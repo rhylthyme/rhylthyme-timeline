@@ -1,7 +1,8 @@
 # @rhylthyme/timeline
 
-Timing engine and static Gantt renderer for [Rhylthyme](https://www.rhylthyme.com)
-programs. Zero dependencies, one UMD file, runs in the browser, Node and ESM.
+Timing engine, static Gantt renderer and `<rhylthyme-timeline>` player
+Web Component for [Rhylthyme](https://www.rhylthyme.com) programs. Zero
+dependencies; the engine is one UMD file that runs in the browser, Node and ESM.
 
 A Rhylthyme program is JSON describing parallel **tracks** of sequential
 **steps**, each with a duration (fixed, variable or indefinite) and a start
@@ -11,10 +12,76 @@ turns that into resolved start and end times and draws them.
 
 ## What it produces
 
-Three outputs from the same engine, shown here for
+Four outputs from the same engine, shown here for
 [`thanksgiving_one_oven.json`](test/fixtures/programs/thanksgiving_one_oven.json).
 
-### 1. The interactive player: `node player/build.js`
+### 1. The `<rhylthyme-timeline>` element (2.0 beta)
+
+A Web Component that plays a program: wall-clock-anchored cursor, Start /
+Pause / Stop, speed, manual gates and indefinite steps handled by the
+person following along, and events for the host page. Timings come from
+the engine (`computeStepTimings(program, { actual, now })`), so what the
+player shows is what the validator plans, adjusted for what has actually
+happened.
+
+![rhylthyme-timeline element paused at 150 minutes: the roast is active and hatched, the potato peel waits in red for the cook to start it, Done and Start actions below](docs/element-player.png)
+
+```html
+<script src="https://cdn.jsdelivr.net/npm/@rhylthyme/timeline@2/src/index.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@rhylthyme/timeline@2/src/element.js"></script>
+
+<rhylthyme-timeline src="thanksgiving.json" mode="player" speed="1" time-format="minutes"></rhylthyme-timeline>
+<script>
+  const el = document.querySelector('rhylthyme-timeline');
+  // or: el.program = programObject;
+  el.addEventListener('rt-step-start', (e) => console.log('started', e.detail.stepId, 'at', e.detail.time));
+  el.addEventListener('rt-complete', () => console.log('all done'));
+</script>
+```
+
+Try it: `open examples/player.html` (program, mode, theme and time-format
+pickers, event log). `?at=9000&theme=dark` positions it for screenshots.
+
+| Attribute | Values |
+|---|---|
+| `program` (property) / `src` | program object, or a URL to fetch |
+| `mode` | `player` (default) or `static` (the Gantt alone, no controls or cursor) |
+| `speed` | playback multiplier, default `1` |
+| `time-format` | `minutes` (`mm:ss`), `seconds`, `hours` (`h:mm:ss`), `clock` (wall time from `start-at` or the moment Start was pressed) |
+| `start-at` | ISO 8601 start time for `clock` format |
+| `theme` | `light`, `dark`, `cookbook`; or override `--rt-bg`, `--rt-fg`, `--rt-accent`, `--rt-border`, `--rt-panel`, `--rt-muted` |
+| `view` | `timeline` (itinerary and DAG views are planned) |
+
+Methods: `start()`, `pause()`, `stop()`, `toggle()`, `seek(seconds)` (while
+paused), `startStep(id)`, `completeStep(id)`, `tick()`, `setClock(fn)`.
+Read-only: `currentTime`, `status`, `timings`, `stepStates`. Events (all
+bubble and cross the shadow boundary): `rt-load`, `rt-start`, `rt-pause`,
+`rt-stop`, `rt-tick`, `rt-step-start`, `rt-step-complete`, `rt-complete`.
+
+How the player treats step kinds, matching the rhylthyme.com runner:
+
+- **Manual gates** (`startTrigger.type: "manual"`) and **negative-offset
+  hand-offs** wait for `startStep()`. Until then they float forward with
+  the cursor (shown as a red dashed bar with a *Start* button), and
+  everything downstream moves with them.
+- **Indefinite steps** run until `completeStep()` (*Done* button).
+  Starting a negative-offset step caps the step it refers to at
+  now + |offset|, so "peel the potatoes 45 min before the roast is due
+  out" ends the roast 45 min after you start peeling.
+- **Variable steps with a `triggerName`** can be finished after
+  `minSeconds` and finish on their own at `maxSeconds`.
+- When every step is done the player pauses after a 3 s grace period with
+  status `completed`.
+
+<img src="docs/element-mobile-cookbook.png" alt="the element at phone width with the cookbook theme" width="300">
+
+The dark preset inverts the chart with a CSS filter; theming the SVG
+itself is on the roadmap. `test/element.test.js` drives the element in
+headless Chrome through a full Thanksgiving run with a fake clock (CI has
+Chrome; locally it is skipped unless a Chrome binary is found or
+`CHROME_BIN` is set).
+
+### 2. The classic player page: `node player/build.js`
 
 The page rhylthyme.com serves in its player: a timeline with a live cursor,
 Start / Pause / Stop and speed controls, zoom, and a tab bar for the
@@ -47,7 +114,7 @@ where `computeStepTimings` puts it (unifying the two is on the roadmap),
 and the "Switch kitchen" button messages a parent window, so it does
 nothing when the file is opened on its own.
 
-### 2. The static SVG: `renderTimelineSvg` (Node) and `renderTimeline` (browser)
+### 3. The static SVG: `renderTimelineSvg` (Node) and `renderTimeline` (browser)
 
 One Gantt drawing, no dependencies. `renderTimelineSvg(program)` returns
 it as an SVG string; `renderTimeline(container, program)` is a two-line
@@ -97,7 +164,7 @@ In a browser, open [`examples/index.html`](examples/index.html) (no server
 or build needed): it loads `src/index.js`, calls `renderTimeline`, and has
 a dropdown of six example programs.
 
-### 3. Just the numbers: `computeStepTimings(program)`
+### 4. Just the numbers: `computeStepTimings(program)`
 
 What both renderers are drawn from (seconds from program start;
 `resolved` is `false` only for cycles or dangling references):
@@ -138,10 +205,11 @@ const svg = Rhylthyme.renderTimelineSvg(program);
 
 | Function | Returns |
 |---|---|
-| `computeStepTimings(program)` | `{ [stepId]: { start, end, duration, trackId, resolved } }` in seconds from program start. `resolved` is `false` when a trigger could not be satisfied (cycle or dangling reference); such steps are placed at `t = 0`. |
-| `renderTimelineSvg(program, opts?)` | SVG markup (string). `opts = { arrows, marks, legend }`, all default `true`: cross-track dependency arrows (dashed for negative offsets), hatched indefinite steps, faded variable-step extensions to their maximum, a flag on manual gates, and a one-line legend. |
+| `computeStepTimings(program, opts?)` | `{ [stepId]: { start, end, duration, trackId, resolved } }` in seconds from program start. `resolved` is `false` when a trigger could not be satisfied (cycle or dangling reference); such steps are placed at `t = 0`. `opts.actual = { [stepId]: { start?, end? } }` overrides the plan with what actually happened; `opts.now` makes unstarted manual gates float to the current time and started indefinite steps stretch to it. |
+| `renderTimelineSvg(program, opts?)` | SVG markup (string). `opts = { arrows, marks, legend }`, all default `true`: cross-track dependency arrows (dashed for negative offsets), hatched indefinite steps, faded variable-step extensions to their maximum, a flag on manual gates, and a one-line legend. Player options: `timings` (precomputed), `now` (draws the cursor), `states` (`{ [stepId]: 'done' \| 'active' \| 'waiting' }`), `width`. Bars carry `class="rt-bar"` and `data-step`. |
 | `renderTimeline(container, program, opts?)` | Injects the SVG into a DOM element and returns the markup. |
 | `buildPlayerHtml(program, environment?)` (from `@rhylthyme/timeline/player`) | The interactive visualizer page as an HTML string, identical to the server's. Needs Node (reads `player/template.html`). |
+| `stepNeedsStart(step)` / `stepNeedsFinish(step)` | Whether the executor must start the step (manual gate, negative offset) / must end it (indefinite, variable with `triggerName`). |
 | `expandReplicates(program)` | A deep copy with track/step `replicates` (and legacy `batch_size`/`stagger`) expanded into flat tracks and steps, exactly as the Python `expand_replicates` does. The functions above apply it automatically. |
 | `parseSeconds(value)` | `90`, `"90"`, `"5m"`, `"1h30m"`, `"-20m"` → seconds (number). |
 | `stepDurationSeconds(step)` | Planning duration: fixed seconds, else variable default, else max, else min; indefinite → `defaultSeconds`, or a 60 s placeholder. |
@@ -168,7 +236,9 @@ Offsets and durations accept numbers (seconds) or unit strings.
 ## Versioning
 
 SemVer. The exported function signatures are the public API; changing one
-is a major release. Adding support for a new program-schema version is a
+is a major release. The element's attributes, methods and events are part
+of that API from 2.0.0 onward; while the version is `2.0.0-beta.N` they may
+change between betas. Adding support for a new program-schema version is a
 minor release and is recorded in `supportedSchemaVersions`. Rendering
 changes that keep the SVG structure are patch releases.
 
@@ -181,7 +251,7 @@ programs at 1.3.0), so the two implementations cannot drift silently.
 
 - [rhylthyme-spec](https://github.com/rhylthyme/rhylthyme-spec): the JSON Schema
 - [rhylthyme-examples](https://github.com/rhylthyme/rhylthyme-examples): the programs used as test fixtures
-- The interactive player ships here as a page builder (`player/`); packaging it as a `<rhylthyme-timeline>` Web Component is the next step in the server repository's `plans/rhylthyme-timeline.md`.
+- The `<rhylthyme-timeline>` element is pre-release (2.0.0-beta); its attribute and event names may still change. rhylthyme.com serves it behind a flag (`/p/<id>?player=element`) while the classic player (`player/`) remains the default. Roadmap: the server repository's `plans/rhylthyme-timeline.md`.
 
 ## License
 

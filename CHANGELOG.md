@@ -3,6 +3,30 @@
 All notable changes to this package are documented here. The format follows
 Keep a Changelog; versions follow SemVer.
 
+## [2.0.0-beta.1] - 2026-09-09
+
+Pre-release of the player Web Component. The engine API is unchanged and
+1.x-compatible; the major bump marks the new element API as part of the
+public surface once it leaves beta.
+
+### Added
+- `src/element.js`: `<rhylthyme-timeline>` custom element (shadow DOM,
+  `light` / `dark` / `cookbook` presets, `--rt-*` custom properties).
+  Attributes `src`, `mode`, `speed`, `time-format`, `start-at`, `theme`,
+  `view`; `program` property; `start/pause/stop/toggle/seek`,
+  `startStep`, `completeStep`; `rt-*` events. Exported as
+  `@rhylthyme/timeline/element`.
+- `computeStepTimings(program, { actual, now })`: actual start/end
+  overrides and a current time, so manual gates float forward until
+  started and indefinite steps stretch until finished. Downstream steps
+  re-plan from the engine, not from a second routine.
+- `renderTimelineSvg` options `timings`, `now` (cursor), `states`
+  (done / active / waiting bar styling) and `width`; bars carry
+  `class="rt-bar"` and `data-step`.
+- `stepNeedsStart(step)` and `stepNeedsFinish(step)` exports.
+- `examples/player.html` demo; `test/element.test.js` drives the element
+  in headless Chrome through a full run with a fake clock.
+
 ## [1.4.1] - 2026-09-09
 
 ### Changed

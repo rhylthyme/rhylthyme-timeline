@@ -1,0 +1,95 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>rhylthyme-timeline element harness</title>
+<rhylthyme-timeline id="el" mode="player" speed="1"></rhylthyme-timeline>
+<pre id="results"></pre>
+<script src="../src/index.js"></script>
+<script src="../src/element.js"></script>
+<script src="../examples/programs.js"></script>
+<script>
+// Drives the element with a fake clock and records what a test can assert on.
+(function () {
+  const out = { checks: {}, events: [], errors: [] };
+  try {
+    const el = document.getElementById('el');
+    let ms = 0;
+    el.setClock(() => ms);
+    for (const ev of ['rt-start', 'rt-pause', 'rt-stop', 'rt-step-start', 'rt-step-complete', 'rt-complete']) {
+      el.addEventListener(ev, (e) => out.events.push([ev, e.detail.stepId || null, Math.round(e.detail.time || 0)]));
+    }
+    const advance = (sec) => { ms += sec * 1000; el.tick(); };
+    const shadowText = () => el.shadowRoot.textContent;
+    const bars = () => el.shadowRoot.querySelectorAll('rect.rt-bar').length;
+
+    el.program = JSON.parse(JSON.stringify(window.RHYLTHYME_EXAMPLES.thanksgiving_one_oven));
+    out.checks.rendersBars = bars();
+    out.checks.hasControls = !!el.shadowRoot.querySelector('.controls button[data-act="start"]');
+    out.checks.hasCursorBeforeStart = !!el.shadowRoot.querySelector('.rt-cursor');
+
+    el.start();
+    out.checks.statusRunning = el.status;
+    advance(1300); // roast (indefinite, automatic start at 1200) is active
+    out.checks.roastState = el.stepStates['turkey-roast'];
+    out.checks.roastDoneButton = !!el.shadowRoot.querySelector('button[data-step-done="turkey-roast"]');
+    out.checks.timeDisplay = el.shadowRoot.querySelector('.time').textContent;
+
+    advance(7200); // t = 8500: potatoes-peel is planned at 8400 (roast end − 45 min) and needs a start
+    out.checks.peelState = el.stepStates['potatoes-peel'];
+    out.checks.peelStartButton = !!el.shadowRoot.querySelector('button[data-step-start="potatoes-peel"]');
+    advance(500); // t = 9000: still waiting, floats forward
+    out.checks.peelFloatsTo = Math.round(el.timings['potatoes-peel'].start);
+    el.startStep('potatoes-peel'); // caps the roast at 9000 + 2700 = 11700
+    out.checks.peelStateAfterStart = el.stepStates['potatoes-peel'];
+    advance(2800); // t = 11800: roast auto-completed at the cap
+    out.checks.roastEnd = Math.round(el.timings['turkey-roast'].end);
+    out.checks.roastState2 = el.stepStates['turkey-roast'];
+    out.checks.restStart = Math.round(el.timings['turkey-rest'].start);
+
+    // Drive to the end: start every manual gate as it becomes ready, finish indefinite steps.
+    let guard = 0;
+    while (el.status === 'running' && guard++ < 200) {
+      advance(120);
+      const states = el.stepStates;
+      for (const id of Object.keys(states)) {
+        if (states[id] === 'waiting') el.startStep(id);
+      }
+    }
+    out.checks.finalStatus = el.status;
+    out.checks.finalTime = Math.round(el.currentTime);
+    out.checks.allDone = Object.values(el.stepStates).every((s) => s === 'done');
+
+    // Speed and stop
+    el.stop();
+    out.checks.afterStop = [el.status, el.currentTime, Object.keys(el.stepStates).filter((k) => el.stepStates[k] !== 'pending').length];
+    el.setAttribute('speed', '10');
+    el.start(); advance(10);
+    out.checks.speed10Time = Math.round(el.currentTime);
+    el.pause();
+    out.checks.pausedStatus = el.status;
+
+    // Static mode: no controls, no cursor
+    el.setAttribute('mode', 'static');
+    out.checks.staticControls = !!el.shadowRoot.querySelector('.controls');
+    out.checks.staticCursor = !!el.shadowRoot.querySelector('.rt-cursor');
+    out.checks.staticBars = bars();
+
+    // Time formats
+    el.setAttribute('mode', 'player');
+    el.setAttribute('time-format', 'hours');
+    out.checks.hoursFormat = el.formatTime(3725);
+    el.setAttribute('time-format', 'clock');
+    el.setAttribute('start-at', '2026-11-26T14:00:00');
+    out.checks.clockFormat = el.formatTime(600);
+
+    // Every corpus program renders without throwing
+    out.checks.corpusRendered = 0;
+    for (const key of Object.keys(window.RHYLTHYME_EXAMPLES)) {
+      el.program = JSON.parse(JSON.stringify(window.RHYLTHYME_EXAMPLES[key]));
+      if (bars() > 0) out.checks.corpusRendered++;
+    }
+  } catch (e) {
+    out.errors.push(String(e && e.stack || e));
+  }
+  document.getElementById('results').textContent = JSON.stringify(out);
+})();
+</script>
