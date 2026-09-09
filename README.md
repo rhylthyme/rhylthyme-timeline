@@ -11,7 +11,7 @@ turns that into resolved start and end times and draws them.
 
 ## What it produces
 
-Four outputs from the same engine, shown here for
+Three outputs from the same engine, shown here for
 [`thanksgiving_one_oven.json`](test/fixtures/programs/thanksgiving_one_oven.json).
 
 ### 1. The interactive player: `node player/build.js`
@@ -44,16 +44,17 @@ byte-identical to the server's (39 programs, sha256). Two things to know:
 the player keeps the server's own step placement, which puts a
 negative-offset step at the start of the step it refers to rather than
 where `computeStepTimings` puts it (unifying the two is on the roadmap),
-and the "Request a video" and "Switch kitchen" buttons message a parent
-window, so they do nothing when the file is opened on its own.
+and the "Switch kitchen" button messages a parent window, so it does
+nothing when the file is opened on its own.
 
-### 2. In the browser: `renderTimeline(container, program)`
+### 2. The static SVG: `renderTimelineSvg` (Node) and `renderTimeline` (browser)
 
-The JavaScript component draws straight into a DOM element. This is a
-Chrome screenshot of [`examples/index.html`](examples/index.html), which
-loads `src/index.js` and calls `renderTimeline`:
+One Gantt drawing, no dependencies. `renderTimelineSvg(program)` returns
+it as an SVG string; `renderTimeline(container, program)` is a two-line
+wrapper that calls the same function and sets the container's
+`innerHTML` to the result, so what a page shows is exactly this file:
 
-![renderTimeline output in Chrome: five tracks, an indefinite roast, a negative-offset dependency, a manual gate](docs/thanksgiving-browser.png)
+![renderTimelineSvg output](docs/thanksgiving.svg)
 
 Rows are tracks and bars are steps at their resolved times. The roast is
 *indefinite* (hatched): it ends when the cook says so, and everything after
@@ -63,31 +64,12 @@ dependencies; the dashed one is a negative offset ("peel the potatoes
 *manual* gate; "Serve" waits for all four dishes. The oven has capacity
 one, so the stuffing bakes only after the turkey comes out.
 
-Reproduce it by opening the demo page (no server or build needed):
-
-```bash
-git clone https://github.com/rhylthyme/rhylthyme-timeline
-cd rhylthyme-timeline
-open examples/index.html        # macOS; or xdg-open, or drag it into a browser
-```
-
-The page has a dropdown of six example programs and re-renders on change.
-`examples/programs.js` is those programs inlined so the page works from
-`file://`.
-
-### 3. From Node: `renderTimelineSvg(program)` → an SVG file
-
-The same drawing as a standalone SVG string, written by
-[`examples/render.js`](examples/render.js). This is the file it produced,
-[`docs/thanksgiving.svg`](docs/thanksgiving.svg):
-
-![renderTimelineSvg output as an SVG file](docs/thanksgiving.svg)
+From Node, [`examples/render.js`](examples/render.js) writes the file and
+prints every step's resolved start and end:
 
 ```bash
 node examples/render.js test/fixtures/programs/thanksgiving_one_oven.json thanksgiving.svg
 ```
-
-The script also prints every step's resolved start and end:
 
 ```
    0:00 –   20:00  Turkey: Season and truss
@@ -111,7 +93,11 @@ run any SVG converter, e.g. `rsvg-convert -w 1640 -f png -o out.png thanksgiving
 Point it at your own program JSON to render that instead; the
 [example corpus](test/fixtures/programs) has 39 more.
 
-### 4. Just the numbers: `computeStepTimings(program)`
+In a browser, open [`examples/index.html`](examples/index.html) (no server
+or build needed): it loads `src/index.js`, calls `renderTimeline`, and has
+a dropdown of six example programs.
+
+### 3. Just the numbers: `computeStepTimings(program)`
 
 What both renderers are drawn from (seconds from program start;
 `resolved` is `false` only for cycles or dangling references):

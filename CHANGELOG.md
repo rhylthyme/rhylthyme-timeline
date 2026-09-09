@@ -3,6 +3,15 @@
 All notable changes to this package are documented here. The format follows
 Keep a Changelog; versions follow SemVer.
 
+## [1.4.1] - 2026-09-09
+
+### Changed
+- The player template no longer carries the rhylthyme.com "Request a
+  video" sticker (a server-side upsell); the export and the parity
+  fixture strip it together.
+- README: the static SVG is one section (`renderTimeline` only injects
+  `renderTimelineSvg`'s output into the DOM).
+
 ## [1.4.0] - 2026-09-09
 
 ### Added

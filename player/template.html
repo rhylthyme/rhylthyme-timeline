@@ -1934,10 +1934,6 @@
                     <span style="font-size:10px; color:white;">Change</span>
                 </div>
                 <button id="cover-photo-remove" style="display:none; position:absolute; top:-6px; right:-6px; width:20px; height:20px; border-radius:50%; background:#ef4444; color:white; border:none; cursor:pointer; font-size:11px; line-height:20px; text-align:center; padding:0;" title="Remove cover photo">&times;</button>
-                <button id="request-video-sticker-cover" type="button" onclick="requestRecipeVideo()" title="Request a cooking video for this recipe" class="rvs-on-cover">
-                    <span class="rvs-icon">🎬</span>
-                    <span class="rvs-label">Request a video!</span>
-                </button>
             </div>
             <div id="cover-photo-add-btn" class="rg-cover-add" style="display:none;">
                 <div class="rg-cover-add-icon"><i class="fas fa-camera-retro"></i></div>
@@ -1974,10 +1970,6 @@
                     <%=f'<span class="text-blue-600 font-semibold">· {program_duration_text}</span>' if program_duration_text else ''%>
                     <span id="target-duration-readonly" class="text-blue-500 font-semibold" style="display:<%='inline-flex' if target_duration_text else 'none'%>;align-items:center;gap:5px;">· Target: <span id="target-duration-readonly-text"><%=target_duration_text%></span><span id="target-over-warning" class="text-amber-500 cursor-help" title="Over target — try Fit to Time auto-plan in edit mode" style="display:<%='inline' if target_duration_seconds and total_duration > target_duration_seconds else 'none'%>;">&#9888;</span></span>
                 </div>
-                <button id="request-video-sticker" type="button" onclick="requestRecipeVideo()" title="Request a cooking video for this recipe">
-                    <span class="rvs-icon">🎬</span>
-                    <span class="rvs-label">Request a video!</span>
-                </button>
             </div>
         </div>
 
