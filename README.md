@@ -7,7 +7,35 @@ A Rhylthyme program is JSON describing parallel **tracks** of sequential
 **steps**, each with a duration (fixed, variable or indefinite) and a start
 trigger (program start, an offset, after another step's end or start,
 after with buffer, manual, on abort, or all/any of several). This package
-turns that into resolved start and end times and draws them.
+turns that into resolved start and end times and draws them:
+
+![Thanksgiving with One Oven: five tracks, an indefinite roast, a negative-offset dependency, a manual gate](docs/thanksgiving.png)
+
+Rows are tracks and bars are steps at their resolved times. The roast is
+*indefinite* (hatched): it ends when the cook says so, and everything after
+it is planned against its default duration. Arrows are cross-track
+dependencies; the dashed one is a negative offset ("peel the potatoes
+45 min before the roast is due out"). The flag on "Guests seated" is a
+*manual* gate; "Serve" waits for all four dishes. The oven has capacity
+one, so the stuffing bakes only after the turkey comes out.
+
+## Quickstart
+
+Reproduce that picture in under a minute:
+
+```bash
+git clone https://github.com/rhylthyme/rhylthyme-timeline
+cd rhylthyme-timeline
+node examples/render.js test/fixtures/programs/thanksgiving_one_oven.json thanksgiving.svg
+```
+
+The script prints every step's resolved start and end and writes the SVG.
+For a PNG, `npm i @resvg/resvg-js` and give the output a `.png` name (or
+run any SVG converter, e.g. `rsvg-convert -w 1640 -f png -o out.png thanksgiving.svg`).
+Point it at your own program JSON to render that instead; the
+[example corpus](test/fixtures/programs) has 39 more.
+
+In a page, without a build step:
 
 ```html
 <script src="https://cdn.jsdelivr.net/npm/@rhylthyme/timeline@1/src/index.js"></script>
