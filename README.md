@@ -7,9 +7,20 @@ A Rhylthyme program is JSON describing parallel **tracks** of sequential
 **steps**, each with a duration (fixed, variable or indefinite) and a start
 trigger (program start, an offset, after another step's end or start,
 after with buffer, manual, on abort, or all/any of several). This package
-turns that into resolved start and end times and draws them:
+turns that into resolved start and end times and draws them.
 
-![Thanksgiving with One Oven: five tracks, an indefinite roast, a negative-offset dependency, a manual gate](docs/thanksgiving.png)
+## What it produces
+
+Three outputs from the same engine, shown here for
+[`thanksgiving_one_oven.json`](test/fixtures/programs/thanksgiving_one_oven.json).
+
+### 1. In the browser: `renderTimeline(container, program)`
+
+The JavaScript component draws straight into a DOM element. This is a
+Chrome screenshot of [`examples/index.html`](examples/index.html), which
+loads `src/index.js` and calls `renderTimeline`:
+
+![renderTimeline output in Chrome: five tracks, an indefinite roast, a negative-offset dependency, a manual gate](docs/thanksgiving-browser.png)
 
 Rows are tracks and bars are steps at their resolved times. The roast is
 *indefinite* (hatched): it ends when the cook says so, and everything after
@@ -19,17 +30,31 @@ dependencies; the dashed one is a negative offset ("peel the potatoes
 *manual* gate; "Serve" waits for all four dishes. The oven has capacity
 one, so the stuffing bakes only after the turkey comes out.
 
-## Quickstart
-
-Reproduce that picture in under a minute:
+Reproduce it by opening the demo page (no server or build needed):
 
 ```bash
 git clone https://github.com/rhylthyme/rhylthyme-timeline
 cd rhylthyme-timeline
+open examples/index.html        # macOS; or xdg-open, or drag it into a browser
+```
+
+The page has a dropdown of six example programs and re-renders on change.
+`examples/programs.js` is those programs inlined so the page works from
+`file://`.
+
+### 2. From Node: `renderTimelineSvg(program)` → an SVG file
+
+The same drawing as a standalone SVG string, written by
+[`examples/render.js`](examples/render.js). This is the file it produced,
+[`docs/thanksgiving.svg`](docs/thanksgiving.svg):
+
+![renderTimelineSvg output as an SVG file](docs/thanksgiving.svg)
+
+```bash
 node examples/render.js test/fixtures/programs/thanksgiving_one_oven.json thanksgiving.svg
 ```
 
-The script prints every step's resolved start and end and writes the SVG:
+The script also prints every step's resolved start and end:
 
 ```
    0:00 –   20:00  Turkey: Season and truss
@@ -48,8 +73,15 @@ The script prints every step's resolved start and end and writes the SVG:
 wrote thanksgiving.svg
 ```
 
-What `computeStepTimings` returns for the same program (seconds from
-program start; `resolved` is `false` only for cycles or dangling references):
+For a PNG, `npm i @resvg/resvg-js` and give the output a `.png` name (or
+run any SVG converter, e.g. `rsvg-convert -w 1640 -f png -o out.png thanksgiving.svg`).
+Point it at your own program JSON to render that instead; the
+[example corpus](test/fixtures/programs) has 39 more.
+
+### 3. Just the numbers: `computeStepTimings(program)`
+
+What both renderers are drawn from (seconds from program start;
+`resolved` is `false` only for cycles or dangling references):
 
 ```js
 const R = require('@rhylthyme/timeline');
@@ -63,10 +95,8 @@ R.computeStepTimings(program)
 //   ...
 // }
 ```
-For a PNG, `npm i @resvg/resvg-js` and give the output a `.png` name (or
-run any SVG converter, e.g. `rsvg-convert -w 1640 -f png -o out.png thanksgiving.svg`).
-Point it at your own program JSON to render that instead; the
-[example corpus](test/fixtures/programs) has 39 more.
+
+## Usage
 
 In a page, without a build step:
 

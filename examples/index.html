@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>@rhylthyme/timeline demo</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  body { margin: 0; padding: 16px 20px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #fff; color: #111827; }
+  header { display: flex; align-items: baseline; gap: 14px; margin-bottom: 10px; }
+  header h1 { font-size: 16px; margin: 0; }
+  header code { font-size: 12px; color: #6b7280; }
+  select { font-size: 13px; padding: 3px 6px; }
+  #timeline svg { max-width: 100%; height: auto; display: block; }
+</style>
+</head>
+<body>
+<header>
+  <h1>@rhylthyme/timeline</h1>
+  <code>Rhylthyme.renderTimeline(container, program)</code>
+  <label>program <select id="pick"></select></label>
+</header>
+<div id="timeline"></div>
+
+<script src="../src/index.js"></script>
+<script src="./programs.js"></script>
+<script>
+  const pick = document.getElementById("pick");
+  const container = document.getElementById("timeline");
+  for (const key of Object.keys(window.RHYLTHYME_EXAMPLES)) {
+    const opt = document.createElement("option");
+    opt.value = key; opt.textContent = window.RHYLTHYME_EXAMPLES[key].name || key;
+    pick.appendChild(opt);
+  }
+  function render() {
+    const program = window.RHYLTHYME_EXAMPLES[pick.value];
+    Rhylthyme.renderTimeline(container, program);
+    const t = Rhylthyme.computeStepTimings(program);
+    console.log(pick.value, Object.keys(t).length, "steps", Rhylthyme.version);
+  }
+  pick.addEventListener("change", render);
+  const wanted = new URLSearchParams(location.search).get("program");
+  if (wanted && window.RHYLTHYME_EXAMPLES[wanted]) pick.value = wanted;
+  render();
+</script>
+</body>
+</html>
