@@ -29,7 +29,40 @@ cd rhylthyme-timeline
 node examples/render.js test/fixtures/programs/thanksgiving_one_oven.json thanksgiving.svg
 ```
 
-The script prints every step's resolved start and end and writes the SVG.
+The script prints every step's resolved start and end and writes the SVG:
+
+```
+   0:00 –   20:00  Turkey: Season and truss
+  20:00 – 185:00  Turkey: Roast until 74°C
+ 185:00 – 215:00  Turkey: Rest
+ 220:00 – 230:00  Turkey: Carve and serve
+  90:00 – 115:00  Stuffing: Sauté aromatics, mix
+ 185:00 – 220:00  Stuffing: Bake stuffing
+ 140:00 – 155:00  Potatoes: Peel and cut
+ 155:00 – 175:00  Potatoes: Boil until tender
+ 175:00 – 185:00  Potatoes: Mash with butter
+ 190:00 – 205:00  Gravy: Make gravy from drippings
+ 210:00 – 215:00  Service: Dress the salad
+ 215:00 – 220:00  Service: Guests seated
+ 230:00 – 235:00  Service: Serve
+wrote thanksgiving.svg
+```
+
+What `computeStepTimings` returns for the same program (seconds from
+program start; `resolved` is `false` only for cycles or dangling references):
+
+```js
+const R = require('@rhylthyme/timeline');
+R.computeStepTimings(program)
+// {
+//   'turkey-prep':  { start: 0,     end: 1200,  duration: 1200, trackId: 'turkey',   resolved: true },
+//   'turkey-roast': { start: 1200,  end: 11100, duration: 9900, trackId: 'turkey',   resolved: true },
+//   'potatoes-peel':{ start: 8400,  end: 9300,  duration: 900,  trackId: 'potatoes', resolved: true },  // roast end − 45 min
+//   'guests-seated':{ start: 12900, end: 13200, duration: 300,  trackId: 'service',  resolved: true },  // manual gate, planned after the previous step
+//   'serve':        { start: 13800, end: 14100, duration: 300,  trackId: 'service',  resolved: true },  // all four dishes done
+//   ...
+// }
+```
 For a PNG, `npm i @resvg/resvg-js` and give the output a `.png` name (or
 run any SVG converter, e.g. `rsvg-convert -w 1640 -f png -o out.png thanksgiving.svg`).
 Point it at your own program JSON to render that instead; the
@@ -59,8 +92,9 @@ const svg = Rhylthyme.renderTimelineSvg(program);
 | `computeStepTimings(program)` | `{ [stepId]: { start, end, duration, trackId, resolved } }` in seconds from program start. `resolved` is `false` when a trigger could not be satisfied (cycle or dangling reference); such steps are placed at `t = 0`. |
 | `renderTimelineSvg(program, opts?)` | SVG markup (string). `opts = { arrows, marks, legend }`, all default `true`: cross-track dependency arrows (dashed for negative offsets), hatched indefinite steps, faded variable-step extensions to their maximum, a flag on manual gates, and a one-line legend. |
 | `renderTimeline(container, program, opts?)` | Injects the SVG into a DOM element and returns the markup. |
+| `expandReplicates(program)` | A deep copy with track/step `replicates` (and legacy `batch_size`/`stagger`) expanded into flat tracks and steps, exactly as the Python `expand_replicates` does. The functions above apply it automatically. |
 | `parseSeconds(value)` | `90`, `"90"`, `"5m"`, `"1h30m"`, `"-20m"` → seconds (number). |
-| `stepDurationSeconds(step)` | Planning duration: fixed seconds, else variable default, else max, else min; indefinite → `defaultSeconds` or 0. |
+| `stepDurationSeconds(step)` | Planning duration: fixed seconds, else variable default, else max, else min; indefinite → `defaultSeconds`, or a 60 s placeholder. |
 | `version` | Package version string. |
 | `supportedSchemaVersions` | Program schema versions this engine understands. |
 
@@ -90,18 +124,8 @@ changes that keep the SVG structure are patch releases.
 
 `test/fixtures/python-timings.json` holds start/end times for the example
 corpus computed by the Python reference validator; `npm test` asserts this
-engine agrees with it, so the two implementations cannot drift silently.
-
-### Known differences from the Python validator
-
-The parity test excludes programs that use these constructs; each is a
-documented disagreement to be resolved on one side or the other:
-
-| Construct | Python validator | This engine |
-|---|---|---|
-| `afterStepWithBuffer` | ignores `bufferSeconds` | adds it |
-| negative `offsetSeconds` | places the step at the referenced step's start (placeholder) | `ref.end + offset`, clamped to `ref.start` |
-| `replicates` / `batch_size` | expands them before resolving | resolves the unexpanded program |
+engine agrees with it on every step of every program (616 steps, 39
+programs at 1.3.0), so the two implementations cannot drift silently.
 
 ## Related
 

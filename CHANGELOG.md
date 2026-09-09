@@ -3,6 +3,24 @@
 All notable changes to this package are documented here. The format follows
 Keep a Changelog; versions follow SemVer.
 
+## [1.3.0] - 2026-09-09
+
+### Added
+- `expandReplicates(program)`: port of the Python `expand_replicates`
+  (track and step `replicates` in parallel / stagger / serial modes, legacy
+  `batch_size` + `stagger`). Applied automatically by `computeStepTimings`
+  and `renderTimelineSvg`, so programs with replicates now resolve exactly
+  as the Python validator resolves them.
+
+### Changed
+- Indefinite steps without `defaultSeconds` plan as a 60 s placeholder
+  (previously 0), matching the Python validator.
+- The parity test now covers every program in the corpus with no
+  exclusions; the Python validator was fixed in step (it now honours
+  `bufferSeconds`, resolves negative offsets against the planned end, and
+  parses unit strings), so the two implementations agree on 616 steps
+  across 39 programs.
+
 ## [1.2.0] - 2026-09-08
 
 Extracted from `rhylthyme-server/static/js/timeline-render.js` into its own

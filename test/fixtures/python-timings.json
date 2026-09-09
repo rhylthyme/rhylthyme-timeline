@@ -1,5 +1,5 @@
 {
- "generatedBy": "rhylthyme.validate_program (Python) after expand_replicates",
+ "generatedBy": "rhylthyme.validate_program (Python, patched 2026-09-09) after expand_replicates",
  "programs": {
   "academy_awards_ceremony.json": {
    "opening-monologue": {
@@ -315,12 +315,12 @@
     "end": 3600
    },
    "ua-takeoff-r1": {
-    "start": 3600,
-    "end": 3660
+    "start": 3720,
+    "end": 3780
    },
    "ua-departure-r1": {
-    "start": 3660,
-    "end": 3840
+    "start": 3780,
+    "end": 3960
    },
    "ua-boarding-r2": {
     "start": 0,
@@ -335,12 +335,12 @@
     "end": 3600
    },
    "ua-takeoff-r2": {
-    "start": 3600,
-    "end": 3660
+    "start": 3720,
+    "end": 3780
    },
    "ua-departure-r2": {
-    "start": 3660,
-    "end": 3840
+    "start": 3780,
+    "end": 3960
    }
   },
   "airport_program_example.json": {
@@ -373,12 +373,12 @@
     "end": 3600
    },
    "ua456-takeoff": {
-    "start": 3600,
-    "end": 3660
+    "start": 3720,
+    "end": 3780
    },
    "ua456-departure": {
-    "start": 3660,
-    "end": 3840
+    "start": 3780,
+    "end": 3960
    },
    "dl789-approach": {
     "start": 900,
@@ -463,12 +463,12 @@
     "end": 12600
    },
    "ciabatta-bake": {
-    "start": 12600,
-    "end": 14400
+    "start": 12900,
+    "end": 14700
    },
    "ciabatta-cool": {
-    "start": 14400,
-    "end": 16800
+    "start": 14700,
+    "end": 17100
    }
   },
   "breakfast_from_tracks.json": {
@@ -1255,12 +1255,12 @@
     "end": 4800
    },
    "make-finishing-sauce": {
-    "start": 600,
-    "end": 1800
+    "start": 3000,
+    "end": 4200
    },
    "combine-and-glaze": {
-    "start": 1800,
-    "end": 2100
+    "start": 4200,
+    "end": 4500
    },
    "cook-rice": {
     "start": 0,
@@ -2311,16 +2311,16 @@
     "end": 13200
    },
    "potatoes-peel": {
-    "start": 1200,
-    "end": 2100
+    "start": 8400,
+    "end": 9300
    },
    "potatoes-boil": {
-    "start": 2100,
-    "end": 3300
+    "start": 9300,
+    "end": 10500
    },
    "potatoes-mash": {
-    "start": 3300,
-    "end": 3900
+    "start": 10500,
+    "end": 11100
    },
    "gravy-make": {
     "start": 11400,

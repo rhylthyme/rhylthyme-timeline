@@ -65,6 +65,21 @@ test("computeStepTimings marks cycles and dangling refs as unresolved", () => {
   assert.equal(t.z.resolved, false);
 });
 
+test("expandReplicates matches the Python expansion shape", () => {
+  const p = JSON.parse(fs.readFileSync(path.join(__dirname, "fixtures", "programs", "replicates_comprehensive_demo.json")));
+  const e = R.expandReplicates(p);
+  assert.notEqual(e, p, "returns a copy");
+  assert.equal(p.tracks.length, 4, "input untouched");
+  assert.equal(e.tracks.length, 14);
+  const ids = new Set();
+  e.tracks.forEach((t) => t.steps.forEach((s) => { assert.ok(!s.replicates); ids.add(s.stepId); }));
+  assert.ok(ids.has("serial-process-r4") && ids.has("parallel-process-r3"));
+  // A program without replicates is returned as-is.
+  const plain = { tracks: [{ trackId: "t", steps: [fixed("a", 1, { type: "programStart" })] }] };
+  assert.equal(R.expandReplicates(plain), plain);
+  assert.equal(R.stepDurationSeconds({ duration: { type: "indefinite" } }), 60);
+});
+
 test("renderTimelineSvg draws arrows, marks and legend, and can switch them off", () => {
   const p = JSON.parse(fs.readFileSync(path.join(__dirname, "fixtures", "programs", "thanksgiving_one_oven.json")));
   const svg = R.renderTimelineSvg(p);
@@ -92,7 +107,7 @@ test("renderTimelineSvg draws arrows, marks and legend, and can switch them off"
 // Programs using any of them are excluded from the parity assertion and
 // listed in the test output. Remove an entry here only when the Python
 // side is changed to match (or vice versa) and the fixture regenerated.
-const KNOWN_DIFFERENCES = ["afterStepWithBuffer", "negative-offset", "replicates"];
+const KNOWN_DIFFERENCES = [];
 
 function constructsOf(program) {
   const c = new Set();
