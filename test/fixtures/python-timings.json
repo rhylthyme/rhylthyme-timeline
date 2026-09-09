@@ -1,0 +1,2548 @@
+{
+ "generatedBy": "rhylthyme.validate_program (Python) after expand_replicates",
+ "programs": {
+  "academy_awards_ceremony.json": {
+   "opening-monologue": {
+    "start": 0,
+    "end": 480
+   },
+   "awards-intro-monologue": {
+    "start": 480,
+    "end": 660
+   },
+   "best-supporting-actor": {
+    "start": 840,
+    "end": 1140
+   },
+   "best-supporting-actress": {
+    "start": 1140,
+    "end": 1440
+   },
+   "best-animated-feature": {
+    "start": 1440,
+    "end": 1620
+   },
+   "best-original-screenplay": {
+    "start": 1620,
+    "end": 1800
+   },
+   "best-adapted-screenplay": {
+    "start": 1800,
+    "end": 1980
+   },
+   "best-international-feature": {
+    "start": 1980,
+    "end": 2160
+   },
+   "best-documentary-feature": {
+    "start": 2160,
+    "end": 2340
+   },
+   "best-documentary-short": {
+    "start": 2340,
+    "end": 2490
+   },
+   "best-animated-short": {
+    "start": 2490,
+    "end": 2640
+   },
+   "best-live-action-short": {
+    "start": 2640,
+    "end": 2790
+   },
+   "best-original-song": {
+    "start": 3030,
+    "end": 3210
+   },
+   "best-original-score": {
+    "start": 3210,
+    "end": 3390
+   },
+   "best-actor": {
+    "start": 3390,
+    "end": 3750
+   },
+   "best-actress": {
+    "start": 3750,
+    "end": 4110
+   },
+   "best-director": {
+    "start": 4110,
+    "end": 4410
+   },
+   "best-picture": {
+    "start": 4410,
+    "end": 5010
+   },
+   "closing-remarks-final": {
+    "start": 5010,
+    "end": 5310
+   },
+   "best-cinematography": {
+    "start": 2790,
+    "end": 2970
+   },
+   "best-film-editing": {
+    "start": 2970,
+    "end": 3150
+   },
+   "best-production-design": {
+    "start": 3150,
+    "end": 3330
+   },
+   "best-costume-design": {
+    "start": 3330,
+    "end": 3510
+   },
+   "best-makeup-hairstyling": {
+    "start": 3510,
+    "end": 3690
+   },
+   "best-visual-effects": {
+    "start": 3690,
+    "end": 3870
+   },
+   "best-sound": {
+    "start": 3870,
+    "end": 4050
+   },
+   "musical-performance-1": {
+    "start": 2790,
+    "end": 3030
+   },
+   "musical-performance-2": {
+    "start": 4050,
+    "end": 4290
+   },
+   "in-memoriam-tribute": {
+    "start": 4290,
+    "end": 4710
+   },
+   "firefighter-tribute": {
+    "start": 4710,
+    "end": 5010
+   },
+   "host-segment-1": {
+    "start": 1620,
+    "end": 1800
+   },
+   "nominees-banter-monologue": {
+    "start": 1800,
+    "end": 1980
+   },
+   "mid-show-monologue": {
+    "start": 2970,
+    "end": 3120
+   },
+   "host-segment-2": {
+    "start": 1440,
+    "end": 1620
+   },
+   "pre-finale-monologue": {
+    "start": 1620,
+    "end": 1800
+   },
+   "commercial-break-1": {
+    "start": 660,
+    "end": 840
+   },
+   "commercial-break-2": {
+    "start": 1620,
+    "end": 1830
+   },
+   "commercial-break-3": {
+    "start": 1980,
+    "end": 2220
+   },
+   "commercial-break-4": {
+    "start": 2340,
+    "end": 2535
+   },
+   "commercial-break-5": {
+    "start": 3030,
+    "end": 3255
+   },
+   "commercial-break-6": {
+    "start": 3150,
+    "end": 3330
+   },
+   "commercial-break-7": {
+    "start": 3690,
+    "end": 3930
+   },
+   "commercial-break-8": {
+    "start": 4290,
+    "end": 4500
+   },
+   "commercial-break-9": {
+    "start": 3390,
+    "end": 3585
+   },
+   "commercial-break-10": {
+    "start": 3750,
+    "end": 3975
+   },
+   "commercial-break-11": {
+    "start": 1800,
+    "end": 2040
+   }
+  },
+  "advanced_dependencies_demo.json": {
+   "system-startup": {
+    "start": 0,
+    "end": 180
+   },
+   "safety-check": {
+    "start": 180,
+    "end": 360
+   },
+   "material-inspection": {
+    "start": 60,
+    "end": 300
+   },
+   "material-prep-r1": {
+    "start": 300,
+    "end": 720
+   },
+   "material-prep-r2": {
+    "start": 300,
+    "end": 720
+   },
+   "material-prep-r3": {
+    "start": 300,
+    "end": 720
+   },
+   "load-machine-a": {
+    "start": 720,
+    "end": 900
+   },
+   "primary-process": {
+    "start": 900,
+    "end": 1800
+   },
+   "unload-machine-a": {
+    "start": 1800,
+    "end": 1920
+   },
+   "secondary-process-r1": {
+    "start": 1980,
+    "end": 2460
+   },
+   "secondary-process-r2": {
+    "start": 1980,
+    "end": 2460
+   },
+   "initial-qa": {
+    "start": 1920,
+    "end": 2100
+   },
+   "manual-inspection": {
+    "start": 2460,
+    "end": 2760
+   },
+   "final-approval": {
+    "start": 2760,
+    "end": 3000
+   },
+   "package-prep": {
+    "start": 2100,
+    "end": 2340
+   },
+   "final-packaging": {
+    "start": 3000,
+    "end": 3360
+   }
+  },
+  "airport_batch_example.json": {
+   "aa-approach-r1": {
+    "start": 300,
+    "end": 600
+   },
+   "aa-landing-r1": {
+    "start": 600,
+    "end": 690
+   },
+   "aa-taxi-r1": {
+    "start": 690,
+    "end": 1290
+   },
+   "aa-gate-r1": {
+    "start": 1290,
+    "end": 3690
+   },
+   "aa-approach-r2": {
+    "start": 300,
+    "end": 600
+   },
+   "aa-landing-r2": {
+    "start": 600,
+    "end": 690
+   },
+   "aa-taxi-r2": {
+    "start": 690,
+    "end": 1290
+   },
+   "aa-gate-r2": {
+    "start": 1290,
+    "end": 3690
+   },
+   "aa-approach-r3": {
+    "start": 300,
+    "end": 600
+   },
+   "aa-landing-r3": {
+    "start": 600,
+    "end": 690
+   },
+   "aa-taxi-r3": {
+    "start": 690,
+    "end": 1290
+   },
+   "aa-gate-r3": {
+    "start": 1290,
+    "end": 3690
+   },
+   "ua-boarding-r1": {
+    "start": 0,
+    "end": 2400
+   },
+   "ua-pushback-r1": {
+    "start": 2400,
+    "end": 2700
+   },
+   "ua-taxi-r1": {
+    "start": 2700,
+    "end": 3600
+   },
+   "ua-takeoff-r1": {
+    "start": 3600,
+    "end": 3660
+   },
+   "ua-departure-r1": {
+    "start": 3660,
+    "end": 3840
+   },
+   "ua-boarding-r2": {
+    "start": 0,
+    "end": 2400
+   },
+   "ua-pushback-r2": {
+    "start": 2400,
+    "end": 2700
+   },
+   "ua-taxi-r2": {
+    "start": 2700,
+    "end": 3600
+   },
+   "ua-takeoff-r2": {
+    "start": 3600,
+    "end": 3660
+   },
+   "ua-departure-r2": {
+    "start": 3660,
+    "end": 3840
+   }
+  },
+  "airport_program_example.json": {
+   "aa123-approach": {
+    "start": 300,
+    "end": 600
+   },
+   "aa123-landing": {
+    "start": 600,
+    "end": 690
+   },
+   "aa123-taxi": {
+    "start": 690,
+    "end": 1290
+   },
+   "aa123-gate": {
+    "start": 1290,
+    "end": 3690
+   },
+   "ua456-boarding": {
+    "start": 0,
+    "end": 2400
+   },
+   "ua456-pushback": {
+    "start": 2400,
+    "end": 2700
+   },
+   "ua456-taxi": {
+    "start": 2700,
+    "end": 3600
+   },
+   "ua456-takeoff": {
+    "start": 3600,
+    "end": 3660
+   },
+   "ua456-departure": {
+    "start": 3660,
+    "end": 3840
+   },
+   "dl789-approach": {
+    "start": 900,
+    "end": 1260
+   },
+   "dl789-landing": {
+    "start": 1260,
+    "end": 1380
+   },
+   "dl789-taxi": {
+    "start": 1380,
+    "end": 2100
+   },
+   "dl789-gate": {
+    "start": 2100,
+    "end": 5700
+   }
+  },
+  "bakery_program_example.json": {
+   "sourdough-prep": {
+    "start": 0,
+    "end": 1800
+   },
+   "sourdough-rest": {
+    "start": 1800,
+    "end": 5400
+   },
+   "sourdough-shape": {
+    "start": 5400,
+    "end": 6600
+   },
+   "sourdough-proof": {
+    "start": 6600,
+    "end": 10200
+   },
+   "sourdough-bake": {
+    "start": 10200,
+    "end": 12600
+   },
+   "sourdough-cool": {
+    "start": 12600,
+    "end": 16200
+   },
+   "baguette-prep": {
+    "start": 1800,
+    "end": 3300
+   },
+   "baguette-rest": {
+    "start": 3300,
+    "end": 6000
+   },
+   "baguette-shape": {
+    "start": 6000,
+    "end": 7800
+   },
+   "baguette-proof": {
+    "start": 7800,
+    "end": 10500
+   },
+   "baguette-bake": {
+    "start": 10500,
+    "end": 12000
+   },
+   "baguette-cool": {
+    "start": 12000,
+    "end": 13800
+   },
+   "ciabatta-prep": {
+    "start": 3600,
+    "end": 5400
+   },
+   "ciabatta-rest": {
+    "start": 5400,
+    "end": 8400
+   },
+   "ciabatta-shape": {
+    "start": 8400,
+    "end": 9600
+   },
+   "ciabatta-proof": {
+    "start": 9600,
+    "end": 12600
+   },
+   "ciabatta-bake": {
+    "start": 12600,
+    "end": 14400
+   },
+   "ciabatta-cool": {
+    "start": 14400,
+    "end": 16800
+   }
+  },
+  "breakfast_from_tracks.json": {
+   "eggs-crack-whisk": {
+    "start": 0,
+    "end": 90
+   },
+   "eggs-heat-pan": {
+    "start": 90,
+    "end": 180
+   },
+   "eggs-cook": {
+    "start": 180,
+    "end": 360
+   },
+   "bacon-prep": {
+    "start": 0,
+    "end": 90
+   },
+   "bacon-cook": {
+    "start": 90,
+    "end": 690
+   },
+   "toast-cook": {
+    "start": 300,
+    "end": 510
+   }
+  },
+  "breakfast_schedule.json": {
+   "eggs-crack-whisk": {
+    "start": 0,
+    "end": 60
+   },
+   "eggs-heat-pan": {
+    "start": 60,
+    "end": 150
+   },
+   "eggs-cook": {
+    "start": 150,
+    "end": 300
+   },
+   "bacon-prep": {
+    "start": 0,
+    "end": 60
+   },
+   "bacon-cook": {
+    "start": 60,
+    "end": 660
+   },
+   "toast-cook": {
+    "start": 480,
+    "end": 690
+   }
+  },
+  "breakfast_with_buffers.json": {
+   "eggs-crack-whisk": {
+    "start": 0,
+    "end": 60
+   },
+   "eggs-heat-pan": {
+    "start": 60,
+    "end": 150
+   },
+   "eggs-cook": {
+    "start": 150,
+    "end": 300
+   },
+   "bacon-prep": {
+    "start": 0,
+    "end": 60
+   },
+   "bacon-cook": {
+    "start": 60,
+    "end": 660
+   },
+   "toast-cook": {
+    "start": 480,
+    "end": 690
+   }
+  },
+  "breakfast_with_environment.json": {
+   "eggs-crack-whisk": {
+    "start": 0,
+    "end": 60
+   },
+   "eggs-heat-pan": {
+    "start": 60,
+    "end": 150
+   },
+   "eggs-cook": {
+    "start": 150,
+    "end": 300
+   },
+   "bacon-prep": {
+    "start": 0,
+    "end": 60
+   },
+   "bacon-cook": {
+    "start": 60,
+    "end": 660
+   },
+   "pancake-batter": {
+    "start": 0,
+    "end": 90
+   },
+   "pancake-cook": {
+    "start": 90,
+    "end": 570
+   },
+   "potato-prep": {
+    "start": 0,
+    "end": 120
+   },
+   "hash-brown-cook": {
+    "start": 120,
+    "end": 480
+   },
+   "toast-cook": {
+    "start": 240,
+    "end": 450
+   },
+   "coffee-prep": {
+    "start": 0,
+    "end": 90
+   },
+   "coffee-brew": {
+    "start": 90,
+    "end": 390
+   },
+   "fruit-prep": {
+    "start": 0,
+    "end": 180
+   }
+  },
+  "buffer_example.json": {
+   "prep-pasta": {
+    "start": 0,
+    "end": 480
+   },
+   "prep-sauce": {
+    "start": 60,
+    "end": 480
+   },
+   "plate-dish": {
+    "start": 480,
+    "end": 600
+   }
+  },
+  "cell_culture_experiment.json": {
+   "prep-media": {
+    "start": 0,
+    "end": 900
+   },
+   "passage-cells": {
+    "start": 900,
+    "end": 2400
+   },
+   "plate-cells": {
+    "start": 2400,
+    "end": 3600
+   },
+   "incubate-overnight": {
+    "start": 3600,
+    "end": 61200
+   },
+   "prep-compounds": {
+    "start": 61200,
+    "end": 63000
+   },
+   "treat-cells": {
+    "start": 63000,
+    "end": 63900
+   },
+   "treatment-incubation": {
+    "start": 63900,
+    "end": 150300
+   },
+   "add-viability-reagent": {
+    "start": 150300,
+    "end": 150900
+   },
+   "reagent-incubation": {
+    "start": 150900,
+    "end": 158100
+   },
+   "read-plate": {
+    "start": 158100,
+    "end": 158400
+   },
+   "data-analysis": {
+    "start": 158400,
+    "end": 161100
+   }
+  },
+  "chemical_plant_batch.json": {
+   "receive-raw-materials": {
+    "start": 0,
+    "end": 2700
+   },
+   "prepare-reagent-a": {
+    "start": 2700,
+    "end": 5100
+   },
+   "prepare-reagent-b": {
+    "start": 2700,
+    "end": 4500
+   },
+   "charge-reactor-1": {
+    "start": 5100,
+    "end": 6300
+   },
+   "add-reagent-b-slowly": {
+    "start": 6300,
+    "end": 13500
+   },
+   "reaction-1-aging": {
+    "start": 13500,
+    "end": 24300
+   },
+   "transfer-to-reactor-2": {
+    "start": 24300,
+    "end": 26100
+   },
+   "heat-to-reaction-temp": {
+    "start": 26100,
+    "end": 29700
+   },
+   "oxidation-reaction": {
+    "start": 29700,
+    "end": 44100
+   },
+   "cool-and-transfer": {
+    "start": 44100,
+    "end": 46500
+   },
+   "add-cyclization-catalyst": {
+    "start": 46500,
+    "end": 47700
+   },
+   "cyclization-reaction": {
+    "start": 47700,
+    "end": 69300
+   },
+   "quench-reaction": {
+    "start": 69300,
+    "end": 72900
+   },
+   "extraction-separation": {
+    "start": 72900,
+    "end": 77700
+   },
+   "solvent-distillation": {
+    "start": 77700,
+    "end": 86700
+   },
+   "prepare-crystallization": {
+    "start": 86700,
+    "end": 89100
+   },
+   "controlled-crystallization": {
+    "start": 89100,
+    "end": 117900
+   },
+   "crystal-isolation": {
+    "start": 117900,
+    "end": 121500
+   },
+   "sample-preparation": {
+    "start": 121500,
+    "end": 122700
+   },
+   "purity-analysis": {
+    "start": 122700,
+    "end": 126900
+   },
+   "structure-confirmation": {
+    "start": 126900,
+    "end": 130500
+   },
+   "release-testing": {
+    "start": 130500,
+    "end": 137700
+   },
+   "weigh-and-package": {
+    "start": 137700,
+    "end": 139500
+   },
+   "label-and-store": {
+    "start": 139500,
+    "end": 140700
+   }
+  },
+  "circuit_training.json": {
+   "dynamic-warmup": {
+    "start": 0,
+    "end": 600
+   },
+   "push-ups": {
+    "start": 600,
+    "end": 645
+   },
+   "dumbbell-rows": {
+    "start": 660,
+    "end": 705
+   },
+   "jumping-jacks": {
+    "start": 720,
+    "end": 765
+   },
+   "shoulder-press": {
+    "start": 780,
+    "end": 825
+   },
+   "plank": {
+    "start": 840,
+    "end": 885
+   },
+   "rest-1": {
+    "start": 885,
+    "end": 1005
+   },
+   "squats": {
+    "start": 1005,
+    "end": 1050
+   },
+   "lunges": {
+    "start": 1065,
+    "end": 1110
+   },
+   "deadlifts": {
+    "start": 1125,
+    "end": 1170
+   },
+   "calf-raises": {
+    "start": 1185,
+    "end": 1230
+   },
+   "wall-sit": {
+    "start": 1245,
+    "end": 1290
+   },
+   "rest-2": {
+    "start": 1290,
+    "end": 1410
+   },
+   "burpees": {
+    "start": 1410,
+    "end": 1455
+   },
+   "russian-twists": {
+    "start": 1470,
+    "end": 1515
+   },
+   "kettlebell-swings": {
+    "start": 1530,
+    "end": 1575
+   },
+   "bicycle-crunches": {
+    "start": 1590,
+    "end": 1635
+   },
+   "box-jumps": {
+    "start": 1650,
+    "end": 1695
+   },
+   "cool-down": {
+    "start": 1695,
+    "end": 2295
+   }
+  },
+  "comprehensive_manual_demo.json": {
+   "setup": {
+    "start": 0,
+    "end": 30
+   },
+   "manual-prep": {
+    "start": 30,
+    "end": 90
+   },
+   "variable-monitor": {
+    "start": 30,
+    "end": 150
+   },
+   "indefinite-watch": {
+    "start": 150,
+    "end": 270
+   },
+   "auto-task": {
+    "start": 30,
+    "end": 120
+   },
+   "manual-execution": {
+    "start": 120,
+    "end": 195
+   },
+   "final-step": {
+    "start": 195,
+    "end": 240
+   }
+  },
+  "corporate_conference.json": {
+   "venue-prep": {
+    "start": 0,
+    "end": 3600
+   },
+   "av-system-setup": {
+    "start": 3600,
+    "end": 6300
+   },
+   "slide-deck-testing": {
+    "start": 6300,
+    "end": 8700
+   },
+   "speaker-briefing": {
+    "start": 1800,
+    "end": 3600
+   },
+   "keynote-speaker-prep": {
+    "start": 8700,
+    "end": 9900
+   },
+   "registration-open": {
+    "start": 10200,
+    "end": 12000
+   },
+   "welcome-remarks": {
+    "start": 12000,
+    "end": 12900
+   },
+   "keynote-1-intro": {
+    "start": 12900,
+    "end": 13200
+   },
+   "keynote-1-presentation": {
+    "start": 13200,
+    "end": 15900
+   },
+   "keynote-1-qa": {
+    "start": 15900,
+    "end": 16650
+   },
+   "setup-coffee-break": {
+    "start": 16650,
+    "end": 17550
+   },
+   "networking-break-1": {
+    "start": 17550,
+    "end": 18750
+   },
+   "keynote-2-setup": {
+    "start": 16950,
+    "end": 17550
+   },
+   "keynote-2-presentation": {
+    "start": 18750,
+    "end": 21750
+   },
+   "keynote-2-qa": {
+    "start": 21750,
+    "end": 22500
+   },
+   "setup-panel-rooms": {
+    "start": 22050,
+    "end": 23250
+   },
+   "panel-discussions-r1": {
+    "start": 22500,
+    "end": 25200
+   },
+   "panel-discussions-r2": {
+    "start": 22500,
+    "end": 25200
+   },
+   "lunch-setup": {
+    "start": 25200,
+    "end": 27000
+   },
+   "lunch-networking": {
+    "start": 27000,
+    "end": 32400
+   },
+   "keynote-3-presentation": {
+    "start": 32400,
+    "end": 35400
+   },
+   "keynote-3-qa": {
+    "start": 35400,
+    "end": 36150
+   },
+   "afternoon-break": {
+    "start": 36150,
+    "end": 37050
+   },
+   "keynote-4-presentation": {
+    "start": 37050,
+    "end": 40050
+   },
+   "keynote-4-qa": {
+    "start": 40050,
+    "end": 40800
+   },
+   "closing-remarks": {
+    "start": 40800,
+    "end": 41700
+   },
+   "final-networking": {
+    "start": 41700,
+    "end": 44400
+   },
+   "venue-breakdown": {
+    "start": 44400,
+    "end": 48000
+   }
+  },
+  "corporate_presentation.json": {
+   "venue-preparation": {
+    "start": 0,
+    "end": 2700
+   },
+   "av-system-setup": {
+    "start": 2700,
+    "end": 4500
+   },
+   "slide-deck-loading": {
+    "start": 4500,
+    "end": 5400
+   },
+   "tech-rehearsal": {
+    "start": 5400,
+    "end": 7200
+   },
+   "speaker-briefing": {
+    "start": 1800,
+    "end": 3600
+   },
+   "slide-walkthrough": {
+    "start": 7200,
+    "end": 8400
+   },
+   "final-speaker-prep": {
+    "start": 8400,
+    "end": 9000
+   },
+   "registration-open": {
+    "start": 9000,
+    "end": 10800
+   },
+   "audience-seating": {
+    "start": 10800,
+    "end": 11700
+   },
+   "opening-remarks": {
+    "start": 11700,
+    "end": 12000
+   },
+   "agenda-overview": {
+    "start": 12000,
+    "end": 12180
+   },
+   "market-landscape": {
+    "start": 12180,
+    "end": 12780
+   },
+   "transformation-framework": {
+    "start": 12780,
+    "end": 13680
+   },
+   "implementation-roadmap": {
+    "start": 13680,
+    "end": 14280
+   },
+   "expected-outcomes": {
+    "start": 14280,
+    "end": 14580
+   },
+   "next-steps": {
+    "start": 14580,
+    "end": 14820
+   },
+   "qa-transition": {
+    "start": 14820,
+    "end": 15120
+   },
+   "qa-session": {
+    "start": 15120,
+    "end": 16020
+   },
+   "closing-remarks": {
+    "start": 16020,
+    "end": 16200
+   },
+   "immediate-followup": {
+    "start": 16200,
+    "end": 17100
+   },
+   "materials-distribution": {
+    "start": 17100,
+    "end": 18300
+   },
+   "venue-breakdown": {
+    "start": 17100,
+    "end": 18900
+   }
+  },
+  "drug_screening_from_tracks.json": {
+   "prep-media": {
+    "start": 0,
+    "end": 900
+   },
+   "passage-cells": {
+    "start": 900,
+    "end": 2400
+   },
+   "plate-cells": {
+    "start": 2400,
+    "end": 3600
+   },
+   "incubate-overnight": {
+    "start": 3600,
+    "end": 61200
+   },
+   "prep-compounds": {
+    "start": 61200,
+    "end": 63000
+   },
+   "treat-cells": {
+    "start": 63000,
+    "end": 63900
+   },
+   "treatment-incubation": {
+    "start": 63900,
+    "end": 236700
+   },
+   "add-viability-reagent": {
+    "start": 236700,
+    "end": 237300
+   },
+   "reagent-incubation": {
+    "start": 237300,
+    "end": 251700
+   },
+   "read-plate": {
+    "start": 251700,
+    "end": 252000
+   },
+   "data-analysis": {
+    "start": 252000,
+    "end": 254700
+   }
+  },
+  "hiit_cardio_workout.json": {
+   "warmup": {
+    "start": 0,
+    "end": 300
+   },
+   "round-1-r1": {
+    "start": 300,
+    "end": 540
+   },
+   "round-1-r2": {
+    "start": 540,
+    "end": 780
+   },
+   "round-1-r3": {
+    "start": 780,
+    "end": 1020
+   },
+   "round-1-r4": {
+    "start": 1020,
+    "end": 1260
+   },
+   "round-2-r1": {
+    "start": 1260,
+    "end": 1500
+   },
+   "round-2-r2": {
+    "start": 1500,
+    "end": 1740
+   },
+   "round-2-r3": {
+    "start": 1740,
+    "end": 1980
+   },
+   "round-2-r4": {
+    "start": 1980,
+    "end": 2220
+   },
+   "round-3-r1": {
+    "start": 2220,
+    "end": 2460
+   },
+   "round-3-r2": {
+    "start": 2460,
+    "end": 2700
+   },
+   "round-3-r3": {
+    "start": 2700,
+    "end": 2940
+   },
+   "round-3-r4": {
+    "start": 2940,
+    "end": 3180
+   },
+   "round-4-r1": {
+    "start": 3180,
+    "end": 3420
+   },
+   "round-4-r2": {
+    "start": 3420,
+    "end": 3660
+   },
+   "round-4-r3": {
+    "start": 3660,
+    "end": 3900
+   },
+   "round-4-r4": {
+    "start": 3900,
+    "end": 4140
+   },
+   "cooldown": {
+    "start": 4140,
+    "end": 4440
+   }
+  },
+  "lab_experiment.json": {
+   "extract-dna": {
+    "start": 0,
+    "end": 1800
+   },
+   "quantify-dna": {
+    "start": 1800,
+    "end": 2400
+   },
+   "prepare-pcr-mix": {
+    "start": 2400,
+    "end": 3300
+   },
+   "run-pcr": {
+    "start": 3300,
+    "end": 10500
+   },
+   "analyze-products": {
+    "start": 10500,
+    "end": 12900
+   }
+  },
+  "multi_resource_example.json": {
+   "prep-ingredients": {
+    "start": 0,
+    "end": 120
+   },
+   "cook-bacon": {
+    "start": 120,
+    "end": 420
+   },
+   "cook-eggs": {
+    "start": 120,
+    "end": 300
+   },
+   "bake-biscuits": {
+    "start": 120,
+    "end": 720
+   },
+   "make-toast": {
+    "start": 120,
+    "end": 240
+   },
+   "serve-breakfast": {
+    "start": 420,
+    "end": 480
+   }
+  },
+  "negative_offset_demo.json": {
+   "prep-ingredients": {
+    "start": 0,
+    "end": 600
+   },
+   "slow-braise": {
+    "start": 600,
+    "end": 4200
+   },
+   "rest-and-serve": {
+    "start": 4200,
+    "end": 4800
+   },
+   "make-finishing-sauce": {
+    "start": 600,
+    "end": 1800
+   },
+   "combine-and-glaze": {
+    "start": 1800,
+    "end": 2100
+   },
+   "cook-rice": {
+    "start": 0,
+    "end": 1200
+   },
+   "steam-vegetables": {
+    "start": 1200,
+    "end": 1680
+   }
+  },
+  "protein_lysate_immunoblotting.json": {
+   "plate-cells": {
+    "start": 0,
+    "end": 1800
+   },
+   "add-treatment": {
+    "start": 86400,
+    "end": 87000
+   },
+   "wash-cells": {
+    "start": 87000,
+    "end": 87300
+   },
+   "lyse-cells": {
+    "start": 87300,
+    "end": 87900
+   },
+   "incubate-lysates": {
+    "start": 87900,
+    "end": 88200
+   },
+   "centrifuge-lysates": {
+    "start": 88200,
+    "end": 88680
+   },
+   "measure-protein": {
+    "start": 88680,
+    "end": 90480
+   },
+   "prepare-samples": {
+    "start": 90480,
+    "end": 90960
+   },
+   "run-gel": {
+    "start": 90960,
+    "end": 93960
+   },
+   "transfer-membrane": {
+    "start": 93960,
+    "end": 97560
+   },
+   "block-membrane": {
+    "start": 97560,
+    "end": 99360
+   },
+   "primary-antibody": {
+    "start": 99360,
+    "end": 142560
+   },
+   "wash-primary": {
+    "start": 142560,
+    "end": 143760
+   },
+   "secondary-antibody": {
+    "start": 143760,
+    "end": 147360
+   },
+   "wash-secondary": {
+    "start": 147360,
+    "end": 149160
+   },
+   "develop-detect": {
+    "start": 149160,
+    "end": 150360
+   }
+  },
+  "rat_psychopharmacology.json": {
+   "saline-saline-pretreatment": {
+    "start": 0,
+    "end": 1860
+   },
+   "saline-saline-treatment": {
+    "start": 1860,
+    "end": 2220
+   },
+   "saline-saline-2dg": {
+    "start": 2220,
+    "end": 2580
+   },
+   "saline-saline-sacrifice": {
+    "start": 2580,
+    "end": 2700
+   },
+   "saline-saline-brain-removal": {
+    "start": 2700,
+    "end": 2880
+   },
+   "saline-saline-brain-freeze": {
+    "start": 2880,
+    "end": 3060
+   },
+   "saline-ketamine-pretreatment": {
+    "start": 0,
+    "end": 1860
+   },
+   "saline-ketamine-treatment": {
+    "start": 1860,
+    "end": 2220
+   },
+   "saline-ketamine-2dg": {
+    "start": 2220,
+    "end": 2580
+   },
+   "saline-ketamine-sacrifice": {
+    "start": 2580,
+    "end": 2700
+   },
+   "saline-ketamine-brain-removal": {
+    "start": 2700,
+    "end": 2880
+   },
+   "saline-ketamine-brain-freeze": {
+    "start": 2880,
+    "end": 3060
+   },
+   "clozapine5-saline-pretreatment": {
+    "start": 0,
+    "end": 1860
+   },
+   "clozapine5-saline-treatment": {
+    "start": 1860,
+    "end": 2220
+   },
+   "clozapine5-saline-2dg": {
+    "start": 2220,
+    "end": 2580
+   },
+   "clozapine5-saline-sacrifice": {
+    "start": 2580,
+    "end": 2700
+   },
+   "clozapine5-saline-brain-removal": {
+    "start": 2700,
+    "end": 2880
+   },
+   "clozapine5-saline-brain-freeze": {
+    "start": 2880,
+    "end": 3060
+   },
+   "clozapine5-ketamine-pretreatment": {
+    "start": 0,
+    "end": 1860
+   },
+   "clozapine5-ketamine-treatment": {
+    "start": 1860,
+    "end": 2220
+   },
+   "clozapine5-ketamine-2dg": {
+    "start": 2220,
+    "end": 2580
+   },
+   "clozapine5-ketamine-sacrifice": {
+    "start": 2580,
+    "end": 2700
+   },
+   "clozapine5-ketamine-brain-removal": {
+    "start": 2700,
+    "end": 2880
+   },
+   "clozapine5-ketamine-brain-freeze": {
+    "start": 2880,
+    "end": 3060
+   },
+   "clozapine10-saline-pretreatment": {
+    "start": 0,
+    "end": 1860
+   },
+   "clozapine10-saline-treatment": {
+    "start": 1860,
+    "end": 2220
+   },
+   "clozapine10-saline-2dg": {
+    "start": 2220,
+    "end": 2580
+   },
+   "clozapine10-saline-sacrifice": {
+    "start": 2580,
+    "end": 2700
+   },
+   "clozapine10-saline-brain-removal": {
+    "start": 2700,
+    "end": 2880
+   },
+   "clozapine10-saline-brain-freeze": {
+    "start": 2880,
+    "end": 3060
+   },
+   "clozapine10-ketamine-pretreatment": {
+    "start": 0,
+    "end": 1860
+   },
+   "clozapine10-ketamine-treatment": {
+    "start": 1860,
+    "end": 2220
+   },
+   "clozapine10-ketamine-2dg": {
+    "start": 2220,
+    "end": 2580
+   },
+   "clozapine10-ketamine-sacrifice": {
+    "start": 2580,
+    "end": 2700
+   },
+   "clozapine10-ketamine-brain-removal": {
+    "start": 2700,
+    "end": 2880
+   },
+   "clozapine10-ketamine-brain-freeze": {
+    "start": 2880,
+    "end": 3060
+   }
+  },
+  "replicates_bakery_serial.json": {
+   "mix-dough-r1": {
+    "start": 0,
+    "end": 600
+   },
+   "bulk-ferment-r1": {
+    "start": 600,
+    "end": 7800
+   },
+   "shape-r1": {
+    "start": 7800,
+    "end": 8700
+   },
+   "bake-r1": {
+    "start": 8700,
+    "end": 11400
+   },
+   "cool-r1": {
+    "start": 11400,
+    "end": 15000
+   },
+   "mix-dough-r2": {
+    "start": 15000,
+    "end": 15600
+   },
+   "bulk-ferment-r2": {
+    "start": 15600,
+    "end": 22800
+   },
+   "shape-r2": {
+    "start": 22800,
+    "end": 23700
+   },
+   "bake-r2": {
+    "start": 23700,
+    "end": 26400
+   },
+   "cool-r2": {
+    "start": 26400,
+    "end": 30000
+   },
+   "mix-dough-r3": {
+    "start": 30000,
+    "end": 30600
+   },
+   "bulk-ferment-r3": {
+    "start": 30600,
+    "end": 37800
+   },
+   "shape-r3": {
+    "start": 37800,
+    "end": 38700
+   },
+   "bake-r3": {
+    "start": 38700,
+    "end": 41400
+   },
+   "cool-r3": {
+    "start": 41400,
+    "end": 45000
+   },
+   "mix-dough-r4": {
+    "start": 45000,
+    "end": 45600
+   },
+   "bulk-ferment-r4": {
+    "start": 45600,
+    "end": 52800
+   },
+   "shape-r4": {
+    "start": 52800,
+    "end": 53700
+   },
+   "bake-r4": {
+    "start": 53700,
+    "end": 56400
+   },
+   "cool-r4": {
+    "start": 56400,
+    "end": 60000
+   }
+  },
+  "replicates_comprehensive_demo.json": {
+   "parallel-prep-r1": {
+    "start": 0,
+    "end": 120
+   },
+   "parallel-prep-r2": {
+    "start": 0,
+    "end": 120
+   },
+   "parallel-prep-r3": {
+    "start": 0,
+    "end": 120
+   },
+   "parallel-process-r1": {
+    "start": 120,
+    "end": 300
+   },
+   "parallel-process-r2": {
+    "start": 120,
+    "end": 300
+   },
+   "parallel-process-r3": {
+    "start": 120,
+    "end": 300
+   },
+   "serial-setup": {
+    "start": 60,
+    "end": 120
+   },
+   "serial-process-r1": {
+    "start": 120,
+    "end": 210
+   },
+   "serial-process-r2": {
+    "start": 210,
+    "end": 300
+   },
+   "serial-process-r3": {
+    "start": 300,
+    "end": 390
+   },
+   "serial-process-r4": {
+    "start": 390,
+    "end": 480
+   },
+   "serial-cleanup": {
+    "start": 480,
+    "end": 510
+   },
+   "stagger-init": {
+    "start": 120,
+    "end": 150
+   },
+   "stagger-process-r1": {
+    "start": 150,
+    "end": 300
+   },
+   "stagger-process-r2": {
+    "start": 180.0,
+    "end": 330.0
+   },
+   "stagger-process-r3": {
+    "start": 210.0,
+    "end": 360.0
+   },
+   "stagger-process-r4": {
+    "start": 240.0,
+    "end": 390.0
+   },
+   "stagger-process-r5": {
+    "start": 270.0,
+    "end": 420.0
+   },
+   "collect-items": {
+    "start": 510,
+    "end": 570
+   },
+   "final-package": {
+    "start": 570,
+    "end": 660
+   }
+  },
+  "replicates_lab_samples.json": {
+   "label-tubes": {
+    "start": 0,
+    "end": 120
+   },
+   "analyze": {
+    "start": 720,
+    "end": 1020
+   },
+   "centrifuge-r1": {
+    "start": 120,
+    "end": 720
+   },
+   "centrifuge-r2": {
+    "start": 120,
+    "end": 720
+   },
+   "centrifuge-r3": {
+    "start": 120,
+    "end": 720
+   }
+  },
+  "replicates_stagger_orders.json": {
+   "fire-appetizer-r1": {
+    "start": 0,
+    "end": 300
+   },
+   "prep-entree-r1": {
+    "start": 300,
+    "end": 480
+   },
+   "cook-entree-r1": {
+    "start": 480,
+    "end": 960
+   },
+   "plate-serve-r1": {
+    "start": 960,
+    "end": 1080
+   },
+   "fire-appetizer-r2": {
+    "start": 60.0,
+    "end": 360.0
+   },
+   "prep-entree-r2": {
+    "start": 360.0,
+    "end": 540.0
+   },
+   "cook-entree-r2": {
+    "start": 540.0,
+    "end": 1020.0
+   },
+   "plate-serve-r2": {
+    "start": 1020.0,
+    "end": 1140.0
+   },
+   "fire-appetizer-r3": {
+    "start": 120.0,
+    "end": 420.0
+   },
+   "prep-entree-r3": {
+    "start": 420.0,
+    "end": 600.0
+   },
+   "cook-entree-r3": {
+    "start": 600.0,
+    "end": 1080.0
+   },
+   "plate-serve-r3": {
+    "start": 1080.0,
+    "end": 1200.0
+   },
+   "fire-appetizer-r4": {
+    "start": 180.0,
+    "end": 480.0
+   },
+   "prep-entree-r4": {
+    "start": 480.0,
+    "end": 660.0
+   },
+   "cook-entree-r4": {
+    "start": 660.0,
+    "end": 1140.0
+   },
+   "plate-serve-r4": {
+    "start": 1140.0,
+    "end": 1260.0
+   },
+   "fire-appetizer-r5": {
+    "start": 240.0,
+    "end": 540.0
+   },
+   "prep-entree-r5": {
+    "start": 540.0,
+    "end": 720.0
+   },
+   "cook-entree-r5": {
+    "start": 720.0,
+    "end": 1200.0
+   },
+   "plate-serve-r5": {
+    "start": 1200.0,
+    "end": 1320.0
+   }
+  },
+  "restaurant_breakfast.json": {
+   "eggs-crack-whisk-r1": {
+    "start": 0,
+    "end": 60
+   },
+   "eggs-heat-pan-r1": {
+    "start": 60,
+    "end": 150
+   },
+   "eggs-cook-r1": {
+    "start": 150,
+    "end": 300
+   },
+   "eggs-crack-whisk-r2": {
+    "start": 0,
+    "end": 60
+   },
+   "eggs-heat-pan-r2": {
+    "start": 60,
+    "end": 150
+   },
+   "eggs-cook-r2": {
+    "start": 150,
+    "end": 300
+   },
+   "eggs-crack-whisk-r3": {
+    "start": 0,
+    "end": 60
+   },
+   "eggs-heat-pan-r3": {
+    "start": 60,
+    "end": 150
+   },
+   "eggs-cook-r3": {
+    "start": 150,
+    "end": 300
+   },
+   "bacon-prep-r1": {
+    "start": 0,
+    "end": 60
+   },
+   "bacon-cook-r1": {
+    "start": 60,
+    "end": 660
+   },
+   "bacon-prep-r2": {
+    "start": 0,
+    "end": 60
+   },
+   "bacon-cook-r2": {
+    "start": 60,
+    "end": 660
+   },
+   "toast-cook-r1": {
+    "start": 120,
+    "end": 330
+   },
+   "toast-cook-r2": {
+    "start": 120,
+    "end": 330
+   },
+   "toast-cook-r3": {
+    "start": 120,
+    "end": 330
+   },
+   "toast-cook-r4": {
+    "start": 120,
+    "end": 330
+   }
+  },
+  "restaurant_tasting_menu.json": {
+   "prepare-oyster-foam": {
+    "start": 0,
+    "end": 900
+   },
+   "plate-amuse-bouche": {
+    "start": 2700,
+    "end": 3000
+   },
+   "prep-scallops": {
+    "start": 600,
+    "end": 1800
+   },
+   "make-cauliflower-puree": {
+    "start": 1800,
+    "end": 3600
+   },
+   "sear-scallops": {
+    "start": 3900,
+    "end": 4140
+   },
+   "plate-scallops": {
+    "start": 4140,
+    "end": 4440
+   },
+   "make-lobster-stock": {
+    "start": 1200,
+    "end": 3600
+   },
+   "prepare-bisque": {
+    "start": 3600,
+    "end": 4800
+   },
+   "serve-bisque": {
+    "start": 5640,
+    "end": 5880
+   },
+   "prepare-lobster-garnish": {
+    "start": 4500,
+    "end": 5100
+   },
+   "prep-halibut": {
+    "start": 2400,
+    "end": 3300
+   },
+   "prepare-vegetables": {
+    "start": 3300,
+    "end": 4500
+   },
+   "make-beurre-blanc": {
+    "start": 6780,
+    "end": 7230
+   },
+   "cook-halibut": {
+    "start": 7230,
+    "end": 7710
+   },
+   "plate-halibut": {
+    "start": 7710,
+    "end": 8070
+   },
+   "prepare-beef": {
+    "start": 3600,
+    "end": 4800
+   },
+   "make-red-wine-jus": {
+    "start": 4800,
+    "end": 6600
+   },
+   "grill-beef": {
+    "start": 9270,
+    "end": 9990
+   },
+   "plate-beef": {
+    "start": 9990,
+    "end": 10410
+   },
+   "prepare-potato-gratin": {
+    "start": 5100,
+    "end": 7800
+   },
+   "prepare-cheese-board": {
+    "start": 5400,
+    "end": 6600
+   },
+   "toast-bread": {
+    "start": 11310,
+    "end": 11610
+   },
+   "plate-cheese-course": {
+    "start": 11610,
+    "end": 11850
+   },
+   "make-quince-paste": {
+    "start": 4800,
+    "end": 6600
+   },
+   "prepare-souffle-base": {
+    "start": 4800,
+    "end": 6000
+   },
+   "prepare-ramekins": {
+    "start": 6000,
+    "end": 6600
+   },
+   "make-vanilla-sauce": {
+    "start": 6600,
+    "end": 7500
+   },
+   "whip-egg-whites": {
+    "start": 12450,
+    "end": 12750
+   },
+   "bake-souffles": {
+    "start": 12750,
+    "end": 13550
+   },
+   "serve-dessert": {
+    "start": 13550,
+    "end": 13730
+   }
+  },
+  "software_product_launch.json": {
+   "feature_freeze": {
+    "start": 0,
+    "end": 28800
+   },
+   "integration_testing": {
+    "start": 28800,
+    "end": 86400
+   },
+   "performance_optimization": {
+    "start": 86400,
+    "end": 172800
+   },
+   "security_audit": {
+    "start": 86400,
+    "end": 129600
+   },
+   "production_deployment": {
+    "start": 129600,
+    "end": 144000
+   },
+   "monitoring_setup": {
+    "start": 144000,
+    "end": 165600
+   },
+   "final_ui_polish": {
+    "start": 0,
+    "end": 43200
+   },
+   "user_testing": {
+    "start": 43200,
+    "end": 115200
+   },
+   "design_documentation": {
+    "start": 115200,
+    "end": 144000
+   },
+   "onboarding_flow": {
+    "start": 144000,
+    "end": 201600
+   },
+   "content_creation": {
+    "start": 0,
+    "end": 172800
+   },
+   "influencer_outreach": {
+    "start": 43200,
+    "end": 302400
+   },
+   "press_kit": {
+    "start": 172800,
+    "end": 259200
+   },
+   "beta_program": {
+    "start": 115200,
+    "end": 460800
+   },
+   "launch_announcement": {
+    "start": 460800,
+    "end": 464400
+   },
+   "social_media_campaign": {
+    "start": 464400,
+    "end": 550800
+   },
+   "infrastructure_scaling": {
+    "start": 0,
+    "end": 57600
+   },
+   "backup_procedures": {
+    "start": 57600,
+    "end": 100800
+   },
+   "support_training": {
+    "start": 201600,
+    "end": 288000
+   },
+   "analytics_setup": {
+    "start": 100800,
+    "end": 129600
+   },
+   "go_live_checklist": {
+    "start": 129600,
+    "end": 136800
+   },
+   "pricing_finalization": {
+    "start": 0,
+    "end": 86400
+   },
+   "legal_compliance": {
+    "start": 28800,
+    "end": 158400
+   },
+   "partnership_agreements": {
+    "start": 86400,
+    "end": 259200
+   },
+   "financial_setup": {
+    "start": 158400,
+    "end": 216000
+   }
+  },
+  "stir_fry_with_choice.json": {
+   "rinse-rice": {
+    "start": 0,
+    "end": 120
+   },
+   "cook-rice": {
+    "start": 120,
+    "end": 1200
+   },
+   "prep-veggies": {
+    "start": 120,
+    "end": 720
+   },
+   "stir-fry-veggies": {
+    "start": 1350,
+    "end": 1590
+   },
+   "choose-protein": {
+    "start": 720,
+    "end": 750
+   },
+   "prep-chicken": {
+    "start": 750,
+    "end": 1050
+   },
+   "prep-tofu": {
+    "start": 750,
+    "end": 1170
+   },
+   "prep-shrimp": {
+    "start": 750,
+    "end": 1110
+   },
+   "cook-protein": {
+    "start": 1050,
+    "end": 1350
+   },
+   "make-sauce": {
+    "start": 720,
+    "end": 840
+   },
+   "add-sauce": {
+    "start": 1590,
+    "end": 1650
+   }
+  },
+  "strength_training_session.json": {
+   "general-warmup": {
+    "start": 0,
+    "end": 300
+   },
+   "mobility": {
+    "start": 300,
+    "end": 600
+   },
+   "bench-warmup": {
+    "start": 600,
+    "end": 900
+   },
+   "bench-working": {
+    "start": 900,
+    "end": 1800
+   },
+   "ohp-working": {
+    "start": 1800,
+    "end": 2460
+   },
+   "row-working": {
+    "start": 2460,
+    "end": 3240
+   },
+   "pullup-working": {
+    "start": 3240,
+    "end": 3840
+   },
+   "curls": {
+    "start": 3840,
+    "end": 4290
+   },
+   "dips": {
+    "start": 4290,
+    "end": 4740
+   },
+   "stretching": {
+    "start": 4740,
+    "end": 5040
+   }
+  },
+  "sunny_side_up_eggs.json": {
+   "prep": {
+    "start": 0,
+    "end": 180
+   },
+   "crack-eggs": {
+    "start": 180,
+    "end": 210
+   },
+   "cover-and-cook": {
+    "start": 210,
+    "end": 360
+   },
+   "plate": {
+    "start": 360,
+    "end": 390
+   }
+  },
+  "test_offset_example.json": {
+   "start-immediately": {
+    "start": 0,
+    "end": 60
+   },
+   "start-after-5min": {
+    "start": 300,
+    "end": 420
+   },
+   "start-after-10min": {
+    "start": 600,
+    "end": 690
+   }
+  },
+  "test_overutilization.json": {
+   "boil-water": {
+    "start": 0,
+    "end": 300
+   },
+   "cook-pasta": {
+    "start": 300,
+    "end": 780
+   },
+   "prep-sauce-ingredients": {
+    "start": 0,
+    "end": 240
+   },
+   "cook-sauce": {
+    "start": 240,
+    "end": 840
+   },
+   "prep-vegetables": {
+    "start": 0,
+    "end": 360
+   },
+   "roast-vegetables": {
+    "start": 360,
+    "end": 2160
+   },
+   "prep-garlic-bread": {
+    "start": 0,
+    "end": 180
+   },
+   "bake-garlic-bread": {
+    "start": 180,
+    "end": 780
+   },
+   "rinse-rice": {
+    "start": 0,
+    "end": 180
+   },
+   "cook-rice": {
+    "start": 180,
+    "end": 1080
+   }
+  },
+  "thanksgiving_dinner.json": {
+   "turkey-prep": {
+    "start": 0,
+    "end": 1800
+   },
+   "turkey-roast": {
+    "start": 1800,
+    "end": 12600
+   },
+   "turkey-rest": {
+    "start": 12600,
+    "end": 14400
+   },
+   "bread-prep": {
+    "start": 3600,
+    "end": 4800
+   },
+   "saute-vegetables": {
+    "start": 4800,
+    "end": 5700
+   },
+   "mix-stuffing": {
+    "start": 5700,
+    "end": 6300
+   },
+   "bake-stuffing": {
+    "start": 12600,
+    "end": 15300
+   },
+   "peel-potatoes": {
+    "start": 7200,
+    "end": 8400
+   },
+   "boil-potatoes": {
+    "start": 8400,
+    "end": 9600
+   },
+   "mash-potatoes": {
+    "start": 9600,
+    "end": 10200
+   },
+   "keep-warm": {
+    "start": 10200,
+    "end": 11100
+   },
+   "blanch-beans": {
+    "start": 8400,
+    "end": 8700
+   },
+   "make-sauce": {
+    "start": 8700,
+    "end": 9600
+   },
+   "assemble-casserole": {
+    "start": 9600,
+    "end": 9900
+   },
+   "bake-casserole": {
+    "start": 15300,
+    "end": 16800
+   },
+   "cook-cranberries": {
+    "start": 10800,
+    "end": 11700
+   },
+   "cool-sauce": {
+    "start": 11700,
+    "end": 13500
+   },
+   "make-roux": {
+    "start": 12600,
+    "end": 12900
+   },
+   "add-stock": {
+    "start": 12900,
+    "end": 13500
+   }
+  },
+  "thanksgiving_one_oven.json": {
+   "turkey-prep": {
+    "start": 0,
+    "end": 1200
+   },
+   "turkey-roast": {
+    "start": 1200,
+    "end": 11100
+   },
+   "turkey-rest": {
+    "start": 11100,
+    "end": 12900
+   },
+   "turkey-carve": {
+    "start": 13200,
+    "end": 13800
+   },
+   "stuffing-prep": {
+    "start": 5400,
+    "end": 6900
+   },
+   "stuffing-bake": {
+    "start": 11100,
+    "end": 13200
+   },
+   "potatoes-peel": {
+    "start": 1200,
+    "end": 2100
+   },
+   "potatoes-boil": {
+    "start": 2100,
+    "end": 3300
+   },
+   "potatoes-mash": {
+    "start": 3300,
+    "end": 3900
+   },
+   "gravy-make": {
+    "start": 11400,
+    "end": 12300
+   },
+   "salad": {
+    "start": 12600,
+    "end": 12900
+   },
+   "guests-seated": {
+    "start": 12900,
+    "end": 13200
+   },
+   "serve": {
+    "start": 13800,
+    "end": 14100
+   }
+  },
+  "wedding_and_reception.json": {
+   "bride-hair-makeup": {
+    "start": 0,
+    "end": 7200
+   },
+   "bride-dress": {
+    "start": 7200,
+    "end": 9000
+   },
+   "groom-getting-ready": {
+    "start": 3600,
+    "end": 7200
+   },
+   "getting-ready-photos": {
+    "start": 3600,
+    "end": 7200
+   },
+   "first-look": {
+    "start": 9000,
+    "end": 10200
+   },
+   "couple-portraits": {
+    "start": 10200,
+    "end": 12000
+   },
+   "wedding-party-photos": {
+    "start": 12000,
+    "end": 13200
+   },
+   "family-formals": {
+    "start": 13200,
+    "end": 14400
+   },
+   "ceremony-venue-setup": {
+    "start": 0,
+    "end": 5400
+   },
+   "musician-setup": {
+    "start": 5400,
+    "end": 7200
+   },
+   "guest-seating": {
+    "start": 14400,
+    "end": 16200
+   },
+   "processional": {
+    "start": 16200,
+    "end": 16800
+   },
+   "opening-remarks": {
+    "start": 16800,
+    "end": 17100
+   },
+   "readings": {
+    "start": 17100,
+    "end": 17700
+   },
+   "vows": {
+    "start": 17700,
+    "end": 18180
+   },
+   "ring-exchange": {
+    "start": 18180,
+    "end": 18480
+   },
+   "unity-ceremony": {
+    "start": 18480,
+    "end": 18780
+   },
+   "the-kiss": {
+    "start": 18780,
+    "end": 18900
+   },
+   "recessional": {
+    "start": 18900,
+    "end": 19200
+   },
+   "cocktail-setup": {
+    "start": 16200,
+    "end": 18000
+   },
+   "cocktail-hour": {
+    "start": 19200,
+    "end": 22800
+   },
+   "reception-flip": {
+    "start": 19200,
+    "end": 22800
+   },
+   "cake-display-setup": {
+    "start": 22800,
+    "end": 24000
+   },
+   "dj-setup": {
+    "start": 19200,
+    "end": 21900
+   },
+   "grand-entrance": {
+    "start": 24000,
+    "end": 24600
+   },
+   "first-dance": {
+    "start": 24600,
+    "end": 24900
+   },
+   "welcome-toast": {
+    "start": 24900,
+    "end": 25200
+   },
+   "dinner-service": {
+    "start": 25200,
+    "end": 29400
+   },
+   "parent-dances": {
+    "start": 29400,
+    "end": 30000
+   },
+   "cake-cutting": {
+    "start": 30000,
+    "end": 30600
+   },
+   "bouquet-toss": {
+    "start": 30600,
+    "end": 30900
+   },
+   "garter-toss": {
+    "start": 30900,
+    "end": 31200
+   },
+   "open-dancing": {
+    "start": 31200,
+    "end": 36600
+   },
+   "last-dance": {
+    "start": 36600,
+    "end": 36900
+   },
+   "send-off": {
+    "start": 36900,
+    "end": 37500
+   },
+   "maid-of-honor-toast": {
+    "start": 26400,
+    "end": 26820
+   },
+   "best-man-toast": {
+    "start": 26820,
+    "end": 27240
+   },
+   "anniversary-dance": {
+    "start": 33000,
+    "end": 33420
+   },
+   "dessert-service": {
+    "start": 30600,
+    "end": 33000
+   },
+   "late-night-snacks": {
+    "start": 33000,
+    "end": 36600
+   }
+  },
+  "yoga_flow_session.json": {
+   "centering": {
+    "start": 0,
+    "end": 300
+   },
+   "warmup-stretches": {
+    "start": 300,
+    "end": 660
+   },
+   "sun-salutation-a-r1": {
+    "start": 660,
+    "end": 750
+   },
+   "sun-salutation-a-r2": {
+    "start": 750,
+    "end": 840
+   },
+   "sun-salutation-a-r3": {
+    "start": 840,
+    "end": 930
+   },
+   "sun-salutation-b-r1": {
+    "start": 930,
+    "end": 1080
+   },
+   "sun-salutation-b-r2": {
+    "start": 1080,
+    "end": 1230
+   },
+   "standing-poses": {
+    "start": 1230,
+    "end": 1710
+   },
+   "seated-poses": {
+    "start": 1710,
+    "end": 2010
+   },
+   "savasana": {
+    "start": 2010,
+    "end": 2430
+   }
+  }
+ },
+ "skipped": []
+}

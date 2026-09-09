@@ -1,0 +1,46 @@
+{
+  "name": "@rhylthyme/timeline",
+  "version": "1.2.0",
+  "description": "Timing engine and static Gantt renderer for Rhylthyme programs: resolve step start/end times from triggers, render an SVG timeline with dependency arrows. Zero dependencies, UMD.",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./core": "./src/index.js"
+  },
+  "files": [
+    "src/",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node --test test/"
+  },
+  "keywords": [
+    "rhylthyme",
+    "scheduling",
+    "gantt",
+    "timeline",
+    "svg",
+    "temporal"
+  ],
+  "author": "Jeremy Leipzig",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rhylthyme/rhylthyme-timeline.git"
+  },
+  "bugs": {
+    "url": "https://github.com/rhylthyme/rhylthyme-timeline/issues"
+  },
+  "homepage": "https://github.com/rhylthyme/rhylthyme-timeline#readme",
+  "engines": {
+    "node": ">=18"
+  },
+  "rhylthyme": {
+    "supportedSchemaVersions": [
+      "0.1.0",
+      "0.2.0-alpha"
+    ]
+  }
+}
