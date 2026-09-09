@@ -11,10 +11,43 @@ turns that into resolved start and end times and draws them.
 
 ## What it produces
 
-Three outputs from the same engine, shown here for
+Four outputs from the same engine, shown here for
 [`thanksgiving_one_oven.json`](test/fixtures/programs/thanksgiving_one_oven.json).
 
-### 1. In the browser: `renderTimeline(container, program)`
+### 1. The interactive player: `node player/build.js`
+
+The page rhylthyme.com serves in its player: a timeline with a live cursor,
+Start / Pause / Stop and speed controls, zoom, and a tab bar for the
+itinerary, dependency graph, resources, clock, layers and JSON editor views.
+This is a Chrome screenshot of the page `player/build.js` wrote:
+
+![Interactive player built by player/build.js: controls, zoomable timeline with live cursor, view tabs](docs/thanksgiving-player.png)
+
+```bash
+node player/build.js test/fixtures/programs/thanksgiving_one_oven.json thanksgiving-player.html
+open thanksgiving-player.html
+```
+
+The output is one self-contained HTML file (D3 v5 and Font Awesome load
+from CDNs). Pass `--environment env.json` to merge an environment's
+resource constraints the way the server does. From code:
+
+```js
+const { buildPlayerHtml } = require('@rhylthyme/timeline/player');
+const html = buildPlayerHtml(program /*, environment */);
+```
+
+`player/template.html` is exported verbatim from the server's
+`web_visualizer.py`; `player/build.js` ports the Python that fills its
+slots. `npm test` rebuilds every corpus program and checks the HTML is
+byte-identical to the server's (39 programs, sha256). Two things to know:
+the player keeps the server's own step placement, which puts a
+negative-offset step at the start of the step it refers to rather than
+where `computeStepTimings` puts it (unifying the two is on the roadmap),
+and the "Request a video" and "Switch kitchen" buttons message a parent
+window, so they do nothing when the file is opened on its own.
+
+### 2. In the browser: `renderTimeline(container, program)`
 
 The JavaScript component draws straight into a DOM element. This is a
 Chrome screenshot of [`examples/index.html`](examples/index.html), which
@@ -42,7 +75,7 @@ The page has a dropdown of six example programs and re-renders on change.
 `examples/programs.js` is those programs inlined so the page works from
 `file://`.
 
-### 2. From Node: `renderTimelineSvg(program)` → an SVG file
+### 3. From Node: `renderTimelineSvg(program)` → an SVG file
 
 The same drawing as a standalone SVG string, written by
 [`examples/render.js`](examples/render.js). This is the file it produced,
@@ -78,7 +111,7 @@ run any SVG converter, e.g. `rsvg-convert -w 1640 -f png -o out.png thanksgiving
 Point it at your own program JSON to render that instead; the
 [example corpus](test/fixtures/programs) has 39 more.
 
-### 3. Just the numbers: `computeStepTimings(program)`
+### 4. Just the numbers: `computeStepTimings(program)`
 
 What both renderers are drawn from (seconds from program start;
 `resolved` is `false` only for cycles or dangling references):
@@ -122,6 +155,7 @@ const svg = Rhylthyme.renderTimelineSvg(program);
 | `computeStepTimings(program)` | `{ [stepId]: { start, end, duration, trackId, resolved } }` in seconds from program start. `resolved` is `false` when a trigger could not be satisfied (cycle or dangling reference); such steps are placed at `t = 0`. |
 | `renderTimelineSvg(program, opts?)` | SVG markup (string). `opts = { arrows, marks, legend }`, all default `true`: cross-track dependency arrows (dashed for negative offsets), hatched indefinite steps, faded variable-step extensions to their maximum, a flag on manual gates, and a one-line legend. |
 | `renderTimeline(container, program, opts?)` | Injects the SVG into a DOM element and returns the markup. |
+| `buildPlayerHtml(program, environment?)` (from `@rhylthyme/timeline/player`) | The interactive visualizer page as an HTML string, identical to the server's. Needs Node (reads `player/template.html`). |
 | `expandReplicates(program)` | A deep copy with track/step `replicates` (and legacy `batch_size`/`stagger`) expanded into flat tracks and steps, exactly as the Python `expand_replicates` does. The functions above apply it automatically. |
 | `parseSeconds(value)` | `90`, `"90"`, `"5m"`, `"1h30m"`, `"-20m"` → seconds (number). |
 | `stepDurationSeconds(step)` | Planning duration: fixed seconds, else variable default, else max, else min; indefinite → `defaultSeconds`, or a 60 s placeholder. |
@@ -161,7 +195,7 @@ programs at 1.3.0), so the two implementations cannot drift silently.
 
 - [rhylthyme-spec](https://github.com/rhylthyme/rhylthyme-spec): the JSON Schema
 - [rhylthyme-examples](https://github.com/rhylthyme/rhylthyme-examples): the programs used as test fixtures
-- The interactive player (`<rhylthyme-timeline>` Web Component) is planned as a second entry point of this package; see the roadmap in the server repository's `plans/rhylthyme-timeline.md`.
+- The interactive player ships here as a page builder (`player/`); packaging it as a `<rhylthyme-timeline>` Web Component is the next step in the server repository's `plans/rhylthyme-timeline.md`.
 
 ## License
 

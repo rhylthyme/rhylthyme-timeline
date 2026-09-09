@@ -1,0 +1,158 @@
+{
+  "academy_awards_ceremony": {
+    "sha256": "c22c0dd391eb8a39f6ba504fb2e84895bdea5e401d567356ad02010a11087163",
+    "length": 865272
+  },
+  "advanced_dependencies_demo": {
+    "sha256": "2390a39993cd52749ff5510d18446bc598b6ac8015a9304d452beb91928773ca",
+    "length": 802005
+  },
+  "airport_batch_example": {
+    "sha256": "5c50c076a0beb71749281c898a587532ab4055e420242cf9f62c242d27e8cb19",
+    "length": 819343
+  },
+  "airport_program_example": {
+    "sha256": "381f15c78e608cb9a01fc9316749ad613ebe858827d955d2cd60a7bd9e22a7d8",
+    "length": 799890
+  },
+  "bakery_program_example": {
+    "sha256": "d40a009d521dce40dc5a164daabacbfd42056adbb7463aa04f285466b2d3221c",
+    "length": 806400
+  },
+  "breakfast_from_tracks": {
+    "sha256": "6f91b6de615228b2b17d8fb350a23b442e89f22c4323160d157c150734b5e4ce",
+    "length": 782815
+  },
+  "breakfast_schedule": {
+    "sha256": "6d0f535096a5683ea8a5e2bf58fcbb46e02580777ece54430ff76522088d5419",
+    "length": 776070
+  },
+  "breakfast_with_buffers": {
+    "sha256": "2166694c844bece139313b5fb8bae1cdbb04372b1f818e0b6cd9d2d57092f1af",
+    "length": 780894
+  },
+  "breakfast_with_environment": {
+    "sha256": "47e043aed8ddcb910aa1af022a3e7d0ab239241f5069c977ff95e192f888d190",
+    "length": 790031
+  },
+  "buffer_example": {
+    "sha256": "0a0284409f37cdae6907c376832c86650f895be7d8927c77676b68457d1b3cd9",
+    "length": 775023
+  },
+  "cell_culture_experiment": {
+    "sha256": "e881f59a5b58f71c8d2f4df6a61d847f824bebbd5cd42ef5e0fe7c2b736a2b0f",
+    "length": 787382
+  },
+  "chemical_plant_batch": {
+    "sha256": "6a272ea648feb83c974aa2b98cc7c066ffd3758906d3b8c349d155afd9444514",
+    "length": 820051
+  },
+  "circuit_training": {
+    "sha256": "3454da577b6e49a895e66f1b039edefbcb2795e97b79b9c48ee4c47d8efe1b59",
+    "length": 802514
+  },
+  "comprehensive_manual_demo": {
+    "sha256": "588d14a5250569800829937b1f3c8ecbafe19c6f91374d01a5723e2404558c6c",
+    "length": 777924
+  },
+  "corporate_conference": {
+    "sha256": "e9cc26758e5e2f6c1c0ed101bc13551ae0781d53a23b87953f50c946f046589b",
+    "length": 827177
+  },
+  "corporate_presentation": {
+    "sha256": "47da1eedf214bd54c809dbac295f8d20d27ec5ccf4f5a5b1a83964a61d19a288",
+    "length": 814263
+  },
+  "drug_screening_from_tracks": {
+    "sha256": "a3eab5066d85beb831f7692d71f3dcc79aed670777fb847d800b92cbf3c3f0fe",
+    "length": 789410
+  },
+  "hiit_cardio_workout": {
+    "sha256": "a7f3330603bd03e7bd7e93f0e1346df690b7aa5262417603e882f2d9831c6a6c",
+    "length": 800010
+  },
+  "lab_experiment": {
+    "sha256": "65c7ff8d1e102fad54317d5dab744a703eaaa3b0a86d8a574b791d220d5bb934",
+    "length": 777919
+  },
+  "multi_resource_example": {
+    "sha256": "cd3bf8d0b5585a65fb4b15acc8c20a24c8000b21d36e2c8466c1fc1792729af6",
+    "length": 776103
+  },
+  "negative_offset_demo": {
+    "sha256": "603e71248e09b20bd5930f11ed99acbd3638aa9a67b0cd13c738f912a5bd081d",
+    "length": 778983
+  },
+  "protein_lysate_immunoblotting": {
+    "sha256": "618d278aa619806a9b1ce605fac83734a3e695bf629ded548f5bccf5db4831f4",
+    "length": 804772
+  },
+  "rat_psychopharmacology": {
+    "sha256": "18ed5a1ecbd37dba0ed5a3d40da67d04c522bb18df96fe1281564f5f99cbcf49",
+    "length": 842675
+  },
+  "replicates_bakery_serial": {
+    "sha256": "d0a24219133185c9b47436801aad1f0cf584c654cf2dc3cc097775736fbb64b6",
+    "length": 804070
+  },
+  "replicates_comprehensive_demo": {
+    "sha256": "c0b9f6c45990ac94f612ac8e9d947436482e4d92b8a35b74f7989a817b5a3b6b",
+    "length": 814251
+  },
+  "replicates_lab_samples": {
+    "sha256": "ed4eeb280dfc6fe470e5f9375ff07b12cf2c6d144ab3a06ccb88a133309d08cc",
+    "length": 774861
+  },
+  "replicates_stagger_orders": {
+    "sha256": "12119b63e0b890725e8441065ea41775c00863ae055eaa983e2768cc519e640a",
+    "length": 804243
+  },
+  "restaurant_breakfast": {
+    "sha256": "8d63ae8181ab6f226782774d4c3d6753995b46f54eec95c39ca46f592a2578fc",
+    "length": 800400
+  },
+  "restaurant_tasting_menu": {
+    "sha256": "0bff2f22ded5aa82949289978171bca95e160d297bc32749c49d1178b4d14c6f",
+    "length": 829551
+  },
+  "software_product_launch": {
+    "sha256": "3b0622459020a608f2e152297ee2dca270a6058a681df0baeacd94520828c011",
+    "length": 813988
+  },
+  "stir_fry_with_choice": {
+    "sha256": "91daefccfae55b3c9d082b22c3997932bfcc9055500c152ca28f5ba44f61133b",
+    "length": 788833
+  },
+  "strength_training_session": {
+    "sha256": "b379688fe5f7e8b3442c4a2919d5528f269e3f7bee9f4dfdfc18229cd67c10b6",
+    "length": 787153
+  },
+  "sunny_side_up_eggs": {
+    "sha256": "c9eeb9c5db4ef257d2ff9ad6ec03986d569068ae4889f2bec77936e168a3621d",
+    "length": 774561
+  },
+  "test_offset_example": {
+    "sha256": "3ef76690ba2939c620db085766de7f20be0209d4b5f29a9f93e484c5d6a99b3f",
+    "length": 769390
+  },
+  "test_overutilization": {
+    "sha256": "26c05b7497591d05714f799b3b89b9ba1c48900d79eb8f831d62bed59a65db0d",
+    "length": 784165
+  },
+  "thanksgiving_dinner": {
+    "sha256": "a171d71b0c7c9034fe8aa881ad909d7d390f3ff78ce4ad4848375b778cde4d6a",
+    "length": 803445
+  },
+  "thanksgiving_one_oven": {
+    "sha256": "8370f4a7f60de5444293717e10ed3b1671fcadea301e1667601cfe415dde3de4",
+    "length": 789017
+  },
+  "wedding_and_reception": {
+    "sha256": "b0027c945582f4553504344722a928cc0226c88d8d9864568cd95e190540b076",
+    "length": 853292
+  },
+  "yoga_flow_session": {
+    "sha256": "2bc4473e1402f3ad1195add3b7fd5ab90f43bd27ef43709bfd3d5673534dc016",
+    "length": 784536
+  }
+}

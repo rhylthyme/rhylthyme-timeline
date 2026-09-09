@@ -3,6 +3,20 @@
 All notable changes to this package are documented here. The format follows
 Keep a Changelog; versions follow SemVer.
 
+## [1.4.0] - 2026-09-09
+
+### Added
+- `player/`: the interactive visualizer from rhylthyme-server (timeline
+  with live cursor and playback controls, itinerary, DAG, resources,
+  editor). `player/template.html` is exported from the server's
+  `web_visualizer.py`; `player/build.js` ports the Python that fills it
+  (`extract_step_dependencies`, `calculate_timeline_data`, the page's
+  scalar fields, Python-compatible `json.dumps`) and is exposed as
+  `require('@rhylthyme/timeline/player').buildPlayerHtml(program, environment?)`
+  and as a CLI. `test/player.test.js` checks the output is byte-identical
+  to the server's for all 39 corpus programs.
+- `examples/index.html`: dependency-free browser demo of `renderTimeline`.
+
 ## [1.3.0] - 2026-09-09
 
 ### Added

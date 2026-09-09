@@ -1,14 +1,16 @@
 {
   "name": "@rhylthyme/timeline",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "Timing engine and static Gantt renderer for Rhylthyme programs: resolve step start/end times from triggers, render an SVG timeline with dependency arrows. Zero dependencies, UMD.",
   "main": "src/index.js",
   "exports": {
     ".": "./src/index.js",
-    "./core": "./src/index.js"
+    "./core": "./src/index.js",
+    "./player": "./player/build.js"
   },
   "files": [
     "src/",
+    "player/",
     "README.md",
     "CHANGELOG.md",
     "LICENSE"

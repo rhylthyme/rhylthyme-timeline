@@ -1,5 +1,5 @@
 /*!
- * Rhylthyme timeline-render v1.3.0
+ * Rhylthyme timeline-render v1.4.0
  * (c) 2026 Rhylthyme contributors. Released under the Apache License 2.0.
  * Source: https://github.com/rhylthyme/rhylthyme-timeline
  *
@@ -629,7 +629,7 @@
   }
 
   return {
-    version: '1.3.0',
+    version: '1.4.0',
     // Program schema versions this engine understands; bumped in step
     // with the package's minor version when new trigger/duration forms
     // are added.
