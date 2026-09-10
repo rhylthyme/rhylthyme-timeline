@@ -3,6 +3,12 @@
 All notable changes to this package are documented here. The format follows
 Keep a Changelog; versions follow SemVer.
 
+## [2.0.0-beta.3] - 2026-09-10
+
+### Changed
+- Shorter SVG legend labels: dependency, negative offset, indefinite,
+  variable, manual.
+
 ## [2.0.0-beta.2] - 2026-09-10
 
 ### Changed
