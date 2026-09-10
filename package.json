@@ -1,6 +1,6 @@
 {
   "name": "@rhylthyme/timeline",
-  "version": "2.0.0-beta.1",
+  "version": "2.0.0-beta.2",
   "description": "Timing engine, static Gantt renderer and <rhylthyme-timeline> player Web Component for Rhylthyme programs: resolve step start/end times from triggers, render an SVG timeline with dependency arrows, play it with manual gates and indefinite steps. Zero dependencies.",
   "main": "src/index.js",
   "exports": {

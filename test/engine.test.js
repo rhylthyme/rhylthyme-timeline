@@ -85,7 +85,7 @@ test("renderTimelineSvg draws arrows, marks and legend, and can switch them off"
   const svg = R.renderTimelineSvg(p);
   assert.ok(svg.startsWith("<svg"));
   assert.ok(svg.includes('marker-end="url(#rt-arrow)"'), "dependency arrows");
-  assert.ok(svg.includes('stroke-dasharray="4,3"'), "negative-offset arrow");
+  assert.ok(svg.includes('class="rt-edge"') && svg.includes('stroke-dasharray="5,4"'), "negative-offset arrow");
   assert.ok(svg.includes('fill="url(#rt-hatch)"'), "indefinite hatch");
   assert.ok(svg.includes("manual gate"), "legend");
   const plain = R.renderTimelineSvg(p, { arrows: false, marks: false, legend: false });

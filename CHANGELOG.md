@@ -3,6 +3,17 @@
 All notable changes to this package are documented here. The format follows
 Keep a Changelog; versions follow SemVer.
 
+## [2.0.0-beta.2] - 2026-09-10
+
+### Changed
+- `renderTimelineSvg` restyled to match the web player: dependency edges
+  are cubic Bézier S-curves (horizontal for forward hops, vertical for
+  near-vertical and backward negative-offset hops) with a fixed-size
+  arrowhead; bars have larger rounded corners, a white outline and a soft
+  drop shadow; light vertical gridlines run down from the axis ticks;
+  track labels and bar labels are semibold. Bars keep `class="rt-bar"`
+  and `data-step`; edges gain `class="rt-edge"`.
+
 ## [2.0.0-beta.1] - 2026-09-09
 
 Pre-release of the player Web Component. The engine API is unchanged and
