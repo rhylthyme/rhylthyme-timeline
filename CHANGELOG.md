@@ -3,6 +3,107 @@
 All notable changes to this package are documented here. The format follows
 Keep a Changelog; versions follow SemVer.
 
+## [Unreleased]
+
+### Added
+- Predicted offsets in `<rhylthyme-timeline>`. A program with
+  `metadata.offsetsUse: "predicted"` (program schema 0.3.0-alpha) resolves
+  a NEGATIVE `offsetSeconds` against a *predicted* end of the step it is
+  anchored on instead of that step's authored `defaultSeconds`. Supply the
+  predictions with the new `predictions` property (or the
+  `data-predictions` attribute), `{stepId: {seconds, low, high, basis}}`
+  exactly as `predict_durations` / `analyze_schedule` return them. A
+  prediction is used only for an `indefinite` anchor, only when `basis` is
+  not `"none"`, and only when it is sharper than the guess
+  (`high - low < defaultSeconds`); otherwise the authored number is used
+  unchanged. It is applied by resolving a program COPY carrying the
+  predicted `defaultSeconds`, so the frozen `planned` block of the run
+  record and any drawing made from `computeStepTimings(program)` still come
+  from the program as authored. New read-only `offsetsUse` and
+  `predictedAnchors` properties expose what is in force. Without the flag
+  the `predictions` property changes nothing.
+- Run records carry which durations the run's offsets were resolved
+  against: `context.offsetsUse` (`"planned"` | `"predicted"`) and, on each
+  step gated by a negative offset that used a prediction,
+  `predictedAnchorSeconds` (runs schema 0.1.0-alpha).
+- Planned-vs-actual rendering. `renderTimelineSvg` takes `baseline` (a
+  second timings map, normally `computeStepTimings(program)`): every step
+  it covers gets a thin ghost bar under its own bar at the planned
+  position (`<rect class="rt-baseline" data-step>`), rows grow to fit
+  both, and each bar is outlined by the sign of its end deviation and
+  tagged `data-deviation="early" | "late" | "on-time"` with
+  `data-deviation-seconds`. `deviationThreshold` (default 30 s) sets the
+  on-time dead band and is named in the four new legend keys. Passing a
+  run record as `run` is shorthand for
+  `{ timings: timingsFromRun(program, run), baseline: computeStepTimings(program) }`.
+  Without either option every drawing is byte-identical to 2.0.0-beta.3,
+  asserted over the whole corpus by `test/fixtures/render-snapshots.json`
+  (regenerate with `tools/gen-render-snapshots.js`).
+- `actualFromRun(record, program?, opts?)`, `timingsFromRun(program,
+  record, opts?)` and `runtimeStepId(entry, knownIds?)` map a run record
+  (rhylthyme-spec `runs` schema 0.1.0-alpha) onto expanded step ids and
+  into `computeStepTimings`' `actual`. `opts.endsOnly` keeps only the
+  observed ends.
+- Replay parity: `test/fixtures/runs/thanksgiving_one_oven.run.json` (a
+  recorded run of the Thanksgiving example, written by
+  `tools/gen-run-fixture.py`) is fed back into the engine as ends-only
+  actuals and every start it resolves matches the `triggerFiredAt` the
+  runtime recorded, within 0.5 s. `manual` gates and negative offsets are
+  excluded: the executor picks the moment for the first, and the second is
+  fired by the live runtime from the anchor's *projected* end, which the
+  observed end has since contradicted. (`event: "start"` was excluded too
+  until the CLI runner learned to anchor on the referenced step's start, as
+  this engine does.) The Python half of the check is
+  `rhylthyme-cli-runner/tests/test_replay.py`.
+- `engine.test.js` now also asserts `test/fixtures/hash-parity.json`
+  through `tools/hash-program.js`, so `programVersion` parity with Python
+  is checked from both sides.
+- `expandReplicates` understands program schema 0.3.0-alpha `instances`
+  on `afterStep` / `afterStepWithBuffer`: `"each"` replicates the
+  referencing step once per instance of the replicated step (paired
+  i -> i, transitive, offset/buffer/event preserved, placed in instance
+  i's sub-track; serial replicates get per-instance sub-tracks
+  `<trackId>--<stepId>-r<i>`), `"all"` is an explicit `compound{all}`
+  barrier (the existing default join), `"any"` a `compound{any}`.
+  Expanded instances carry `instanceOf` / `instanceIndex`; sub-tracks
+  carry `parentTrackId`. No `instances` key survives expansion, so
+  `computeStepTimings` and the renderer see only 0.2.0 constructs.
+- `supportedSchemaVersions` includes `0.3.0-alpha`.
+- `tools/gen-python-timings.py` regenerates
+  `test/fixtures/python-timings.json` from the Python reference resolver;
+  fixtures may declare `metadata.expectedTimings`, which the engine test
+  asserts on both sides. Parity corpus is now 43 programs / 685 steps
+  (adds `cookies_three_trays.json`, `pcr_twelve_samples.json` and
+  `airport_landings_taxi_gate.json`).
+- `expandReplicates` understands `replicates.maxInFlight` (0.3.0-alpha):
+  for a replicated step with `maxInFlight: k`, every instance past the
+  k-th gets one synthetic `afterStep` per leaf chain, on instance i-k of
+  the last `instances: "each"` descendant (on the step itself when it has
+  none, which makes a parallel fan-out a rolling window). The gate is
+  merged into the instance's own trigger under `logic: "all"` and tagged
+  `_synthetic: "inFlight"` with `inFlightOf` / `inFlightLimit`; the tags
+  are inert for `computeStepTimings` and stop a second expansion pass
+  from matching the trigger.
+- `renderTimelineSvg` draws each in-flight gate as a dotted, labelled
+  arrow (`<g class="rt-inflight" data-inflight-of data-limit data-from
+  data-step>`, `stroke-dasharray="1.5,3"`, label `<task> <= <k>`) from the
+  leaf instance to the instance it holds back, never as an ordinary
+  dependency arrow, with an "in-flight limit" legend key when one is
+  drawn. Barrier detection ignores synthetic sub-triggers.
+
+### Changed
+- `test/fixtures/runs/thanksgiving_one_oven.run.json` regenerated: the CLI
+  runner that produces it now fires `event: "start"` triggers from the
+  referenced step's start and negative offsets from the anchor's projected
+  end, so `salad` and the whole potato chain run earlier than before. The
+  overlay entry in `test/fixtures/render-snapshots.json` moved with it; no
+  default drawing changed.
+
+### Fixed
+- `player/build.js`: `markStaggerFloats` now reaches the staggered
+  `offsetSeconds` of an instance whose trigger the in-flight pass wrapped
+  in a compound, keeping the page byte-identical to the Python visualizer.
+
 ## [2.0.0-beta.3] - 2026-09-10
 
 ### Changed

@@ -2,6 +2,7 @@
   "'<button onclick=\"window.parent.postMessage({type:\\'rhylthyme-change-environment\\',currentType:\\'' + environment_type + \"',currentEnvId:'\" + environment_name + '\\'}, \\'*\\')\" style=\"background:none;border:1px solid var(--brand-primary, #6B9E7D);color:var(--brand-primary, #6B9E7D);border-radius:9999px;padding:3px 12px;cursor:pointer;font-size:12px;font-weight:600;transition:all 0.15s;\" onmouseover=\"this.style.background=\\'var(--brand-primary, #6B9E7D)\\';this.style.color=\\'white\\';\" onmouseout=\"this.style.background=\\'none\\';this.style.color=\\'var(--brand-primary, #6B9E7D)\\';\">' + env_load_cta + '</button>' if env_using_inline else '<div style=\"display:flex;align-items:center;gap:6px;\"><span class=\"font-semibold text-sm\" style=\"color:var(--text-primary);\" title=\"' + environment_description + '\">' + environment_name + '</span><button onclick=\"window.parent.postMessage({type:\\'rhylthyme-change-environment\\',currentType:\\'' + environment_type + \"',currentEnvId:'\" + environment_name + '\\'}, \\'*\\')\" style=\"background:none;border:1px solid #d1d5db;border-radius:4px;padding:1px 8px;cursor:pointer;font-size:10px;color:#6b7280;\" title=\"Switch ' + env_type_label.lower() + '\">Switch</button></div>'",
   "'inline' if target_duration_seconds and total_duration > target_duration_seconds else 'none'",
   "'inline-flex' if target_duration_text else 'none'",
+  "_AUTO_PLAN_JS",
   "_TAILWIND_CSS",
   "edges_json",
   "env_type_label",

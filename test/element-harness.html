@@ -6,6 +6,133 @@
 <script src="../src/index.js"></script>
 <script src="../src/element.js"></script>
 <script src="../examples/programs.js"></script>
+<script id="cookies">window.RHYLTHYME_COOKIES = {
+ "schemaVersion": "0.3.0-alpha",
+ "programId": "cookies-three-trays",
+ "name": "Three trays, one oven",
+ "description": "Three trays of cookies bake one after another in a single oven, onto a rack that holds two. Each tray starts cooling the moment it comes out (instances: \"each\"); the rack cap is replicates.maxInFlight: 2, so the third bake waits for the first tray to leave the rack rather than stranding a hot tray; boxing waits for every tray (instances: \"all\"). Per-instance triggers and in-flight limits from program schema 0.3.0-alpha.",
+ "environmentType": "kitchen",
+ "tracks": [
+  {
+   "trackId": "cookies",
+   "name": "Cookies",
+   "steps": [
+    {
+     "stepId": "mix",
+     "name": "Mix dough",
+     "task": "prep",
+     "duration": {
+      "type": "fixed",
+      "seconds": 900
+     },
+     "startTrigger": {
+      "type": "programStart"
+     }
+    },
+    {
+     "stepId": "bake",
+     "name": "Bake tray",
+     "task": "oven",
+     "duration": {
+      "type": "fixed",
+      "seconds": 720
+     },
+     "replicates": {
+      "count": 3,
+      "mode": "serial",
+      "maxInFlight": 2
+     },
+     "startTrigger": {
+      "type": "afterStep",
+      "stepId": "mix"
+     }
+    },
+    {
+     "stepId": "cool",
+     "name": "Cool on rack",
+     "task": "rack",
+     "duration": {
+      "type": "fixed",
+      "seconds": 900
+     },
+     "startTrigger": {
+      "type": "afterStep",
+      "stepId": "bake",
+      "instances": "each"
+     }
+    },
+    {
+     "stepId": "box",
+     "name": "Box cookies",
+     "task": "prep",
+     "duration": {
+      "type": "fixed",
+      "seconds": 300
+     },
+     "startTrigger": {
+      "type": "afterStep",
+      "stepId": "cool",
+      "instances": "all"
+     }
+    }
+   ]
+  }
+ ],
+ "resourceConstraints": [
+  {
+   "task": "prep",
+   "maxConcurrent": 1,
+   "description": "One cook"
+  },
+  {
+   "task": "oven",
+   "maxConcurrent": 1,
+   "description": "Single oven"
+  },
+  {
+   "task": "rack",
+   "maxConcurrent": 2,
+   "description": "Cooling rack holds two trays"
+  }
+ ],
+ "metadata": {
+  "expectedTimings": {
+   "mix": {
+    "start": 0,
+    "end": 900
+   },
+   "bake-r1": {
+    "start": 900,
+    "end": 1620
+   },
+   "bake-r2": {
+    "start": 1620,
+    "end": 2340
+   },
+   "cool-r1": {
+    "start": 1620,
+    "end": 2520
+   },
+   "cool-r2": {
+    "start": 2340,
+    "end": 3240
+   },
+   "bake-r3": {
+    "start": 2520,
+    "end": 3240
+   },
+   "cool-r3": {
+    "start": 3240,
+    "end": 4140
+   },
+   "box": {
+    "start": 4140,
+    "end": 4440
+   }
+  },
+  "expectedTimingsNote": "PRD prd-per-instance-triggers-barriers \u00a77, in seconds. bake-r3 would be ready at 2340 (when bake-r2 ends) but maxInFlight: 2 holds it until cool-r1 frees a rack slot at 2520, so the critical chain is mix -> bake-r1 -> cool-r1 -> (in flight) bake-r3 -> cool-r3 -> box and the makespan is 4440 s (74 min). rack maxConcurrent: 2 alone would NOT give this schedule: it would let bake-r3 run 2340-3060 and then make cool-r3 wait for a rack slot, leaving a hot tray with nowhere to go."
+ }
+};</script>
 <script>
 // Drives the element with a fake clock and records what a test can assert on.
 (function () {
@@ -17,6 +144,11 @@
     for (const ev of ['rt-start', 'rt-pause', 'rt-stop', 'rt-step-start', 'rt-step-complete', 'rt-complete']) {
       el.addEventListener(ev, (e) => out.events.push([ev, e.detail.stepId || null, Math.round(e.detail.time || 0)]));
     }
+    // Run records (runs schema 0.1.0-alpha): one per run, on completion, on
+    // stop() and when a run is dropped (program replaced / element removed).
+    out.records = {};
+    const mainRecords = [];
+    el.addEventListener('rt-run-record', (e) => mainRecords.push(e.detail));
     const advance = (sec) => { ms += sec * 1000; el.tick(); };
     const shadowText = () => el.shadowRoot.textContent;
     const bars = () => el.shadowRoot.querySelectorAll('rect.rt-bar').length;
@@ -80,6 +212,298 @@
     el.setAttribute('time-format', 'clock');
     el.setAttribute('start-at', '2026-11-26T14:00:00');
     out.checks.clockFormat = el.formatTime(600);
+
+    // ---- replicate instances: grouping and actual-completion re-anchoring
+    // Three trays, one oven, a rack that holds two (maxInFlight: 2).
+    el.removeAttribute('start-at');
+    el.setAttribute('time-format', 'minutes');
+    el.setAttribute('speed', '1');
+    el.program = JSON.parse(JSON.stringify(window.RHYLTHYME_COOKIES));
+    out.checks.cookieGroups = el.groups.map((g) => [g.instanceOf, g.name, g.count, g.done, g.running]);
+    el.start();
+    advance(2400); // bake-r1 and cool-r1 have run; bake-r3 is still projected
+    out.checks.bakeR3Planned = Math.round(el.timings['bake-r3'].start);
+    out.checks.groupsMidRun = el.groups.map((g) => [g.instanceOf, g.done, g.running, g.pending]);
+    advance(300); // t = 2700: tray 1 comes off the rack three minutes late
+    el.completeStep('cool-r1');
+    out.checks.coolR1ActualEnd = Math.round(el.timings['cool-r1'].end);
+    out.checks.bakeR3Reanchored = Math.round(el.timings['bake-r3'].start);
+    out.checks.coolR3Reanchored = Math.round(el.timings['cool-r3'].start);
+    out.checks.boxReanchored = Math.round(el.timings['box'].start);
+    el.stop();
+
+    // ---- run records --------------------------------------------------
+    // The main element produced three runs above: the Thanksgiving run it
+    // played to completion, the 10x run abandoned when the program was
+    // replaced, and the cookies run stopped mid-flight.
+    out.records.mainOutcomes = mainRecords.map((r) => r.outcome);
+    out.records.mainFirst = mainRecords[0] ? mainRecords[0].record : null;
+
+    // A dedicated element with separate monotonic and wall clocks: prep is a
+    // fixed step that ends on its timer, simmer is indefinite and waits for
+    // the executor.
+    const RUNREC = {
+      schemaVersion: '0.2.0-alpha',
+      programId: 'runrec-demo',
+      name: 'Run record demo',
+      environmentType: 'kitchen',
+      tracks: [{ trackId: 'pot', name: 'Pot', steps: [
+        { stepId: 'prep', name: 'Prep', task: 'cook', duration: { type: 'fixed', seconds: 60 }, startTrigger: { type: 'programStart' } },
+        { stepId: 'simmer', name: 'Simmer', task: 'cook', duration: { type: 'indefinite', defaultSeconds: 120 }, startTrigger: { type: 'afterStep', stepId: 'prep' } }
+      ] }],
+      resourceConstraints: [{ task: 'cook', maxConcurrent: 1 }],
+      metadata: { serves: '2', userTags: { oven: 'gas' } }
+    };
+    const makeEl = (program, speed) => {
+      const e = document.createElement('rhylthyme-timeline');
+      e.setAttribute('mode', 'player');
+      e.setAttribute('speed', String(speed || 1));
+      document.body.appendChild(e);
+      e.program = JSON.parse(JSON.stringify(program));
+      return e;
+    };
+
+    // (a) completed, with a tab-hide gap attributed to the running step
+    let m2 = 0, w2 = Date.UTC(2026, 8, 14, 12, 0, 0);
+    const el2 = makeEl(RUNREC);
+    const rec2 = [];
+    el2.addEventListener('rt-run-record', (e) => rec2.push(e.detail));
+    el2.setClock(() => m2, () => w2);
+    const adv2 = (sec) => { m2 += sec * 1000; w2 += sec * 1000; el2.tick(); };
+    el2.start();
+    adv2(30);
+    w2 += 10000; // ten seconds of wall time with the monotonic clock asleep
+    document.dispatchEvent(new Event('visibilitychange'));
+    out.checks.pauseAttributed = el2.runRecord.steps.map((s) => [s.stepId, s.pausedSeconds]);
+    out.checks.liveSnapshotOutcome = el2.runRecord.outcome;
+    adv2(40);  // t = 70: prep ended on its timer at 60, simmer is running
+    adv2(90);  // t = 160
+    el2.completeStep('simmer');
+    adv2(5);   // completion is confirmed three seconds later
+    out.records.completedOutcomes = rec2.map((r) => r.outcome);
+    out.records.completed = rec2[0] ? rec2[0].record : null;
+    out.checks.runRecordGetterMatches = !!(rec2[0] && el2.runRecord && el2.runRecord.runId === rec2[0].record.runId);
+    el2.stop();    // the run is already recorded: no second record
+    el2.remove();  // nor on disconnect
+    out.checks.recordsAfterStopAndRemove = rec2.length;
+
+    // (b) stop() mid-run at speed 10 -> aborted
+    let m3 = 0, w3 = Date.UTC(2026, 8, 14, 13, 0, 0);
+    const el3 = makeEl(RUNREC, 10);
+    const rec3 = [];
+    el3.addEventListener('rt-run-record', (e) => rec3.push(e.detail));
+    el3.setClock(() => m3, () => w3);
+    el3.start();
+    m3 += 3000; w3 += 3000; el3.tick();  // 3 s of wall time = 30 s of program time
+    el3.stop();
+    out.records.aborted = rec3[0] ? rec3[0].record : null;
+    el3.remove();
+
+    // (c) removed from the DOM mid-run -> abandoned
+    let m4 = 0, w4 = Date.UTC(2026, 8, 14, 14, 0, 0);
+    const el4 = makeEl(RUNREC);
+    const rec4 = [];
+    el4.addEventListener('rt-run-record', (e) => rec4.push(e.detail));
+    el4.setClock(() => m4, () => w4);
+    el4.start();
+    m4 += 30000; w4 += 30000; el4.tick();
+    el4.remove();
+    out.records.abandoned = rec4[0] ? rec4[0].record : null;
+
+    // ---- declared variance factors (Phase 4) ---------------------------
+    // The Thanksgiving example as the catalog declares it: two factors, one
+    // number with a unit and one enum. The prompt is a pre-flight in the
+    // shadow DOM: start() opens it instead of starting, and its Start button
+    // starts the run with the answers, which land in context.userTags.
+    const FACTORS = [
+      { key: 'turkeyKg', label: 'Turkey weight (kg)', type: 'number', unit: 'kg' },
+      { key: 'oven', label: 'Oven type', type: 'enum', values: ['gas', 'electric', 'convection'] },
+    ];
+    const withFactors = () => {
+      const p = JSON.parse(JSON.stringify(window.RHYLTHYME_EXAMPLES.thanksgiving_one_oven));
+      p.metadata = p.metadata || {};
+      p.metadata.varianceFactors = JSON.parse(JSON.stringify(FACTORS));
+      return p;
+    };
+    const factorForm = (e) => e.shadowRoot.querySelector('.factors:not([hidden])');
+    const factorFields = (e) => Array.prototype.map.call(
+      e.shadowRoot.querySelectorAll('.factors [data-factor]'),
+      (f) => [f.getAttribute('data-factor'), f.tagName.toLowerCase(), f.type || '']
+    );
+    out.factors = {};
+
+    // (i) the form renders one field per declared factor and start() defers
+    const f1 = makeEl(withFactors());
+    const fEvents1 = [];
+    f1.addEventListener('rt-factors', (e) => fEvents1.push(e.detail));
+    out.factors.declared = f1.declaredFactors.map((f) => [f.key, f.type, f.unit || null, f.values || null]);
+    out.factors.formBeforeStart = !!factorForm(f1);
+    f1.start();
+    out.factors.statusAfterStart = f1.status;          // still stopped: the form is up
+    out.factors.formAfterStart = !!factorForm(f1);
+    out.factors.fields = factorFields(f1);
+    out.factors.unitShown = f1.shadowRoot.querySelector('.factors .unit').textContent;
+    out.factors.enumOptions = Array.prototype.map.call(
+      f1.shadowRoot.querySelectorAll('.factors select[data-factor="oven"] option'), (o) => o.value
+    );
+    // Answer both and press the form's Start button.
+    f1.shadowRoot.querySelector('.factors [data-factor="turkeyKg"]').value = '6.4';
+    f1.shadowRoot.querySelector('.factors select[data-factor="oven"]').value = 'convection';
+    f1.shadowRoot.querySelector('.factors button[data-act="factors-start"]').click();
+    out.factors.statusAfterSubmit = f1.status;
+    out.factors.formAfterSubmit = !!factorForm(f1);
+    out.factors.answered = f1.factors;
+    out.factors.events = fEvents1.map((d) => [d.source, d.factors, d.skipped]);
+    out.factors.recordTags = f1.runRecord.context.userTags;
+    f1.remove();
+
+    // (ii) every field is skippable: Start with nothing filled in
+    const f2 = makeEl(withFactors());
+    f2.start();
+    f2.shadowRoot.querySelector('.factors button[data-act="factors-start"]').click();
+    out.factors.skippedStatus = f2.status;
+    out.factors.skippedTags = f2.runRecord.context.userTags;
+    f2.remove();
+
+    // (iii) a bad answer typed into the form is refused and the run does not start
+    const f3 = makeEl(withFactors());
+    f3.start();
+    f3.shadowRoot.querySelector('.factors [data-factor="turkeyKg"]').value = 'heavy';
+    f3.shadowRoot.querySelector('.factors button[data-act="factors-start"]').click();
+    out.factors.badStatus = f3.status;
+    out.factors.badError = f3.shadowRoot.querySelector('.factors [data-factor-error="turkeyKg"]:not([hidden])').textContent;
+    out.factors.badStillOpen = !!factorForm(f3);
+    // ...fix it and the run starts
+    f3.shadowRoot.querySelector('.factors [data-factor="turkeyKg"]').value = '7';
+    f3.shadowRoot.querySelector('.factors button[data-act="factors-start"]').click();
+    out.factors.fixedStatus = f3.status;
+    out.factors.fixedTags = f3.runRecord.context.userTags;
+    f3.remove();
+
+    // (iv) presetting every factor (property or data-factors) skips the form;
+    //      bad and undeclared values are dropped, exactly as the CLI does
+    const f4 = makeEl(withFactors());
+    const fEvents4 = [];
+    f4.addEventListener('rt-factors', (e) => fEvents4.push(e.detail));
+    f4.factors = { turkeyKg: '5.5', oven: 'GAS', sampleCount: 3 };
+    out.factors.preset = f4.factors;
+    out.factors.presetEvent = fEvents4.map((d) => [d.source, d.skipped]);
+    f4.start();
+    out.factors.presetStatus = f4.status;              // straight into the run
+    out.factors.presetFormShown = !!factorForm(f4);
+    out.factors.presetTags = f4.runRecord.context.userTags;
+    f4.stop();
+    // A bad enum is refused by the setter, which then leaves the factor unanswered.
+    f4.factors = { turkeyKg: 6, oven: 'induction' };
+    out.factors.badEnumDropped = f4.factors;
+    out.factors.badEnumSkipped = fEvents4[fEvents4.length - 1].skipped;
+    out.factors.reopensWhenIncomplete = (f4.start(), f4.status);
+    f4.remove();
+
+    const f5 = makeEl(withFactors());
+    f5.setAttribute('data-factors', 'turkeyKg=4.2,oven=electric');
+    out.factors.fromAttribute = f5.factors;
+    f5.start();
+    out.factors.attributeStatus = f5.status;
+    f5.remove();
+    const f6 = makeEl(withFactors());
+    f6.setAttribute('data-factors', '{"turkeyKg": 8, "oven": "gas"}');
+    out.factors.fromJsonAttribute = f6.factors;
+    f6.remove();
+
+    // (v) a program that declares no factors is untouched: no form, no prompt
+    const f7 = makeEl(RUNREC);
+    out.factors.undeclared = f7.declaredFactors;
+    out.factors.undeclaredAsk = f7.askFactors();
+    f7.start();
+    out.factors.undeclaredStatus = f7.status;
+    out.factors.undeclaredForm = !!factorForm(f7);
+    f7.remove();
+
+    // ---- predicted offsets (Phase 7) -----------------------------------
+    // metadata.offsetsUse: "predicted" lets a NEGATIVE offset be resolved
+    // against a PREDICTED anchor end instead of the anchor's defaultSeconds.
+    // Thanksgiving: turkey-prep is fixed 1200 s, turkey-roast is indefinite
+    // with defaultSeconds 9900, and potatoes-peel hangs off the roast at
+    // -2700 s, so the plan puts the peel at 1200 + 9900 - 2700 = 8400.
+    const PREDICTED_ROAST = { seconds: 7200, low: 6900, high: 7500, basis: 'model', n: 20 };
+    const withOffsets = (use, extra) => {
+      const p = JSON.parse(JSON.stringify(window.RHYLTHYME_EXAMPLES.thanksgiving_one_oven));
+      p.metadata = p.metadata || {};
+      if (use) p.metadata.offsetsUse = use;
+      if (extra) Object.keys(extra).forEach((k) => { p.metadata[k] = extra[k]; });
+      return p;
+    };
+    const peelStart = (e) => Math.round(e.timings['potatoes-peel'].start);
+    out.predicted = {};
+
+    // (i) no flag: the prediction is ignored entirely
+    const q1 = makeEl(withOffsets(null));
+    q1.predictions = { 'turkey-roast': PREDICTED_ROAST };
+    out.predicted.plannedOffsetsUse = q1.offsetsUse;
+    out.predicted.plannedPeelStart = peelStart(q1);
+    out.predicted.plannedAnchors = q1.predictedAnchors;
+    q1.remove();
+
+    // (ii) flag set: the peel moves to predicted-end - 45 min
+    //      = 1200 + 7200 - 2700 = 5700
+    const q2 = makeEl(withOffsets('predicted'));
+    out.predicted.beforePredictions = peelStart(q2);
+    q2.predictions = { 'turkey-roast': PREDICTED_ROAST };
+    out.predicted.offsetsUse = q2.offsetsUse;
+    out.predicted.peelStart = peelStart(q2);
+    out.predicted.anchors = q2.predictedAnchors;
+    out.predicted.roundTrip = q2.predictions;
+    // The roast's own projection moved too, but the plan did not: the record's
+    // frozen `planned` still comes from the program as authored.
+    out.predicted.roastEnd = Math.round(q2.timings['turkey-roast'].end);
+    q2.start();
+    out.predicted.recordOffsetsUse = q2.runRecord.context.offsetsUse;
+    out.predicted.recordPeel = q2.runRecord.steps
+      .filter((s) => s.stepId === 'potatoes-peel')
+      .map((s) => [s.predictedAnchorSeconds, s.planned.start, s.planned.end]);
+    out.predicted.recordRoastPlanned = q2.runRecord.steps
+      .filter((s) => s.stepId === 'turkey-roast')
+      .map((s) => [s.planned.end, s.planned.defaultSeconds]);
+    out.records.predicted = q2.runRecord;
+    // Clearing the predictions puts the peel back on the plan.
+    q2.predictions = {};
+    out.predicted.clearedPeelStart = peelStart(q2);
+    q2.stop();
+    q2.remove();
+
+    // (iii) an interval as wide as the guess is history saying it does not
+    //       know: high - low must be STRICTLY narrower than defaultSeconds
+    const q3 = makeEl(withOffsets('predicted'));
+    q3.predictions = { 'turkey-roast': { seconds: 7200, low: 0, high: 9900, basis: 'model' } };
+    out.predicted.wideIntervalPeel = peelStart(q3);
+    q3.predictions = { 'turkey-roast': { seconds: 7200, low: 0, high: 9899, basis: 'model' } };
+    out.predicted.narrowEnoughPeel = peelStart(q3);
+    // basis "none" is the predictor declining to answer
+    q3.predictions = { 'turkey-roast': { seconds: 7200, low: 6900, high: 7500, basis: 'none' } };
+    out.predicted.basisNonePeel = peelStart(q3);
+    // ...and a prediction for a step nothing hangs off changes nothing
+    q3.predictions = { 'potatoes-boil': PREDICTED_ROAST };
+    out.predicted.irrelevantPeel = peelStart(q3);
+    q3.remove();
+
+    // (iv) the attribute takes the same JSON
+    const q4 = makeEl(withOffsets('predicted'));
+    q4.setAttribute('data-predictions', JSON.stringify({ 'turkey-roast': PREDICTED_ROAST }));
+    out.predicted.fromAttribute = peelStart(q4);
+    q4.setAttribute('data-predictions', 'not json');
+    out.predicted.badAttribute = [q4.predictions, peelStart(q4)];
+    q4.remove();
+
+    // (d) programVersion parity: the same three programs are hashed in Node
+    // with tools/hash-program.js. Base64 so multi-byte characters survive
+    // the DOM dump unharmed.
+    const b64 = (obj) => btoa(String.fromCharCode.apply(null, new TextEncoder().encode(JSON.stringify(obj))));
+    out.hashed = [
+      ['thanksgiving_one_oven', window.RHYLTHYME_EXAMPLES.thanksgiving_one_oven],
+      ['cookies_three_trays', window.RHYLTHYME_COOKIES],
+      ['runrec_demo', RUNREC],
+    ].map(([name, program]) => ({ name: name, b64: b64(program), hash: Rhylthyme.programVersion(program) }));
 
     // Every corpus program renders without throwing
     out.checks.corpusRendered = 0;

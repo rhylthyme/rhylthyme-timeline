@@ -131,6 +131,37 @@ dependencies; the dashed one is a negative offset ("peel the potatoes
 *manual* gate; "Serve" waits for all four dishes. The oven has capacity
 one, so the stuffing bakes only after the turkey comes out.
 
+#### Planned vs actual, from a recorded run
+
+Pass a run record (rhylthyme-spec's `runs` schema, written by
+`rhylthyme run` and by the element player) as `run` and the same drawing
+becomes a comparison: each bar is where the step *actually* ran, with a
+thin ghost bar underneath at the position the plan predicted.
+
+```js
+const svg = Rhylthyme.renderTimelineSvg(program, { run: record });
+```
+
+![planned vs actual overlay](docs/thanksgiving-run.svg)
+
+Here the cook finished the prep 200 s early (blue), the stuffing prep ran
+exactly to plan (green), and the indefinite roast ran 25 minutes past its
+`defaultSeconds`, so the steps that wait for it to *finish* are late (red)
+— the ghost bars show by how much. The potato chain hangs off the roast by
+a negative offset, which the runtime fires from the roast's *projected*
+end rather than its real one, so it runs early instead (blue). A bar is
+outlined green when its end is
+within `deviationThreshold` seconds of the plan (default 30), blue when it
+is earlier, red when it is later, and carries
+`data-deviation="early" | "late" | "on-time"` with
+`data-deviation-seconds` so a page can style or tabulate the same thing.
+
+`{ run }` is shorthand for `{ timings: timingsFromRun(program, record),
+baseline: computeStepTimings(program) }`; pass `baseline` directly to
+compare against any other timings map (a previous run, or the `planned`
+values frozen in the record). `rhylthyme runs show <run> --svg out.svg`
+writes exactly this file from the CLI.
+
 From Node, [`examples/render.js`](examples/render.js) writes the file and
 prints every step's resolved start and end:
 
@@ -206,8 +237,11 @@ const svg = Rhylthyme.renderTimelineSvg(program);
 | Function | Returns |
 |---|---|
 | `computeStepTimings(program, opts?)` | `{ [stepId]: { start, end, duration, trackId, resolved } }` in seconds from program start. `resolved` is `false` when a trigger could not be satisfied (cycle or dangling reference); such steps are placed at `t = 0`. `opts.actual = { [stepId]: { start?, end? } }` overrides the plan with what actually happened; `opts.now` makes unstarted manual gates float to the current time and started indefinite steps stretch to it. |
-| `renderTimelineSvg(program, opts?)` | SVG markup (string). `opts = { arrows, marks, legend }`, all default `true`: cross-track dependency arrows (dashed for negative offsets), hatched indefinite steps, faded variable-step extensions to their maximum, a flag on manual gates, and a one-line legend (dependency, negative offset, indefinite, variable, manual). Player options: `timings` (precomputed), `now` (draws the cursor), `states` (`{ [stepId]: 'done' \| 'active' \| 'waiting' }`), `width`. Bars carry `class="rt-bar"` and `data-step`. |
+| `renderTimelineSvg(program, opts?)` | SVG markup (string). `opts = { arrows, marks, legend }`, all default `true`: cross-track dependency arrows (dashed for negative offsets), hatched indefinite steps, faded variable-step extensions to their maximum, a flag on manual gates, and a one-line legend (dependency, negative offset, indefinite, variable, manual). Player options: `timings` (precomputed), `now` (draws the cursor), `states` (`{ [stepId]: 'done' \| 'active' \| 'waiting' }`), `width`. Planned-vs-actual options: `baseline` (a second timings map drawn as a ghost bar under each step, `class="rt-baseline"`, with every bar tagged `data-deviation` / `data-deviation-seconds`), `deviationThreshold` (seconds inside which a step counts as on time, default 30) and `run` (a run record: shorthand for `timings` from it plus `baseline` from the plan). Bars carry `class="rt-bar"` and `data-step`. Without `baseline`/`run` the output is byte-identical to earlier versions. |
 | `renderTimeline(container, program, opts?)` | Injects the SVG into a DOM element and returns the markup. |
+| `actualFromRun(record, program?, opts?)` | `{ [stepId]: { start, end } }` from a run record, keyed by expanded step id, ready to pass as `computeStepTimings`' `actual`. `opts.endsOnly` keeps only the ends, which is what a replay check feeds back so that every start has to come out of the trigger graph. Arguments may be given in either order. |
+| `timingsFromRun(program, record, opts?)` | `computeStepTimings(program, { actual: actualFromRun(record, program, opts) })`. |
+| `runtimeStepId(entry, knownIds?)` | The expanded step id a record entry refers to: `<stepId>-r<instance>` for a replicated step, `<stepId>` otherwise, confirmed against `knownIds` when given. Python twin: `rhylthyme_cli_runner.history.replay.record_step_id`. |
 | `buildPlayerHtml(program, environment?)` (from `@rhylthyme/timeline/player`) | The interactive visualizer page as an HTML string, identical to the server's. Needs Node (reads `player/template.html`). |
 | `stepNeedsStart(step)` / `stepNeedsFinish(step)` | Whether the executor must start the step (manual gate, negative offset) / must end it (indefinite, variable with `triggerName`). |
 | `expandReplicates(program)` | A deep copy with track/step `replicates` (and legacy `batch_size`/`stagger`) expanded into flat tracks and steps, exactly as the Python `expand_replicates` does. The functions above apply it automatically. |

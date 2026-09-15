@@ -1,0 +1,184 @@
+{
+ "generatedBy": "renderTimelineSvg (rhylthyme-timeline/src/index.js); regenerate with tools/gen-render-snapshots.js",
+ "note": "default = renderTimelineSvg(program); overlay = renderTimelineSvg(program, { run: record }).",
+ "default": {
+  "academy_awards_ceremony.json": {
+   "length": 20066,
+   "sha256": "9a66390bba75ba0a52a479509af1081f9edf1b88b2c2bd12c3c7c39b04f6549e"
+  },
+  "advanced_dependencies_demo.json": {
+   "length": 13369,
+   "sha256": "f02189aeef2563a6de0c92748805bd02d2e1bafbcd77c1f0a7f60a49bf757c54"
+  },
+  "airport_batch_example.json": {
+   "length": 11251,
+   "sha256": "eccc1128a896fd9ea6e299f702c9a27658ed8257a8eda85e6a3a127a3aac345f"
+  },
+  "airport_landings_taxi_gate.json": {
+   "length": 10124,
+   "sha256": "f1e883490a2e426dcf4114f2c22550f91d9182955720e7415c81f42c2c59666a"
+  },
+  "airport_program_example.json": {
+   "length": 7591,
+   "sha256": "968191231d231c494ab72a75691f1b485786bfa76434120b58c6544c2f77e034"
+  },
+  "bakery_program_example.json": {
+   "length": 9766,
+   "sha256": "1770582c4ab5be6fe9e208d1a33b41079536fb29f9b0969c9e96f65c1a962490"
+  },
+  "breakfast_from_tracks.json": {
+   "length": 5578,
+   "sha256": "5acafd62ed8900161807fe3224644101ee3c0c0860ea34d97ea16317976be357"
+  },
+  "breakfast_schedule.json": {
+   "length": 5528,
+   "sha256": "29c3104957cca10bc8fe48772a87a5add1b20beec34f375ba3a24d66f2ed9fa9"
+  },
+  "breakfast_with_buffers.json": {
+   "length": 5544,
+   "sha256": "7a5da6b2bafd86bcb325119cf8ed9986f6d47d1b7abd56ea21b65f74e72938fc"
+  },
+  "breakfast_with_environment.json": {
+   "length": 8238,
+   "sha256": "799cb46179a3294e31e1be8dd73845f3d251ce1a256266afa70b8fc43c9e50d0"
+  },
+  "buffer_example.json": {
+   "length": 4662,
+   "sha256": "a66975058c53cdb647c09092650edacb0bddd0c7f3edb07b5e39d080aeefcbb4"
+  },
+  "cell_culture_experiment.json": {
+   "length": 16843,
+   "sha256": "1aa94c796b2b0e4743fa1e74e1f369616765aa4d17b680f707d4828922d46ef5"
+  },
+  "chemical_plant_batch.json": {
+   "length": 21986,
+   "sha256": "a615fe6fdde1bd7333af198e364cf64860adfd6a12428317faa93bef7754f05e"
+  },
+  "circuit_training.json": {
+   "length": 8106,
+   "sha256": "70908c67d4349ef4690ca283b62d1f534da3c3ea1c9b8060ad070873c2a8cc71"
+  },
+  "compound_each_pairing.json": {
+   "length": 8488,
+   "sha256": "50d1d12063f6d066a4cf638a0ba6d83ac7610e02c5f830a1b1516e419e39d1ff"
+  },
+  "comprehensive_manual_demo.json": {
+   "length": 6105,
+   "sha256": "93db8942999bd7b5a41ae8746fc9f369f5cf2497f874c189c0a6dfc0721c943a"
+  },
+  "cookies_three_trays.json": {
+   "length": 8792,
+   "sha256": "acd3324d3cd2fb07d8391a005c7ddbd50d900ee8c84bf1ffc942297ef0d5ba4f"
+  },
+  "corporate_conference.json": {
+   "length": 17995,
+   "sha256": "b32cbef6ab66ac5a0a2d6ac8125f20d7a6e1e11912c830379257fc610e41cef0"
+  },
+  "corporate_presentation.json": {
+   "length": 11612,
+   "sha256": "b3e103fa5474e6d77d334b6de23de2e87c649c537d4fcebf3df98f155856b0f2"
+  },
+  "drug_screening_from_tracks.json": {
+   "length": 23094,
+   "sha256": "747b60f16528135794e5fa86d0edc7f076a2f3f7f205b27c725c2140a4f37353"
+  },
+  "hiit_cardio_workout.json": {
+   "length": 7179,
+   "sha256": "9eabbaec8d1d92be4b97f025b6dcf1b16c538c278a319b440ba5ee5e81aef3ff"
+  },
+  "lab_experiment.json": {
+   "length": 5098,
+   "sha256": "5e432d378522554d0749bad54f960bbe05102cc95459c7d66ed3bc0d119dc312"
+  },
+  "multi_resource_example.json": {
+   "length": 6752,
+   "sha256": "7115a3c83813fbca698f80d1009b5a9a72886ed01f02682f4f8422cff3c87f68"
+  },
+  "negative_offset_demo.json": {
+   "length": 6644,
+   "sha256": "6c052da6e607d22d60859611c61e0324dcb15e5caf14830e0c765cfdde24a432"
+  },
+  "pcr_twelve_samples.json": {
+   "length": 25630,
+   "sha256": "e17eb8d871988578e26862cea72accbb687733b586beeedca9232485ace5fb9c"
+  },
+  "protein_lysate_immunoblotting.json": {
+   "length": 16944,
+   "sha256": "196ee70a0a6a191e23c1048ba69e7f068e6624e0bd9a39b15a0c8a2ceb22676b"
+  },
+  "rat_psychopharmacology.json": {
+   "length": 15264,
+   "sha256": "982aa4e51fc205aef42193af78dfa0b6ba48bd423e1aaba3a4903bb9bef519e1"
+  },
+  "replicates_bakery_serial.json": {
+   "length": 12287,
+   "sha256": "e316052f783ecdc92ce0757568dcd9be73305d36e2597c088b613ecf23073bec"
+  },
+  "replicates_comprehensive_demo.json": {
+   "length": 16929,
+   "sha256": "b33afce3a59c0651cf08c7ee06615fed8da9d38e6bb0b675d02b6716950eb415"
+  },
+  "replicates_lab_samples.json": {
+   "length": 7078,
+   "sha256": "597596cac83c0ab4997e05e8f51de9195970c333c13b82b560a137c1d5b06d74"
+  },
+  "replicates_stagger_orders.json": {
+   "length": 10545,
+   "sha256": "a18229d3a0bc9569e8664dce5dd8d600f7cc0070e7251f8957132c9e422de616"
+  },
+  "restaurant_breakfast.json": {
+   "length": 10637,
+   "sha256": "06f476d940cbc9e252fe011e08c813baba6fbe3e9bb1666e94f51c2ac4e2e04a"
+  },
+  "restaurant_tasting_menu.json": {
+   "length": 14837,
+   "sha256": "4ad4a1b6c714c1870274d879733d7b5bb42d80aa2857b579274c62956e6691d6"
+  },
+  "software_product_launch.json": {
+   "length": 49250,
+   "sha256": "0b188b5104f0cb59b52398cb93cbe342567c996bec6a40c46e2c6cb9b892331f"
+  },
+  "stir_fry_with_choice.json": {
+   "length": 8399,
+   "sha256": "772360b678aa490b42f9a74946a771814c50801fae0dfde3577ccfd4a41c7656"
+  },
+  "strength_training_session.json": {
+   "length": 8309,
+   "sha256": "12e5fcd3381f5cfc4346fffda058212b11131a1a2c80af643a76d1e6f0ca0ea3"
+  },
+  "sunny_side_up_eggs.json": {
+   "length": 4101,
+   "sha256": "bd1687163f705c5822821262d679191dbb9734740db36a6079e02f865715b653"
+  },
+  "test_offset_example.json": {
+   "length": 4392,
+   "sha256": "421a8bef78ab64ea40010424c15b8a1bf56d918d2790faf453eb03f5d314b92f"
+  },
+  "test_overutilization.json": {
+   "length": 6980,
+   "sha256": "9623a202ad13d5e0a3a773af716ada5a33a13da085418f2d06e96d55506a6f44"
+  },
+  "thanksgiving_dinner.json": {
+   "length": 9862,
+   "sha256": "6b97b2b32eed98cc224c165b8f96aa5846b1fae162754d3385b3f3672ef5411e"
+  },
+  "thanksgiving_one_oven.json": {
+   "length": 9345,
+   "sha256": "a2bda7484493a1fd148da795989e3dd4de91ff68b077f475d52d5f9cd6d4b049"
+  },
+  "wedding_and_reception.json": {
+   "length": 18915,
+   "sha256": "f18ad65a6be690b1e1bde66cf16b2263472e6212218f9c797a23f3c4ea416143"
+  },
+  "yoga_flow_session.json": {
+   "length": 5675,
+   "sha256": "54cbbbd0f08a7255bf9eb3b4fdf34df2b48a6b0a818998ae04f0cb5a88691c68"
+  }
+ },
+ "overlay": {
+  "thanksgiving_one_oven.json": {
+   "length": 13299,
+   "sha256": "998b584c42ddaea5dc7b9c6eed9b40c8d89168a2430bd2d7a8a561477dc02df0"
+  }
+ }
+}

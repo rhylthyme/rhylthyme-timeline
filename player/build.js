@@ -193,6 +193,9 @@ function extractStepDependencies(program) {
   for (const track of get(program, 'tracks', [])) {
     const trackId = get(track, 'trackId', 'unknown');
     const trackName = get(track, 'name', 'Unknown Track');
+    // Sub-tracks created for replicate instances point at their parent
+    // so the step list can group instances under one row.
+    const parentTrackId = get(track, 'parentTrackId');
 
     let prevStepId = null;
     for (const step of get(track, 'steps', [])) {
@@ -290,6 +293,9 @@ function extractStepDependencies(program) {
         durationType: truthy(duration) ? get(duration, 'type', 'fixed') : 'fixed',
         choice: choiceData,
         choiceId: triggerChoiceId,
+        instanceOf: get(step, 'instanceOf'),
+        instanceIndex: get(step, 'instanceIndex'),
+        parentTrackId: parentTrackId,
       };
 
       if (truthy(get(step, 'media'))) nodeData.media = step.media;
@@ -493,6 +499,9 @@ function calculateTimelineData(nodes, edges) {
       durationType: get(node, 'durationType', 'fixed'),
       choice: get(node, 'choice'),
       choiceId: get(node, 'choiceId'),
+      instanceOf: get(node, 'instanceOf'),
+      instanceIndex: get(node, 'instanceIndex'),
+      parentTrackId: get(node, 'parentTrackId'),
     };
     if (truthy(get(node, 'media'))) stepData.media = node.media;
 
@@ -692,6 +701,9 @@ function computeSlots(nodes, edges, programData, environmentData, resourceConstr
 
   return {
     '_TAILWIND_CSS': fs.readFileSync(path.join(HERE, 'tailwind.min.css'), 'utf8'),
+    // The auto-plan strategies, inlined into the page exactly as the server
+    // inlines rhylthyme-server/static/js/auto-plan.js.
+    '_AUTO_PLAN_JS': fs.readFileSync(path.join(HERE, 'auto-plan.js'), 'utf8'),
     'nodes_json': nodesJson,
     'edges_json': edgesJson,
     'timeline_json': timelineJson,
@@ -749,6 +761,12 @@ function mergeConstraints(programConstraints, environmentData) {
  * Python's expand_replicates computes staggered offsets as floats
  * (_parse_delay returns float), so every offsetSeconds it created or changed
  * is a float there. Find those by comparing against the unexpanded steps.
+ *
+ * A staggered instance held back by `replicates.maxInFlight` has its own
+ * trigger wrapped in the compound the gate lives in, so the staggered offset
+ * is one atom down. Only compounds the in-flight pass built are unwrapped;
+ * the fan-ins the expander emits for `instances` keep their offsets verbatim
+ * from the authored trigger and must stay integers if they started as such.
  */
 function markStaggerFloats(original, expanded) {
   const origSteps = new Map();
@@ -759,11 +777,18 @@ function markStaggerFloats(original, expanded) {
       while (!origSteps.has(base) && /-r\d+$/.test(base)) base = base.replace(/-r\d+$/, '');
       const orig = origSteps.get(base);
       const trig = get(st, 'startTrigger', {});
-      if (!orig || !trig || typeof trig !== 'object' || !('offsetSeconds' in trig)) continue;
+      if (!orig || !trig || typeof trig !== 'object') continue;
+      const gated = Array.isArray(trig.triggers) && trig.triggers.some((a) => a && a._synthetic === 'inFlight');
+      const atoms = gated
+        ? trig.triggers.filter((a) => a && typeof a === 'object' && !a._synthetic)
+        : (Array.isArray(trig.triggers) ? [] : [trig]);
       const origTrig = get(orig, 'startTrigger', {});
       const before = origTrig && typeof origTrig === 'object' && 'offsetSeconds' in origTrig ? origTrig.offsetSeconds : undefined;
-      if (before === undefined || +before !== +trig.offsetSeconds || typeof before === 'string') {
-        if (typeof trig.offsetSeconds === 'number') trig.offsetSeconds = new PyFloat(trig.offsetSeconds);
+      for (const atom of atoms) {
+        if (!('offsetSeconds' in atom)) continue;
+        if (before === undefined || +before !== +atom.offsetSeconds || typeof before === 'string') {
+          if (typeof atom.offsetSeconds === 'number') atom.offsetSeconds = new PyFloat(atom.offsetSeconds);
+        }
       }
     }
   }

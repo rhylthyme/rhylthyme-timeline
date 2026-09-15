@@ -41,6 +41,7 @@
     </style>
     <script src="https://d3js.org/d3.v5.min.js"></script>
     <style><%=_TAILWIND_CSS%></style>
+    <script><%=_AUTO_PLAN_JS%></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         /* Custom styles for D3 elements that can't use Tailwind classes */
@@ -4356,7 +4357,9 @@
                                 ? { type: 'afterStep', stepId: step.afterStepId }
                                 : (idx > 0 ? { type: 'afterStep', stepId: track.steps[idx - 1].stepId } : { type: 'programStart' }),
                             task: step.task || '',
-                            flex: step.flex || { enabled: false }
+                            flex: step.flex || { enabled: false },
+                            instanceOf: step.instanceOf || null,
+                            instanceIndex: step.instanceIndex || null
                         }))
                     }))
                 };
@@ -4375,11 +4378,13 @@
                     if (strategy === 'fit_to_time') {
                         const jeopardyCount = (result.plan.stepTimings || []).filter(t => t.inJeopardy).length;
                         const compressedCount = (result.plan.stepTimings || []).filter(t => !t.inJeopardy && t.originalDuration && t.originalDuration !== t.duration).length;
-                        if (jeopardyCount === 0 && compressedCount === 0) {
+                        const omittedCount = (result.plan.stepTimings || []).filter(t => t.omitted).length;
+                        if (jeopardyCount === 0 && compressedCount === 0 && omittedCount === 0) {
                             showToast(I18N.t('autoPlan.alreadyFits'), 'info');
                         } else {
                             const parts = [];
                             if (compressedCount > 0) parts.push(`${compressedCount} compressed`);
+                            if (omittedCount > 0) parts.push(`${omittedCount} omitted`);
                             if (jeopardyCount > 0) parts.push(`${jeopardyCount} in jeopardy`);
                             showToast(`Fit to time: ${parts.join(', ')}`, 'success');
                         }
@@ -4396,412 +4401,18 @@
             }
         }
         
+        // The four strategies live in static/js/auto-plan.js (inlined above as
+        // window.RhylthymeAutoPlan) so they can be unit-tested in Node. This
+        // wrapper supplies the page globals they used to close over:
+        // targetDurationSeconds and originalProgram (the expanded program,
+        // which carries the instance identity and the synthetic maxInFlight
+        // gates the planners need).
         async function applyAutoPlanStrategy(programData, strategy) {
-            try {
-                // Simple client-side auto-planning implementation
-                const result = {
-                    success: true,
-                    plan: {
-                        strategy: strategy,
-                        stepTimings: []
-                    }
-                };
-                
-                // Calculate step dependencies and earliest start times
-                const stepDependencies = calculateStepDependencies(programData);
-                const earliestTimes = calculateEarliestStartTimes(stepDependencies, programData);
-                
-                // Apply strategy-specific logic
-                if (strategy === 'synchronized_finish') {
-                    result.plan.stepTimings = applySynchronizedFinish(earliestTimes, programData);
-                } else if (strategy === 'cover') {
-                    result.plan.stepTimings = applyCoverStrategy(earliestTimes, programData);
-                } else if (strategy === 'minimize_length') {
-                    result.plan.stepTimings = applyMinimizeLength(earliestTimes, programData);
-                } else if (strategy === 'fit_to_time') {
-                    if (!targetDurationSeconds || targetDurationSeconds <= 0) {
-                        return { success: false, error: 'Set a target duration first' };
-                    }
-                    result.plan.stepTimings = applyFitToTime(earliestTimes, programData, targetDurationSeconds);
-                }
-                
-                return result;
-                
-            } catch (error) {
-                return {
-                    success: false,
-                    error: error.message
-                };
-            }
-        }
-        
-        function calculateStepDependencies(programData) {
-            const dependencies = {};
-
-            programData.tracks.forEach(track => {
-                track.steps.forEach((step, index) => {
-                    dependencies[step.stepId] = [];
-
-                    // Cross-track dependency from startTrigger
-                    const trigger = step.startTrigger || {};
-                    if (trigger.type === 'afterStep' && trigger.stepId) {
-                        dependencies[step.stepId].push(trigger.stepId);
-                    }
-                    // Within-track: depend on previous step (if not already covered by afterStep)
-                    else if (index > 0) {
-                        dependencies[step.stepId].push(track.steps[index - 1].stepId);
-                    }
-                });
+            return RhylthymeAutoPlan.applyAutoPlanStrategy(programData, {
+                strategy: strategy,
+                targetDurationSeconds: targetDurationSeconds,
+                program: originalProgram
             });
-
-            return dependencies;
-        }
-        
-        function calculateEarliestStartTimes(dependencies, programData) {
-            const times = {};
-            const stepDurations = {};
-            
-            // Build step durations map
-            programData.tracks.forEach(track => {
-                track.steps.forEach(step => {
-                    stepDurations[step.stepId] = step.duration.seconds || 0;
-                });
-            });
-            
-            function getEarliestTime(stepId, visited = new Set()) {
-                if (visited.has(stepId)) return 0; // Cycle prevention
-                if (times[stepId] !== undefined) return times[stepId];
-                
-                visited.add(stepId);
-                
-                let maxPredecessorEnd = 0;
-                
-                (dependencies[stepId] || []).forEach(depStepId => {
-                    const depStart = getEarliestTime(depStepId, new Set(visited));
-                    const depDuration = stepDurations[depStepId] || 0;
-                    maxPredecessorEnd = Math.max(maxPredecessorEnd, depStart + depDuration);
-                });
-                
-                times[stepId] = maxPredecessorEnd;
-                return maxPredecessorEnd;
-            }
-            
-            // Calculate for all steps
-            programData.tracks.forEach(track => {
-                track.steps.forEach(step => {
-                    getEarliestTime(step.stepId);
-                });
-            });
-            
-            return times;
-        }
-        
-        function applySynchronizedFinish(earliestTimes, programData) {
-            const stepTimings = [];
-            
-            // Calculate track end times at earliest schedule
-            const trackEndTimes = {};
-            programData.tracks.forEach(track => {
-                let trackEnd = 0;
-                track.steps.forEach(step => {
-                    const startTime = earliestTimes[step.stepId] || 0;
-                    const duration = step.duration.seconds || 0;
-                    trackEnd = Math.max(trackEnd, startTime + duration);
-                });
-                trackEndTimes[track.trackId] = trackEnd;
-            });
-            
-            // Find maximum end time
-            const maxEndTime = Math.max(...Object.values(trackEndTimes));
-            
-            // Delay shorter tracks to synchronize finish
-            programData.tracks.forEach(track => {
-                const trackDelay = maxEndTime - trackEndTimes[track.trackId];
-                
-                track.steps.forEach(step => {
-                    const originalStart = earliestTimes[step.stepId] || 0;
-                    const newStart = originalStart + trackDelay;
-                    const duration = step.duration.seconds || 0;
-                    
-                    stepTimings.push({
-                        stepId: step.stepId,
-                        trackId: track.trackId,
-                        startTime: newStart,
-                        duration: duration,
-                        endTime: newStart + duration
-                    });
-                });
-            });
-            
-            return stepTimings;
-        }
-        
-        function applyCoverStrategy(earliestTimes, programData) {
-            const stepTimings = [];
-            let currentTime = 0;
-            let lastScheduledTrack = null;
-            let lastScheduledStep = null;
-            
-            // Prepare all steps with metadata
-            const allSteps = [];
-            programData.tracks.forEach(track => {
-                track.steps.forEach(step => {
-                    allSteps.push({
-                        ...step,
-                        trackId: track.trackId,
-                        trackName: track.name,
-                        trackPriority: track.priority || 100,
-                        earliestTime: earliestTimes[step.stepId] || 0,
-                        isCommercial: track.trackId === 'commercial-breaks',
-                        scheduled: false
-                    });
-                });
-            });
-            
-            // Keep scheduling until all steps are placed
-            while (stepTimings.length < allSteps.length) {
-                const availableSteps = allSteps.filter(step => 
-                    !step.scheduled && step.earliestTime <= currentTime
-                );
-                
-                if (availableSteps.length === 0) {
-                    // No steps available yet, advance time to next earliest step
-                    const nextSteps = allSteps.filter(step => !step.scheduled);
-                    if (nextSteps.length === 0) break;
-                    
-                    const nextEarliestTime = Math.min(...nextSteps.map(s => s.earliestTime));
-                    currentTime = nextEarliestTime;
-                    continue;
-                }
-                
-                // Choose the best next step using priority rules
-                let bestStep = null;
-                
-                // Rule 1: Avoid consecutive commercials at all costs
-                const nonCommercialSteps = availableSteps.filter(s => !s.isCommercial);
-                if (lastScheduledStep && lastScheduledStep.isCommercial && nonCommercialSteps.length > 0) {
-                    bestStep = chooseBestStep(nonCommercialSteps, lastScheduledTrack);
-                } else {
-                    // Rule 2: Prefer different tracks to create variety
-                    const differentTrackSteps = availableSteps.filter(s => s.trackId !== lastScheduledTrack);
-                    if (differentTrackSteps.length > 0) {
-                        // Among different tracks, prefer non-commercials
-                        const nonCommercialDifferentTrack = differentTrackSteps.filter(s => !s.isCommercial);
-                        if (nonCommercialDifferentTrack.length > 0) {
-                            bestStep = chooseBestStep(nonCommercialDifferentTrack, lastScheduledTrack);
-                        } else {
-                            bestStep = chooseBestStep(differentTrackSteps, lastScheduledTrack);
-                        }
-                    } else {
-                        // Rule 3: If no different track available, use same track but avoid consecutive commercials
-                        bestStep = chooseBestStep(availableSteps, lastScheduledTrack);
-                    }
-                }
-                
-                if (!bestStep) {
-                    // Fallback: just pick the first available step
-                    bestStep = availableSteps[0];
-                }
-                
-                // Schedule the chosen step
-                const duration = bestStep.duration.seconds || 0;
-                const endTime = currentTime + duration;
-                
-                stepTimings.push({
-                    stepId: bestStep.stepId,
-                    trackId: bestStep.trackId,
-                    startTime: currentTime,
-                    duration: duration,
-                    endTime: endTime
-                });
-                
-                // Update tracking variables
-                bestStep.scheduled = true;
-                currentTime = endTime;
-                lastScheduledTrack = bestStep.trackId;
-                lastScheduledStep = bestStep;
-            }
-            
-            return stepTimings;
-        }
-        
-        function chooseBestStep(candidateSteps, lastTrackId) {
-            if (candidateSteps.length === 0) return null;
-            if (candidateSteps.length === 1) return candidateSteps[0];
-            
-            // Sort by priority (lower number = higher priority), then by earliest time
-            candidateSteps.sort((a, b) => {
-                if (a.trackPriority !== b.trackPriority) {
-                    return a.trackPriority - b.trackPriority;
-                }
-                return a.earliestTime - b.earliestTime;
-            });
-            
-            return candidateSteps[0];
-        }
-        
-        function applyMinimizeLength(earliestTimes, programData) {
-            const stepTimings = [];
-            
-            // Use earliest times and minimum durations
-            programData.tracks.forEach(track => {
-                track.steps.forEach(step => {
-                    const startTime = earliestTimes[step.stepId] || 0;
-                    const duration = step.duration.seconds || 0;
-                    
-                    stepTimings.push({
-                        stepId: step.stepId,
-                        trackId: track.trackId,
-                        startTime: startTime,
-                        duration: duration,
-                        endTime: startTime + duration
-                    });
-                });
-            });
-            
-            return stepTimings;
-        }
-
-        function applyFitToTime(earliestTimes, programData, targetSeconds) {
-            // Build a working copy of step data with full info
-            const allSteps = [];
-            programData.tracks.forEach(track => {
-                track.steps.forEach((step, idx) => {
-                    const trigger = step.startTrigger || {};
-                    allSteps.push({
-                        stepId: step.stepId,
-                        trackId: track.trackId,
-                        trackIndex: programData.tracks.indexOf(track),
-                        indexInTrack: idx,
-                        afterStepId: trigger.type === 'afterStep' ? trigger.stepId : null,
-                        duration: step.duration.seconds || 0,
-                        originalDuration: step.duration.seconds || 0,
-                        durationType: step.duration.type || 'fixed',
-                        minSeconds: step.duration.minSeconds || null,
-                        maxSeconds: step.duration.maxSeconds || null,
-                        priority: step.priority || 100,
-                        omitted: false,
-                        inJeopardy: false
-                    });
-                });
-            });
-
-            // Build lookup for quick access
-            const stepMap = {};
-            allSteps.forEach(s => { stepMap[s.stepId] = s; });
-
-            // Helper: recalculate schedule respecting all afterStep dependencies
-            function recalculate() {
-                const times = {};
-                const endTimes = {};
-
-                // Topological ordering: process steps whose dependencies are resolved
-                const resolved = new Set();
-                const pending = allSteps.map(s => s.stepId);
-                let safety = pending.length * 2;
-
-                while (pending.length > 0 && safety-- > 0) {
-                    const nextPending = [];
-                    for (const id of pending) {
-                        const s = stepMap[id];
-                        if (s.afterStepId && !resolved.has(s.afterStepId)) {
-                            nextPending.push(id);
-                            continue;
-                        }
-                        // Start after dependency ends, or at 0
-                        const depEnd = s.afterStepId ? (endTimes[s.afterStepId] || 0) : 0;
-                        times[id] = depEnd;
-                        endTimes[id] = depEnd + s.duration;
-                        resolved.add(id);
-                    }
-                    if (nextPending.length === pending.length) break; // cycle guard
-                    pending.length = 0;
-                    pending.push(...nextPending);
-                }
-
-                let maxEnd = 0;
-                allSteps.forEach(s => {
-                    const end = endTimes[s.stepId] || 0;
-                    if (end > maxEnd) maxEnd = end;
-                });
-                return { times, totalDuration: maxEnd };
-            }
-
-            // Initial calculation
-            let { times, totalDuration } = recalculate();
-
-            // Already fits?
-            if (totalDuration <= targetSeconds) {
-                const stepTimings = [];
-                allSteps.forEach(s => {
-                    stepTimings.push({
-                        stepId: s.stepId,
-                        trackId: s.trackId,
-                        startTime: times[s.stepId] || 0,
-                        duration: s.duration,
-                        endTime: (times[s.stepId] || 0) + s.duration,
-                        omitted: false,
-                        inJeopardy: false,
-                        originalDuration: s.originalDuration
-                    });
-                });
-                return stepTimings;
-            }
-
-            // PHASE 1: Compress variable durations
-            const compressible = allSteps.filter(s =>
-                s.durationType === 'variable' && s.minSeconds != null && s.minSeconds < s.duration
-            );
-            if (compressible.length > 0) {
-                // Sort by priority DESC (lowest priority = highest number compressed first)
-                compressible.sort((a, b) => b.priority - a.priority);
-
-                const excess = totalDuration - targetSeconds;
-                const totalAvailable = compressible.reduce((sum, s) => sum + (s.duration - s.minSeconds), 0);
-
-                compressible.forEach(s => {
-                    const available = s.duration - s.minSeconds;
-                    // Proportional reduction
-                    const reduction = Math.min(available, Math.ceil(excess * (available / totalAvailable)));
-                    s.duration = Math.max(s.minSeconds, s.duration - reduction);
-                });
-
-                ({ times, totalDuration } = recalculate());
-            }
-
-            // PHASE 2: Mark lowest-priority steps as "in jeopardy" (instead of omitting)
-            // Steps keep their full duration — they just get a visual warning
-            if (totalDuration > targetSeconds) {
-                const excess = totalDuration - targetSeconds;
-                // Sort candidates by priority DESC (highest number = lowest priority = jeopardy first)
-                const candidates = allSteps
-                    .filter(s => !s.omitted)
-                    .sort((a, b) => b.priority - a.priority);
-
-                let savedSoFar = 0;
-                for (const candidate of candidates) {
-                    if (savedSoFar >= excess) break;
-                    candidate.inJeopardy = true;
-                    savedSoFar += candidate.originalDuration;
-                }
-            }
-
-            // Build final step timings (no 4s stubs — keep full durations)
-            const stepTimings = [];
-            allSteps.forEach(s => {
-                stepTimings.push({
-                    stepId: s.stepId,
-                    trackId: s.trackId,
-                    startTime: times[s.stepId] || 0,
-                    duration: s.duration,
-                    endTime: (times[s.stepId] || 0) + s.duration,
-                    omitted: false,
-                    inJeopardy: s.inJeopardy || false,
-                    originalDuration: s.originalDuration
-                });
-            });
-
-            return stepTimings;
         }
 
         function updateTimelineWithPlan(plan) {
@@ -12776,6 +12387,35 @@
             showToast(I18N.t('toast.switchedResource'), 'info');
         }
         
+        // Replicate expansion names instances "Bake tray (2 of 3)"; the step
+        // list shows the base name once on the group header and a canonical
+        // "[2 of 3]" label on each instance row.
+        const INSTANCE_NAME_RE = /^(.*?)\s*\((\d+) of (\d+)\)$/;
+        function instanceBaseName(name) {
+            const m = INSTANCE_NAME_RE.exec(name || '');
+            return m ? m[1] : (name || '');
+        }
+        function instanceDisplayName(name, index, count) {
+            const m = INSTANCE_NAME_RE.exec(name || '');
+            const base = m ? m[1] : (name || '');
+            const i = index || (m ? +m[2] : null);
+            if (!i || !count) return name || '';
+            return base + ' [' + i + ' of ' + count + ']';
+        }
+        // Expand or collapse one group of replicate instances.
+        function toggleInstanceGroup(instanceOf) {
+            const header = document.querySelector('[data-instance-group-header="' + instanceOf + '"]');
+            const rows = document.querySelectorAll('[data-instance-group="' + instanceOf + '"]');
+            if (!rows.length) return;
+            const collapsed = rows[0].style.display === 'none';
+            rows.forEach(row => { row.style.display = collapsed ? '' : 'none'; });
+            if (header) {
+                const caret = header.querySelector('.instance-group-caret');
+                if (caret) caret.innerHTML = collapsed ? '&#9662;' : '&#9656;';
+            }
+        }
+        window.toggleInstanceGroup = toggleInstanceGroup;
+
         function generateItinerary() {
             const itineraryContent = document.getElementById('itinerary-content');
             itineraryContent.innerHTML = '';
@@ -12808,13 +12448,32 @@
                         negativeOffsetRefStepId: step.negativeOffsetRefStepId || null,
                         omitted: step.omitted || false,
                         inJeopardy: step.inJeopardy || false,
-                        originalDuration: step.originalDuration || null
+                        originalDuration: step.originalDuration || null,
+                        instanceOf: step.instanceOf || null,
+                        instanceIndex: step.instanceIndex || null
                     });
                 });
             });
             
             // Sort events by start time
             events.sort((a, b) => a.time - b.time);
+
+            // Replicate instances collapse into one row per replicated step
+            // ("Bake tray x3"), expandable from its header. A group of one is
+            // just a step, so only counts above one are grouped.
+            const instanceGroups = {};
+            events.forEach(event => {
+                if (!event.instanceOf) return;
+                if (!instanceGroups[event.instanceOf]) {
+                    instanceGroups[event.instanceOf] = { count: 0, members: [] };
+                }
+                instanceGroups[event.instanceOf].count++;
+                instanceGroups[event.instanceOf].members.push(event.stepId);
+            });
+            Object.keys(instanceGroups).forEach(key => {
+                if (instanceGroups[key].count < 2) delete instanceGroups[key];
+            });
+            const instanceGroupsSeen = {};
             
             // Add summary at the top — dedicated `.program-summary`
             // class so the colors can flip in dark mode via the
@@ -12852,9 +12511,29 @@
             
             // Generate timeline items
             events.forEach((event, index) => {
+                const group = event.instanceOf && instanceGroups[event.instanceOf]
+                    ? instanceGroups[event.instanceOf] : null;
+                if (group && !instanceGroupsSeen[event.instanceOf]) {
+                    instanceGroupsSeen[event.instanceOf] = true;
+                    const headerLi = document.createElement('li');
+                    headerLi.className = 'mb-8 ms-4 instance-group-header';
+                    headerLi.dataset.instanceGroupHeader = event.instanceOf;
+                    headerLi.innerHTML =
+                        '<div class="absolute w-3 h-3 bg-gray-400 rounded-full mt-1.5 -start-1.5 border border-white dark:border-gray-900"></div>'
+                        + '<button type="button" class="instance-group-toggle" style="font-weight:600;cursor:pointer;background:none;border:none;padding:0;color:inherit;" onclick="toggleInstanceGroup(&quot;' + event.instanceOf + '&quot;)">'
+                        + '<span class="instance-group-caret">&#9656;</span> '
+                        + instanceBaseName(event.stepName) + ' &times;' + group.count
+                        + '</button>';
+                    timelineOl.appendChild(headerLi);
+                }
+
                 const li = document.createElement('li');
                 li.className = index === events.length - 1 ? 'ms-4 timeline-item' : 'mb-8 ms-4 timeline-item';
                 li.dataset.stepId = event.stepId;
+                if (group) {
+                    li.dataset.instanceGroup = event.instanceOf;
+                    li.style.display = 'none';
+                }
 
                 // Dim steps that belong to an unselected choice branch
                 const choiceActive = isStepChoiceActive(event.stepId);
@@ -12930,7 +12609,7 @@
                     <time class="mb-1 text-sm font-normal leading-none text-gray-400 dark:text-gray-500">${startTime}</time>
                     <h3 class="text-lg font-semibold text-blue-800 dark:text-white flex items-center gap-2">
                         <span>${stepIcon}</span>
-                        <span class="${nameClass}">${event.stepName}</span>
+                        <span class="${nameClass}">${group ? instanceDisplayName(event.stepName, event.instanceIndex, group.count) : event.stepName}</span>
                         <span class="text-xs font-normal bg-gray-100 text-gray-600 px-2 py-1 rounded-full">Step</span>
                         ${badgesHtml}
                     </h3>
@@ -14552,6 +14231,12 @@
             } else {
                 console.log(`${postOptimizationConflicts.length} conflicts still remain:`);
                 postOptimizationConflicts.forEach((conflict, index) => {
+                    if (conflict.kind === 'inFlight') {
+                        console.log(`   ${index + 1}. in flight: ${conflict.demand}/${conflict.maxInFlight} instances of "${conflict.inFlightOf}" between ${conflict.startSeconds}s and ${conflict.endSeconds}s`);
+                        console.log(`      Instances: ${conflict.steps.join(', ')}`);
+                        console.log(`      ${conflict.fix}`);
+                        return;
+                    }
                     console.log(`   ${index + 1}. ${conflict.resourceType}: ${conflict.overutilization + conflict.maxConcurrent}/${conflict.maxConcurrent} at ${conflict.time}s`);
                     console.log(`      Conflicting steps: ${conflict.conflictingSteps.join(', ')}`);
                     
@@ -14575,6 +14260,9 @@
                 console.log('');
                 console.log('=== ATTEMPTING AGGRESSIVE SECONDARY OPTIMIZATION ===');
                 postOptimizationConflicts.forEach(conflict => {
+                    // In-flight over-subscription is fixed by holding the whole
+                    // upstream instance, not by finding another resource slot.
+                    if (conflict.kind !== 'maxConcurrent') return;
                     console.log(`Trying to resolve conflict: ${conflict.resourceType} at ${conflict.time}s`);
                     
                     // Sort conflicting steps by flexibility (fewer dependents = more flexible)
@@ -14645,84 +14333,22 @@
             return optimizedSteps;
         }
         
+        // Both sweeps live in static/js/auto-plan.js; these wrappers supply the
+        // page globals. Every returned item carries `kind`: "maxConcurrent"
+        // for a task over its instantaneous cap and "inFlight" for more
+        // instances between a replicated step and its barrier than
+        // replicates.maxInFlight allows.
         function detectPostOptimizationConflicts(optimizedSteps) {
-            /**
-             * Detect conflicts in the optimized schedule using the same logic as findResourceConflicts
-             */
-            const conflicts = [];
-            const resourceUsage = calculateOptimizedResourceUsage(optimizedSteps);
-            
-            Object.keys(resourceUsage).forEach(resourceType => {
-                const constraint = resourceConstraints.find(c => c.task === resourceType);
-                if (!constraint) return;
-                
-                const events = resourceUsage[resourceType].timeline.sort((a, b) => {
-                    // First sort by time
-                    if (a.time !== b.time) return a.time - b.time;
-                    // For events at the same time, process 'end' before 'start' 
-                    // This prevents false conflicts when one step ends and another begins simultaneously
-                    if (a.type === 'end' && b.type === 'start') return -1;
-                    if (a.type === 'start' && b.type === 'end') return 1;
-                    return 0;
-                });
-                let currentUsage = 0;
-                let activeSteps = [];
-                
-                events.forEach(event => {
-                    if (event.type === 'start') {
-                        currentUsage += 1;
-                        activeSteps.push(event.stepId);
-                        
-                        // Check for overutilization
-                        if (currentUsage > constraint.maxConcurrent) {
-                            conflicts.push({
-                                resourceType: resourceType,
-                                time: event.time,
-                                overutilization: currentUsage - constraint.maxConcurrent,
-                                maxConcurrent: constraint.maxConcurrent,
-                                conflictingSteps: [...activeSteps],
-                                triggerStep: event.stepId
-                            });
-                        }
-                    } else {
-                        currentUsage = Math.max(0, currentUsage - 1);
-                        activeSteps = activeSteps.filter(id => id !== event.stepId);
-                    }
-                });
+            return RhylthymeAutoPlan.detectPostOptimizationConflicts(optimizedSteps, {
+                resourceConstraints: resourceConstraints,
+                program: originalProgram
             });
-            
-            return conflicts;
         }
-        
+
         function calculateOptimizedResourceUsage(optimizedSteps) {
-            /**
-             * Calculate resource usage timeline for optimized steps
-             */
-            const resourceUsage = {};
-            
-            // Initialize resource usage tracking
-            resourceConstraints.forEach(constraint => {
-                resourceUsage[constraint.task] = {
-                    timeline: []
-                };
-            });
-            
-            // Add events for each optimized step
-            Object.values(optimizedSteps).forEach(step => {
-                if (step.task && resourceUsage[step.task]) {
-                    const startTime = step.startTime || step.originalStartTime;
-                    const endTime = startTime + step.duration;
-                    
-                    resourceUsage[step.task].timeline.push(
-                        { type: 'start', time: startTime, stepId: step.stepId },
-                        { type: 'end', time: endTime, stepId: step.stepId }
-                    );
-                }
-            });
-            
-            return resourceUsage;
+            return RhylthymeAutoPlan.calculateOptimizedResourceUsage(optimizedSteps, resourceConstraints);
         }
-        
+
         function analyzeOverutilizationDuration(optimizedSteps) {
             /**
              * Analyze the duration and periods of overutilization in the optimized schedule

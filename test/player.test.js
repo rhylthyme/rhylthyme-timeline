@@ -44,3 +44,32 @@ test('buildPlayerHtml does not mutate its input', () => {
   buildPlayerHtml(program);
   assert.strictEqual(JSON.stringify(program), before);
 });
+
+test('classic player carries instance identity and groups instance rows', () => {
+  const program = parsePyJson(fs.readFileSync(path.join(FIXTURES, 'programs', 'cookies_three_trays.json'), 'utf8'));
+  const [nodes, edges] = extractStepDependencies(require('../src/index.js').expandReplicates(program));
+
+  // Every replicate instance node knows what it is an instance of, and the
+  // sub-track it lives in points at its parent track.
+  const bake3 = nodes.find((n) => n.id === 'bake-r3');
+  assert.strictEqual(bake3.instanceOf, 'bake');
+  assert.strictEqual(bake3.instanceIndex, 3);
+  assert.strictEqual(bake3.parentTrackId, null);
+  const cool1 = nodes.find((n) => n.id === 'cool-r1');
+  assert.strictEqual(cool1.instanceOf, 'cool');
+  assert.strictEqual(cool1.instanceIndex, 1);
+  assert.strictEqual(cool1.parentTrackId, 'cookies');
+  assert.strictEqual(nodes.find((n) => n.id === 'mix').instanceOf, null);
+
+  // …and the same identity reaches the step list the itinerary renders from.
+  const data = calculateTimelineData(nodes, edges);
+  const steps = [].concat(...data.tracks.map((t) => t.steps));
+  assert.strictEqual(steps.find((s) => s.stepId === 'cool-r2').instanceOf, 'cool');
+  assert.strictEqual(steps.find((s) => s.stepId === 'cool-r2').instanceIndex, 2);
+
+  // The page groups those rows under one collapsible header.
+  const html = buildPlayerHtml(program);
+  assert.ok(html.includes('data-instance-group-header'), 'group header row');
+  assert.ok(html.includes('function toggleInstanceGroup'), 'group toggle');
+  assert.ok(html.includes('instanceDisplayName'), 'per-instance labels');
+});
