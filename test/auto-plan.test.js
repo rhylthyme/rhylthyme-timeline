@@ -12,7 +12,7 @@ const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
 
-const AutoPlan = require('../../rhylthyme-server/static/js/auto-plan.js');
+const AutoPlan = require('../player/auto-plan.js');
 const { expandReplicates } = require('../src/index.js');
 
 const PROGRAMS = path.join(__dirname, 'fixtures', 'programs');
