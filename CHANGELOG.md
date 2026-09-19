@@ -6,6 +6,25 @@ Keep a Changelog; versions follow SemVer.
 ## [Unreleased]
 
 ### Added
+- `renderTimelineSvg` looks. `style: 'web'` follows the interactive
+  timeline (its `vivid` palette, flat bars, dark axis, clock labels);
+  `style: 'publication'` is tuned for figures (white page, no brand mark or
+  title, axis title, Helvetica/Arial, full track names, step names set
+  beside a bar that is too short for them, labels drawn above the arrows).
+  New options: `palette` (the interactive timeline's seven palettes plus
+  `okabe-ito` and `grayscale`, or an array), `colorBy: 'track' | 'task'`,
+  `colors`, a configurable `legend` (`position`, `items`, `labels`,
+  `title`, `columns`, `frame`, `onlyUsed`, `capacity`), `title`,
+  `subtitle`, `brand`, `background`, `fontFamily`, `fontScale`,
+  `rowHeight`, `labelWidth`, `timeFormat`, `startAt` (wall-clock axis),
+  `tickInterval`, `axisTitle`, `grid`, `labelOverflow`, `showDurations`,
+  `tooltips`, `fontWidthFactor` (for rasterisers that substitute a wider
+  face). Bar text picks dark or white ink from the bar's luminance;
+  long programs get a sensible number of ticks. Exports `PALETTES`,
+  `STYLES`, `textWidth`. **The default (`classic`) drawing is unchanged**:
+  the snapshot hashes were not regenerated.
+- `rhylthyme-render` (`bin/render.js`): program JSON to SVG, PNG or PDF
+  with every option above as a flag. `examples/render.js` forwards to it.
 - Predicted offsets in `<rhylthyme-timeline>`. A program with
   `metadata.offsetsUse: "predicted"` (program schema 0.3.0-alpha) resolves
   a NEGATIVE `offsetSeconds` against a *predicted* end of the step it is

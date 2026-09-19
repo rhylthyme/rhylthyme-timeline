@@ -1,8 +1,11 @@
 {
   "name": "@rhylthyme/timeline",
-  "version": "2.0.0-beta.4",
-  "description": "Timing engine, static Gantt renderer and <rhylthyme-timeline> player Web Component for Rhylthyme programs: resolve step start/end times from triggers, render an SVG timeline with dependency arrows, play it with manual gates and indefinite steps. Zero dependencies.",
+  "version": "2.0.0-beta.5",
+  "description": "Timing engine, static Gantt renderer and <rhylthyme-timeline> player Web Component for Rhylthyme programs: resolve step start/end times from triggers, render an SVG timeline with dependency arrows (web and publication looks, palettes, configurable legend), play it with manual gates and indefinite steps. Zero dependencies.",
   "main": "src/index.js",
+  "bin": {
+    "rhylthyme-render": "bin/render.js"
+  },
   "exports": {
     ".": "./src/index.js",
     "./core": "./src/index.js",
@@ -11,6 +14,7 @@
   },
   "files": [
     "src/",
+    "bin/",
     "player/",
     "README.md",
     "CHANGELOG.md",

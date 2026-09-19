@@ -191,6 +191,84 @@ run any SVG converter, e.g. `rsvg-convert -w 1640 -f png -o out.png thanksgiving
 Point it at your own program JSON to render that instead; the
 [example corpus](test/fixtures/programs) has 39 more.
 
+#### Looks, palettes and the legend
+
+The default drawing is unchanged from earlier versions (and pinned byte for
+byte by the tests). Two more looks are opt-in with `style`:
+
+| `style` | For | What changes |
+|---|---|---|
+| `classic` (default) | existing embeds | nothing |
+| `web` | previews that sit next to the interactive timeline | its `vivid` palette, flat bars, dark axis with clock labels (`0:30`, `1:00`), a legend that lists only what the drawing contains, `<title>`/`<desc>` and per-bar tooltips |
+| `publication` | papers, slides, posters | as `web`, plus: white page, no brand mark, no title (the caption carries it), an axis title, Helvetica/Arial, track names never cut, and a step name that does not fit its bar is set beside it instead of being truncated |
+
+![web look](docs/thanksgiving-web.svg)
+
+![publication look, coloured by resource](docs/thanksgiving-publication.svg)
+
+```js
+const svg = Rhylthyme.renderTimelineSvg(program, {
+  style: 'publication',
+  colorBy: 'task',                 // colour by resource instead of by track
+  palette: 'okabe-ito',            // or an array of hex colours
+  colors: { oven: '#b91c1c' },     // pin a track id, track name or task
+  fontScale: 1.2,                  // for a figure that will be shrunk to a column
+  startAt: '2026-11-26T14:00:00',  // wall-clock axis instead of elapsed time
+  legend: {
+    position: 'right',             // 'bottom' (default) | 'top' | 'right' | 'none'
+    title: 'Resources',
+    items: ['tasks', 'dependency', 'indefinite'],   // exactly these, in this order
+    labels: { dependency: 'Finish-to-start' },
+    frame: true,
+  },
+});
+```
+
+| Option | Values | Default |
+|---|---|---|
+| `style` | `classic`, `web`, `publication` | `classic` |
+| `palette` | `vivid`, `muted`, `tableau`, `google`, `pastel`, `d3`, `cookbook` (the interactive timeline's palettes, value for value), `okabe-ito` (colour-blind safe), `grayscale`, `classic`, or an array | per style |
+| `colorBy` | `track`, `task` | `track` |
+| `colors` | `{ key: hex }` keyed by track id, track name or task | none |
+| `legend` | `false`, or `{ position, items, labels, title, columns, frame, onlyUsed, capacity, fontSize }` | automatic |
+| `legend.items` | any of `tracks`, `tasks`, `dependency`, `negative-offset`, `indefinite`, `variable`, `manual`, `barrier`, `barrier-any`, `in-flight`, `planned`, `late`, `early`, `on-time` | the keys the drawing uses; `tasks` first when `colorBy: 'task'` (with each resource's `maxConcurrent`) |
+| `title`, `subtitle` | string, or `false` to omit | program name, "N tracks · total" |
+| `brand` | boolean | on, except `publication` |
+| `background` | hex, or `'none'` | per style |
+| `fontFamily`, `fontScale` | CSS family list; 0.5–3 | per style; 1 |
+| `fontWidthFactor` | 0.8–1.6: multiply the text-width estimates when the rasteriser will use a wider face than Helvetica/Arial (about 1.14 for DejaVu Sans) | 1 |
+| `width`, `rowHeight`, `labelWidth` | SVG units | 820; 46; fits the longest track name |
+| `timeFormat` | `clock`, `minutes` | per style |
+| `startAt` | `Date` or ISO string: label the axis with wall-clock times | none |
+| `tickInterval`, `axisTitle`, `grid` | seconds; string or `false`; boolean | automatic |
+| `labelOverflow` | `truncate`, `hide`, `outside` | `outside` for `publication`, else `truncate` |
+| `showDurations`, `tooltips` | boolean | off; on for `web` |
+
+Passing a `legend` object or `colorBy: 'task'` in the classic look swaps
+its fixed one-line key for the configurable one and leaves the rest alone.
+`Rhylthyme.PALETTES` exports the palettes and `Rhylthyme.STYLES` the look
+names.
+
+From the command line (`npx rhylthyme-render`, or `node bin/render.js`):
+
+```bash
+rhylthyme-render program.json -o figure.pdf --style publication \
+    --color-by task --palette okabe-ito --legend right --legend-title Resources
+rhylthyme-render program.json --run run.json -o overlay.png --style web --scale 3
+rhylthyme-render --help
+```
+
+A rasteriser with no fonts draws no text at all: `@resvg/resvg-js` on a
+serverless host needs `font: { fontFiles: [...], loadSystemFonts: false }`
+and a matching `fontFamily` (the Rhylthyme MCP server bundles DejaVu Sans
+for this).
+
+`.pdf` needs `rsvg-convert` on the PATH (vector output, fonts embedded);
+`.png` uses it too, or `@resvg/resvg-js` when it is installed. Text is real
+text, not outlines, so a figure can still be edited in Illustrator or
+Inkscape. Label fitting uses estimated text widths (there is no DOM to
+measure with), so check a final figure by eye.
+
 In a browser, open [`examples/index.html`](examples/index.html) (no server
 or build needed): it loads `src/index.js`, calls `renderTimeline`, and has
 a dropdown of six example programs.
@@ -237,7 +315,7 @@ const svg = Rhylthyme.renderTimelineSvg(program);
 | Function | Returns |
 |---|---|
 | `computeStepTimings(program, opts?)` | `{ [stepId]: { start, end, duration, trackId, resolved } }` in seconds from program start. `resolved` is `false` when a trigger could not be satisfied (cycle or dangling reference); such steps are placed at `t = 0`. `opts.actual = { [stepId]: { start?, end? } }` overrides the plan with what actually happened; `opts.now` makes unstarted manual gates float to the current time and started indefinite steps stretch to it. |
-| `renderTimelineSvg(program, opts?)` | SVG markup (string). `opts = { arrows, marks, legend }`, all default `true`: cross-track dependency arrows (dashed for negative offsets), hatched indefinite steps, faded variable-step extensions to their maximum, a flag on manual gates, and a one-line legend (dependency, negative offset, indefinite, variable, manual). Player options: `timings` (precomputed), `now` (draws the cursor), `states` (`{ [stepId]: 'done' \| 'active' \| 'waiting' }`), `width`. Planned-vs-actual options: `baseline` (a second timings map drawn as a ghost bar under each step, `class="rt-baseline"`, with every bar tagged `data-deviation` / `data-deviation-seconds`), `deviationThreshold` (seconds inside which a step counts as on time, default 30) and `run` (a run record: shorthand for `timings` from it plus `baseline` from the plan). Bars carry `class="rt-bar"` and `data-step`. Without `baseline`/`run` the output is byte-identical to earlier versions. |
+| `renderTimelineSvg(program, opts?)` | SVG markup (string). Looks, palettes, `colorBy` and the configurable legend are described under [Looks, palettes and the legend](#looks-palettes-and-the-legend). `opts = { arrows, marks, legend }`, all default `true`: cross-track dependency arrows (dashed for negative offsets), hatched indefinite steps, faded variable-step extensions to their maximum, a flag on manual gates, and a one-line legend (dependency, negative offset, indefinite, variable, manual). Player options: `timings` (precomputed), `now` (draws the cursor), `states` (`{ [stepId]: 'done' \| 'active' \| 'waiting' }`), `width`. Planned-vs-actual options: `baseline` (a second timings map drawn as a ghost bar under each step, `class="rt-baseline"`, with every bar tagged `data-deviation` / `data-deviation-seconds`), `deviationThreshold` (seconds inside which a step counts as on time, default 30) and `run` (a run record: shorthand for `timings` from it plus `baseline` from the plan). Bars carry `class="rt-bar"` and `data-step`. Without `baseline`/`run` the output is byte-identical to earlier versions. |
 | `renderTimeline(container, program, opts?)` | Injects the SVG into a DOM element and returns the markup. |
 | `actualFromRun(record, program?, opts?)` | `{ [stepId]: { start, end } }` from a run record, keyed by expanded step id, ready to pass as `computeStepTimings`' `actual`. `opts.endsOnly` keeps only the ends, which is what a replay check feeds back so that every start has to come out of the trigger graph. Arguments may be given in either order. |
 | `timingsFromRun(program, record, opts?)` | `computeStepTimings(program, { actual: actualFromRun(record, program, opts) })`. |
