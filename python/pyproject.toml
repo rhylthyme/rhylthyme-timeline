@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rhylthyme-timeline"
+version = "2.0.0b5"
+description = "The Rhylthyme timeline engine and SVG/PNG/PDF Gantt renderer, with the rhylthyme-render command (runs on Node)"
+readme = "README.md"
+requires-python = ">=3.12"
+license = {text = "Apache-2.0"}
+authors = [{name = "Jeremy Leipzig", email = "leipzig@gmail.com"}]
+keywords = ["scheduling", "timeline", "gantt", "svg"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: JavaScript",
+]
+dependencies = []
+
+[project.urls]
+Homepage = "https://www.rhylthyme.com"
+Source = "https://github.com/rhylthyme/rhylthyme-timeline"
+
+[project.scripts]
+rhylthyme-render = "rhylthyme_timeline:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+rhylthyme_timeline = ["js/src/*.js", "js/bin/*.js"]
