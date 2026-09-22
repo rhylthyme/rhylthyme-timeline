@@ -10,10 +10,10 @@ you need on your PATH.
 
 ```bash
 pip install rhylthyme-timeline
-rhylthyme-render dinner.json -o dinner.svg
-rhylthyme-render dinner.json -o dinner.png --style web --palette vivid --start-at 2026-10-03T12:50:00
-rhylthyme-render dinner.json -o figure.pdf --style publication --legend right
-rhylthyme-render --help
+rhylthyme render dinner.json -o dinner.svg                    # with pip install rhylthyme
+rhylthyme render dinner.json -o dinner.png --style web --palette vivid --start-at 2026-10-03T12:50:00
+rhylthyme render dinner.json -o figure.pdf --style publication --legend right
+rhylthyme-render --help                                       # this package's own command, same options
 ```
 
 PNG needs `rsvg-convert` on the PATH (librsvg) or the `@resvg/resvg-js` npm
