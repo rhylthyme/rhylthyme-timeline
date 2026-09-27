@@ -284,3 +284,12 @@ test("fixtures with metadata.expectedTimings resolve to their hand-computed sche
   }
   assert.ok(checked >= 1, "at least one fixture declares expectedTimings");
 });
+
+// engine-timings.json is the engine's own answer for every corpus step; the
+// R package (rhylthyme-r) embeds this engine and asserts it reproduces the
+// file exactly. Stale means a timing changed: regenerate it with
+// tools/gen-engine-timings.js and copy it to the mirrors check_mirrors.sh lists.
+test("engine-timings.json matches the engine's current timings", () => {
+  const { build, OUT_FILE } = require("../tools/gen-engine-timings.js");
+  assert.equal(fs.readFileSync(OUT_FILE, "utf8"), build(), "rerun tools/gen-engine-timings.js");
+});
