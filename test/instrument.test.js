@@ -51,3 +51,20 @@ test('durations filled by rhylthyme plan still read as estimates', () => {
   });
   assert.match(T.renderTimelineSvg(program(load, planned), { tooltips: true }), /estimated/);
 });
+
+test('until and start/end steps: the tooltip names the call waited on', () => {
+  const log = {
+    stepId: 'log', name: 'Log pH',
+    instrument: { tool: 'ph', until: { command: 'log_series', params: { count: 10, interval_s: 3 } } },
+    startTrigger: { type: 'afterStep', stepId: 'load' },
+  };
+  const heat = {
+    stepId: 'heat', name: 'Heat', duration: { type: 'fixed', seconds: 60 },
+    instrument: { tool: 'stirrer', start: [{ command: 'start_heating' }], end: [{ command: 'stop_heating' }] },
+    startTrigger: { type: 'afterStep', stepId: 'log' },
+  };
+  const svg = T.renderTimelineSvg(program(load, log, heat), { tooltips: true });
+  assert.match(svg, /on ph: log_series/);
+  assert.match(svg, /on stirrer</);
+  assert.doesNotMatch(svg, /undefined/);
+});
