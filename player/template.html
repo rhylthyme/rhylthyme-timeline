@@ -8218,9 +8218,11 @@
 
         function presentStepAlert(entry) {
             const msg = { id: entry.id, stepId: entry.stepId, title: entry.title, body: entry.body, level: entry.level };
-            // Native drops the id from its pending set either way.
-            postAlertBridge('rhylthymeAlertFired', msg);
+            // Off: the schedule is empty and nothing is shown, so native must
+            // not hear of it either (Android posts page-fired alerts natively
+            // while the app is in the background).
             if (!alertsEnabled()) return;
+            postAlertBridge('rhylthymeAlertFired', msg);
             // Embedding hosts (like rhylthyme-step-announce).
             try { window.parent.postMessage(Object.assign({ type: 'rhylthyme-alert' }, msg), '*'); } catch (e) {}
             showAlertBanner(entry);
