@@ -5164,6 +5164,11 @@
         // by real elapsed wall time x speed, so a throttled hidden tab or a
         // late timer keeps correct time; null = no baseline (paused/stopped).
         let _lastTickWall = null;
+        // currentTime as the previous tick left it. A different value at the
+        // next tick means it was set from outside (native time sync, resume,
+        // live time_sync) to the true program time, so the wall time since the
+        // previous tick must not be added on top of it again.
+        let _lastTickClock = null;
         let _lastSpeechHalfSecond = -1;
         let currentTimelinePosition = null;
         let renderTotalDuration = null; // Original totalDuration at render time, for stable timeScale
@@ -7298,6 +7303,7 @@
             // the clock by the wall time elapsed since the previous one x speed).
             // A fresh baseline, so time spent paused or stopped never counts.
             _lastTickWall = performance.now();
+            _lastTickClock = null;
             executionTimer = setInterval(updateExecution, 100);
 
             // Start is a user gesture: unlock the alert chime, then tell the
@@ -7326,6 +7332,7 @@
                 executionTimer = null;
             }
             _lastTickWall = null;
+            _lastTickClock = null;
             // Paused: native cancels its pending alerts but keeps the list
             syncAlertSchedule();
 
@@ -7353,6 +7360,7 @@
             }
 
             _lastTickWall = null;
+            _lastTickClock = null;
 
             // Reset all visual states
             resetExecutionVisuals();
@@ -8142,6 +8150,9 @@
                     let end = null;
                     if (manualCompletedSteps.has(step.stepId)) {
                         end = step.endTime;
+                    } else if (ended && step.isIndefinite && step.negativeOffsetCapStartTime) {
+                        // An indefinite step ends when its negative-offset cap expires
+                        end = step.negativeOffsetCapStartTime + step.negativeOffsetMaxSeconds;
                     } else if (ended) {
                         end = start + ((step.hasDurationTrigger && step.maxSeconds) ? step.maxSeconds : step.duration);
                     } else if (!waiting && !step.isIndefinite) {
@@ -8189,7 +8200,10 @@
             if (executionState === 'running') {
                 const result = StepAlerts.evaluate(_alertState, steps, currentTime, {
                     native: inNativeAlertHost(),
-                    t: alertT
+                    t: alertT,
+                    // A regular tick (100 ms, up to a late one) is never a
+                    // jump: at 50x it already advances 5 s of program time.
+                    jumpSeconds: executionSpeed * 1
                 });
                 result.fire.forEach(presentStepAlert);
             }
@@ -8315,9 +8329,13 @@
             // currentTime from outside (native time sync, resume) are kept:
             // only the elapsed delta is added.
             const nowWall = performance.now();
-            const elapsed = _lastTickWall === null ? 0.1 : Math.max(0, (nowWall - _lastTickWall) / 1000);
+            let elapsed;
+            if (_lastTickWall === null) elapsed = 0.1;
+            else if (_lastTickClock !== null && currentTime !== _lastTickClock) elapsed = 0;
+            else elapsed = Math.max(0, (nowWall - _lastTickWall) / 1000);
             _lastTickWall = nowWall;
             currentTime += elapsed * executionSpeed;
+            _lastTickClock = currentTime;
 
             // Update visuals FIRST so push/slide code updates effectiveStartTime
             // before the blocking check reads them

@@ -147,7 +147,8 @@
   /**
    * Where one alert stands for a step snapshot:
    *   {status: 'skip'}     never fires (unpredictable anchor, or bad event)
-   *   {status: 'drop'}     overtaken; mark it fired without presenting it
+   *   {status: 'drop', fireAt?}  overtaken; mark it fired without presenting
+   *                        it (fireAt = the actual anchor + offset, when known)
    *   {status: 'unknown'}  fire time not known yet
    *   {status: 'known', fireAt, confirmed}  `confirmed` = the anchor is actual,
    *                        so the alert may fire once the clock reaches fireAt
@@ -158,7 +159,7 @@
     if (event === 'start') {
       if (off < 0) {
         if (step.manualStart) return { status: 'skip' };
-        if (step.started) return { status: 'drop' };
+        if (step.started) return isNum(step.start) ? { status: 'drop', fireAt: step.start + off } : { status: 'drop' };
         if (!isNum(step.start)) return { status: 'unknown' };
         return { status: 'known', fireAt: step.start + off, confirmed: true };
       }
@@ -169,7 +170,7 @@
     if (event === 'end') {
       if (off < 0) {
         if (step.indefinite) return { status: 'skip' };
-        if (step.ended) return { status: 'drop' };
+        if (step.ended) return isNum(step.end) ? { status: 'drop', fireAt: step.end + off } : { status: 'drop' };
         if (!isNum(step.end)) return { status: 'unknown' };
         return { status: 'known', fireAt: step.end + off, confirmed: true };
       }
@@ -202,12 +203,22 @@
    * where an entry is {id, stepId, title, body, level, fireAt, late}. `fire`
    * is what the page presents now; `silent` was crossed by a clock jump and
    * is only marked fired.
-   * options: { native: bool (inside an app), t: translator }
+   * options: { native: bool (inside an app), t: translator,
+   *            jumpSeconds: the jump threshold (default JUMP_SECONDS; the page
+   *            raises it to one wall second of program time at high speeds so
+   *            a regular 100 ms tick at 50x is not mistaken for a jump) }
+   *
+   * An alert whose anchor was overtaken in this very update (its fire time
+   * lies between the previous and the current clock reading, e.g. a 5 s tick
+   * at 50x or a throttled tab crossing both the fire time and the step's
+   * start) came due before it was overtaken, so it fires (subject to the
+   * jump rules) instead of being dropped.
    */
   function evaluate(state, steps, now, options) {
     var opts = options || {};
     var prev = state.lastClock === null || state.lastClock === undefined ? 0 : state.lastClock;
-    var jumped = now - prev > JUMP_SECONDS;
+    var threshold = isNum(opts.jumpSeconds) && opts.jumpSeconds > JUMP_SECONDS ? opts.jumpSeconds : JUMP_SECONDS;
+    var jumped = now - prev > threshold;
     state.lastClock = now;
     var out = { fire: [], silent: [], dropped: [], jumped: jumped };
     (steps || []).forEach(function (step) {
@@ -216,6 +227,9 @@
         var id = alertId(step.stepId, index);
         if (state.done.has(id)) return;
         var ft = fireTime(step, alert);
+        if (ft.status === 'drop' && isNum(ft.fireAt) && ft.fireAt > prev && ft.fireAt <= now) {
+          ft = { status: 'known', fireAt: ft.fireAt, confirmed: true };
+        }
         if (ft.status === 'drop') {
           state.done.add(id);
           out.dropped.push(id);
