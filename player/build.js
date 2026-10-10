@@ -178,6 +178,34 @@ function parseDurationString(durationStr) {
 // ---------------------------------------------------------------------------
 // Port of web_visualizer.extract_step_dependencies / extract_dependencies_from_trigger
 
+// Instrument steps (galago / LabMCP) may have no duration: they end when the
+// instrument replies. Port of web_visualizer.py's instrument_badge and
+// instrument_duration_estimate: a duration-like command param, else 60 s.
+const INSTRUMENT_DURATION_PARAMS = ['duration', 'duration_seconds', 'seconds', 'run_time', 'time', 'timeout'];
+const INSTRUMENT_DEFAULT_SECONDS = 60;
+const isDict = (v) => v !== null && typeof v === 'object' && !Array.isArray(v) && !isF(v);
+
+function instrumentBadge(instrument) {
+  const until = isDict(get(instrument, 'until')) ? instrument.until : {};
+  return {
+    tool: get(instrument, 'tool'),
+    command: get(instrument, 'command') || get(until, 'command'),
+    toolType: get(instrument, 'toolType'),
+  };
+}
+
+function instrumentDurationEstimate(step) {
+  const instrument = get(step, 'instrument');
+  if (Object.prototype.hasOwnProperty.call(step, 'duration') || !isDict(instrument)) return null;
+  const until = isDict(get(instrument, 'until')) ? instrument.until : {};
+  const params = (truthy(get(instrument, 'command')) ? get(instrument, 'params') : get(until, 'params')) || {};
+  for (const key of INSTRUMENT_DURATION_PARAMS) {
+    const value = get(params, key);
+    if ((typeof value === 'number' || isF(value)) && +value > 0) return value;
+  }
+  return INSTRUMENT_DEFAULT_SECONDS;
+}
+
 function extractStepDependencies(program) {
   const nodes = [];
   const edges = [];
@@ -221,7 +249,11 @@ function extractStepDependencies(program) {
       let durationInfo = null;
       let isIndefinite = false;
       let hasDurationTrigger = false;
-      if (truthy(duration)) {
+      const estimatedSeconds = instrumentDurationEstimate(step);
+      const durationEstimated = estimatedSeconds !== null || truthy(get(get(step, 'metadata') || {}, 'durationEstimate'));
+      if (estimatedSeconds !== null) {
+        durationInfo = `${pyStr(estimatedSeconds)}s`;
+      } else if (truthy(duration)) {
         const durationType = get(duration, 'type');
         if (durationType === 'fixed') {
           durationInfo = `${pyStr(get(duration, 'seconds', 0))}s`;
@@ -296,6 +328,9 @@ function extractStepDependencies(program) {
         instanceOf: get(step, 'instanceOf'),
         instanceIndex: get(step, 'instanceIndex'),
         parentTrackId: parentTrackId,
+        // galago instrument steps: tool badge; estimated length
+        instrument: isDict(get(step, 'instrument')) ? instrumentBadge(step.instrument) : null,
+        durationEstimated: durationEstimated,
       };
 
       if (truthy(get(step, 'media'))) nodeData.media = step.media;
@@ -303,6 +338,8 @@ function extractStepDependencies(program) {
         const stepMetadata = get(step, 'metadata', {});
         if (truthy(get(stepMetadata, 'media'))) nodeData.media = stepMetadata.media;
       }
+      // Step alerts drive the page's alert engine (step-alerts.js).
+      if (truthy(get(step, 'alerts'))) nodeData.alerts = step.alerts;
 
       nodes.push(nodeData);
 
@@ -384,6 +421,7 @@ function calculateTimelineData(nodes, edges) {
   const durationTriggerSteps = new Set();
   const manualStartSteps = new Set();
   const negativeOffsetSteps = new Map();
+  const negativeOffsetSeconds = new Map(); // stepId -> how long before the reference's end it starts
 
   for (const node of nodes) {
     if (node.type !== 'step') continue;
@@ -391,7 +429,10 @@ function calculateTimelineData(nodes, edges) {
     if (truthy(get(node, 'isIndefinite'))) indefiniteSteps.add(node.id);
     if (truthy(get(node, 'hasDurationTrigger'))) durationTriggerSteps.add(node.id);
     if (truthy(get(node, 'isManualStart'))) manualStartSteps.add(node.id);
-    if (truthy(get(node, 'negativeOffsetRefStepId'))) negativeOffsetSteps.set(node.id, node.negativeOffsetRefStepId);
+    if (truthy(get(node, 'negativeOffsetRefStepId'))) {
+      negativeOffsetSteps.set(node.id, node.negativeOffsetRefStepId);
+      negativeOffsetSeconds.set(node.id, get(node, 'negativeOffsetSeconds') || 0);
+    }
 
     const durationStr = get(node, 'duration', '0s');
     if (truthy(durationStr)) {
@@ -419,12 +460,18 @@ function calculateTimelineData(nodes, edges) {
     if (visited.has(stepId)) return stepStartTimes.has(stepId) ? stepStartTimes.get(stepId) : 0;
     tempVisited.add(stepId);
 
+    // Negative-offset steps are planned at the referenced step's planned end
+    // minus the offset, never before that step starts (as the server does).
     if (negativeOffsetSteps.has(stepId)) {
-      const refStart = calculateStartTime(negativeOffsetSteps.get(stepId));
-      stepStartTimes.set(stepId, refStart);
+      const refId = negativeOffsetSteps.get(stepId);
+      const refStart = calculateStartTime(refId);
+      const refEnd = pyAdd(refStart, stepDurations.has(refId) ? stepDurations.get(refId) : 0);
+      const lead = negativeOffsetSeconds.get(stepId) || 0;
+      const planned = pyMax(refStart, pySub(refEnd, lead));
+      stepStartTimes.set(stepId, planned);
       tempVisited.delete(stepId);
       visited.add(stepId);
-      return refStart;
+      return planned;
     }
 
     let maxPredecessorEnd = 0;
@@ -502,8 +549,11 @@ function calculateTimelineData(nodes, edges) {
       instanceOf: get(node, 'instanceOf'),
       instanceIndex: get(node, 'instanceIndex'),
       parentTrackId: get(node, 'parentTrackId'),
+      instrument: get(node, 'instrument'),
+      durationEstimated: get(node, 'durationEstimated', false),
     };
     if (truthy(get(node, 'media'))) stepData.media = node.media;
+    if (truthy(get(node, 'alerts'))) stepData.alerts = node.alerts;
 
     if (preBufferDuration > 0) {
       stepData.preBuffer = {
@@ -704,6 +754,9 @@ function computeSlots(nodes, edges, programData, environmentData, resourceConstr
     // The auto-plan strategies, inlined into the page exactly as the server
     // inlines rhylthyme-server/static/js/auto-plan.js.
     '_AUTO_PLAN_JS': fs.readFileSync(path.join(HERE, 'auto-plan.js'), 'utf8'),
+    // The step-alert engine, inlined the same way from
+    // rhylthyme-server/static/js/step-alerts.js.
+    '_STEP_ALERTS_JS': fs.readFileSync(path.join(HERE, 'step-alerts.js'), 'utf8'),
     'nodes_json': nodesJson,
     'edges_json': edgesJson,
     'timeline_json': timelineJson,

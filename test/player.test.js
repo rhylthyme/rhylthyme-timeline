@@ -73,3 +73,24 @@ test('classic player carries instance identity and groups instance rows', () => 
   assert.ok(html.includes('function toggleInstanceGroup'), 'group toggle');
   assert.ok(html.includes('instanceDisplayName'), 'per-instance labels');
 });
+
+test('step alerts reach the player steps and the page carries the alert engine', () => {
+  const program = {
+    programId: 'alerts', name: 'Alerts',
+    tracks: [{ trackId: 'oven', name: 'Oven', steps: [
+      { stepId: 'bake', name: 'Bake', task: 'oven', duration: { type: 'fixed', seconds: 180 },
+        startTrigger: { type: 'programStart' },
+        alerts: [{ event: 'end', offsetSeconds: -120, message: 'Preheat the oven now' }, { event: 'start' }] },
+      { stepId: 'rest', name: 'Rest', task: 'oven', duration: { type: 'fixed', seconds: 60 },
+        startTrigger: { type: 'afterStep', stepId: 'bake' } },
+    ] }],
+    resourceConstraints: [{ task: 'oven', maxConcurrent: 1 }],
+  };
+  const [nodes, edges] = extractStepDependencies(JSON.parse(JSON.stringify(program)));
+  const steps = [].concat(...calculateTimelineData(nodes, edges).tracks.map((t) => t.steps));
+  assert.deepStrictEqual(steps.find((s) => s.stepId === 'bake').alerts, program.tracks[0].steps[0].alerts);
+  assert.ok(!('alerts' in steps.find((s) => s.stepId === 'rest')));
+  const html = buildPlayerHtml(program);
+  assert.ok(html.includes(fs.readFileSync(path.join(__dirname, '..', 'player', 'step-alerts.js'), 'utf8')), 'engine inlined');
+  assert.ok(html.includes('rhylthymeAlertSchedule') && html.includes('function processStepAlerts'));
+});

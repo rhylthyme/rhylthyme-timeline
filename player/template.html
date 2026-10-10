@@ -42,8 +42,34 @@
     <script src="https://d3js.org/d3.v5.min.js"></script>
     <style><%=_TAILWIND_CSS%></style>
     <script><%=_AUTO_PLAN_JS%></script>
+    <script><%=_STEP_ALERTS_JS%></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
+        /* Program alert banners (step `alerts`), stacked at the top. */
+        .step-alert-stack {
+            position: fixed; top: 12px; left: 50%; transform: translateX(-50%);
+            z-index: 10000; display: flex; flex-direction: column; gap: 8px;
+            width: min(440px, calc(100vw - 32px)); pointer-events: none;
+        }
+        .step-alert-banner {
+            pointer-events: auto; display: flex; align-items: flex-start; gap: 10px;
+            padding: 10px 12px; border-radius: 10px; background: #ffffff; color: #1f2937;
+            border: 1px solid #e5e7eb; border-left: 5px solid #6B9E7D;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18); font-size: 14px;
+        }
+        .step-alert-banner.step-alert-alarm { border-left-color: #dc2626; background: #fef2f2; }
+        .step-alert-icon { margin-top: 2px; color: #6B9E7D; }
+        .step-alert-alarm .step-alert-icon { color: #dc2626; }
+        .step-alert-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+        .step-alert-title { font-weight: 600; }
+        .step-alert-body { margin-top: 2px; }
+        .step-alert-dismiss {
+            background: none; border: none; cursor: pointer; color: #6b7280;
+            font-size: 20px; line-height: 1; padding: 0 2px;
+        }
+        html.dark .step-alert-banner { background: #374151; color: #f3f4f6; border-color: #4b5563; border-left-color: #6B9E7D; }
+        html.dark .step-alert-banner.step-alert-alarm { background: #4c1d1d; border-left-color: #f87171; }
+        html.dark .step-alert-dismiss { color: #d1d5db; }
         /* Custom styles for D3 elements that can't use Tailwind classes */
         .node {
             cursor: pointer;
@@ -2323,6 +2349,29 @@
                         <div class="mt-1 text-sm text-gray-500">
                             Uses your device speaker to announce when steps start, complete, and when time is running low.
                         </div>
+                        <label class="flex items-center mt-3">
+                            <input type="checkbox" id="enable-program-alerts" class="mr-2">
+                            <i class="fas fa-bell mr-2 text-yellow-500"></i>
+                            <span data-i18n="settings.programAlerts">Program alerts</span>
+                        </label>
+                        <div class="mt-1 text-sm text-gray-500" data-i18n="settings.programAlertsHint">
+                            Shows the alerts a program sets on its steps (for example, two minutes before a step ends).
+                        </div>
+                        <label class="flex items-center mt-3">
+                            <input type="checkbox" id="enable-alert-sound" class="mr-2">
+                            <i class="fas fa-music mr-2 text-yellow-500"></i>
+                            <span data-i18n="settings.alertSound">Alert sound</span>
+                        </label>
+                        <div id="browser-notifications-row">
+                            <label class="flex items-center mt-3">
+                                <input type="checkbox" id="enable-browser-notifications" class="mr-2">
+                                <i class="fas fa-window-maximize mr-2 text-yellow-500"></i>
+                                <span data-i18n="settings.browserNotifications">Browser notifications</span>
+                            </label>
+                            <div class="mt-1 text-sm text-gray-500" id="browser-notifications-hint" data-i18n="settings.browserNotificationsHint">
+                                Also notifies you when this tab is in the background.
+                            </div>
+                        </div>
                     </div>
 
                     <!-- Actions -->
@@ -2709,6 +2758,12 @@
                 fitResult: 'Fit to time: {parts}'
             },
             settings: {
+                programAlerts: 'Program alerts',
+                programAlertsHint: 'Shows the alerts a program sets on its steps (for example, two minutes before a step ends).',
+                alertSound: 'Alert sound',
+                browserNotifications: 'Browser notifications',
+                browserNotificationsHint: 'Also notifies you when this tab is in the background.',
+                browserNotificationsDenied: 'Notifications are blocked for this site. Allow them in your browser settings.',
                 title: 'Visualization Settings',
                 theme: 'Theme',
                 lightMode: 'Light Mode',
@@ -2757,6 +2812,18 @@
                 prev: 'Prev',
                 play: 'Play',
                 next: 'Next'
+            },
+            alerts: {
+                startingNow: 'Starting now',
+                startsIn: 'Starts in {d}',
+                startedAgo: 'Started {d} ago',
+                endsIn: 'Ends in {d}',
+                done: 'Done',
+                endedAgo: 'Ended {d} ago',
+                unitHours: '{n} h',
+                unitMinutes: '{n} min',
+                unitSeconds: '{n} s',
+                dismiss: 'Dismiss'
             },
             toast: {
                 viewOnly: 'You are in view-only mode',
@@ -2867,6 +2934,12 @@
                 fitResult: 'Ajuste al tiempo: {parts}'
             },
             settings: {
+                programAlerts: 'Alertas del programa',
+                programAlertsHint: 'Muestra las alertas que un programa define en sus pasos (por ejemplo, dos minutos antes de que termine un paso).',
+                alertSound: 'Sonido de alerta',
+                browserNotifications: 'Notificaciones del navegador',
+                browserNotificationsHint: 'También te avisa cuando esta pestaña está en segundo plano.',
+                browserNotificationsDenied: 'Las notificaciones están bloqueadas para este sitio. Permítelas en la configuración del navegador.',
                 title: 'Configuraci\u00f3n de Visualizaci\u00f3n',
                 theme: 'Tema',
                 lightMode: 'Modo Claro',
@@ -2915,6 +2988,18 @@
                 prev: 'Anterior',
                 play: 'Reproducir',
                 next: 'Siguiente'
+            },
+            alerts: {
+                startingNow: 'Empieza ahora',
+                startsIn: 'Empieza en {d}',
+                startedAgo: 'Empezó hace {d}',
+                endsIn: 'Termina en {d}',
+                done: 'Listo',
+                endedAgo: 'Terminó hace {d}',
+                unitHours: '{n} h',
+                unitMinutes: '{n} min',
+                unitSeconds: '{n} s',
+                dismiss: 'Cerrar'
             },
             toast: {
                 viewOnly: 'Est\u00e1s en modo solo lectura',
@@ -3025,6 +3110,12 @@
                 fitResult: 'Ajust\u00e9 au temps : {parts}'
             },
             settings: {
+                programAlerts: 'Alertes du programme',
+                programAlertsHint: 'Affiche les alertes qu’un programme définit sur ses étapes (par exemple, deux minutes avant la fin d’une étape).',
+                alertSound: 'Son des alertes',
+                browserNotifications: 'Notifications du navigateur',
+                browserNotificationsHint: 'Vous avertit aussi quand cet onglet est en arrière-plan.',
+                browserNotificationsDenied: 'Les notifications sont bloquées pour ce site. Autorisez-les dans les réglages du navigateur.',
                 title: 'Param\u00e8tres de Visualisation',
                 theme: 'Th\u00e8me',
                 lightMode: 'Mode Clair',
@@ -3073,6 +3164,18 @@
                 prev: 'Pr\u00e9c.',
                 play: 'Lire',
                 next: 'Suiv.'
+            },
+            alerts: {
+                startingNow: 'Commence maintenant',
+                startsIn: 'Commence dans {d}',
+                startedAgo: 'Commencé il y a {d}',
+                endsIn: 'Se termine dans {d}',
+                done: 'Terminé',
+                endedAgo: 'Terminé il y a {d}',
+                unitHours: '{n} h',
+                unitMinutes: '{n} min',
+                unitSeconds: '{n} s',
+                dismiss: 'Fermer'
             },
             toast: {
                 viewOnly: 'Vous \u00eates en mode lecture seule',
@@ -3183,6 +3286,12 @@
                 fitResult: 'An Zeit angepasst: {parts}'
             },
             settings: {
+                programAlerts: 'Programm-Hinweise',
+                programAlertsHint: 'Zeigt die Hinweise, die ein Programm für seine Schritte festlegt (zum Beispiel zwei Minuten vor dem Ende eines Schritts).',
+                alertSound: 'Hinweiston',
+                browserNotifications: 'Browser-Benachrichtigungen',
+                browserNotificationsHint: 'Benachrichtigt dich auch, wenn dieser Tab im Hintergrund ist.',
+                browserNotificationsDenied: 'Benachrichtigungen sind für diese Seite blockiert. Erlaube sie in den Browser-Einstellungen.',
                 title: 'Visualisierungs-Einstellungen',
                 theme: 'Design',
                 lightMode: 'Heller Modus',
@@ -3231,6 +3340,18 @@
                 prev: 'Zur\u00fcck',
                 play: 'Abspielen',
                 next: 'Weiter'
+            },
+            alerts: {
+                startingNow: 'Beginnt jetzt',
+                startsIn: 'Beginnt in {d}',
+                startedAgo: 'Begann vor {d}',
+                endsIn: 'Endet in {d}',
+                done: 'Fertig',
+                endedAgo: 'Endete vor {d}',
+                unitHours: '{n} Std.',
+                unitMinutes: '{n} Min.',
+                unitSeconds: '{n} Sek.',
+                dismiss: 'Schließen'
             },
             toast: {
                 viewOnly: 'Nur-Lese-Modus',
@@ -3341,6 +3462,12 @@
                 fitResult: '\u6642\u9593\u8abf\u6574: {parts}'
             },
             settings: {
+                programAlerts: 'プログラムのアラート',
+                programAlertsHint: 'プログラムがステップに設定したアラートを表示します（例：ステップ終了の2分前）。',
+                alertSound: 'アラート音',
+                browserNotifications: 'ブラウザ通知',
+                browserNotificationsHint: 'このタブがバックグラウンドのときにも通知します。',
+                browserNotificationsDenied: 'このサイトの通知はブロックされています。ブラウザの設定で許可してください。',
                 title: '\u8868\u793a\u8a2d\u5b9a',
                 theme: '\u30c6\u30fc\u30de',
                 lightMode: '\u30e9\u30a4\u30c8\u30e2\u30fc\u30c9',
@@ -3389,6 +3516,18 @@
                 prev: '\u524d\u3078',
                 play: '\u518d\u751f',
                 next: '\u6b21\u3078'
+            },
+            alerts: {
+                startingNow: '今から開始',
+                startsIn: '{d}後に開始',
+                startedAgo: '{d}前に開始',
+                endsIn: '{d}後に終了',
+                done: '完了',
+                endedAgo: '{d}前に終了',
+                unitHours: '{n}時間',
+                unitMinutes: '{n}分',
+                unitSeconds: '{n}秒',
+                dismiss: '閉じる'
             },
             toast: {
                 viewOnly: '\u95b2\u89a7\u5c02\u7528\u30e2\u30fc\u30c9\u3067\u3059',
@@ -3498,6 +3637,12 @@
                 fitResult: '时间已调整: {parts}'
             },
             settings: {
+                programAlerts: '程序提醒',
+                programAlertsHint: '显示程序为步骤设置的提醒（例如在步骤结束前两分钟）。',
+                alertSound: '提醒声音',
+                browserNotifications: '浏览器通知',
+                browserNotificationsHint: '当此标签页在后台时也会通知你。',
+                browserNotificationsDenied: '此网站的通知已被阻止。请在浏览器设置中允许。',
                 title: '显示设置',
                 theme: '主题',
                 lightMode: '浅色模式',
@@ -3546,6 +3691,18 @@
                 prev: '上一步',
                 play: '播放',
                 next: '下一步'
+            },
+            alerts: {
+                startingNow: '现在开始',
+                startsIn: '{d}后开始',
+                startedAgo: '{d}前开始',
+                endsIn: '{d}后结束',
+                done: '完成',
+                endedAgo: '{d}前结束',
+                unitHours: '{n}小时',
+                unitMinutes: '{n}分钟',
+                unitSeconds: '{n}秒',
+                dismiss: '关闭'
             },
             toast: {
                 viewOnly: '仅查看模式',
@@ -3810,6 +3967,11 @@
             labelFontSize: 10,
             colorPalette: 'vivid',
             enableSpeech: false,
+            // Program alerts (step `alerts`): in-page banner + chime; browser
+            // notifications are opt-in and need the permission prompt.
+            programAlerts: true,
+            alertSound: true,
+            browserNotifications: false,
             // Itinerary display style. 'simple' (default) strips each
             // step row to dot + time + title + description. 'detailed'
             // shows the full row with badges, Track/Timing/Task cards
@@ -4091,6 +4253,30 @@
             }
         }
 
+        // Turning browser notifications on asks for permission from the click
+        // itself (browsers ignore prompts that are not user-initiated).
+        (function wireBrowserNotificationToggle() {
+            const box = document.getElementById('enable-browser-notifications');
+            if (!box) return;
+            box.addEventListener('change', function() {
+                if (!box.checked || typeof Notification === 'undefined') return;
+                const hint = document.getElementById('browser-notifications-hint');
+                const settle = function(permission) {
+                    if (permission === 'granted') {
+                        hint.textContent = I18N.t('settings.browserNotificationsHint');
+                        return;
+                    }
+                    box.checked = false;
+                    hint.textContent = I18N.t('settings.browserNotificationsDenied');
+                };
+                if (Notification.permission !== 'default') { settle(Notification.permission); return; }
+                try {
+                    const pending = Notification.requestPermission(settle);
+                    if (pending && typeof pending.then === 'function') pending.then(settle);
+                } catch (e) { settle('denied'); }
+            });
+        })();
+
         function closeSettingsModal() {
             if (_settingsDirty) {
                 const ok = window.confirm(
@@ -4140,6 +4326,16 @@
 
             // Set speech toggle
             document.getElementById('enable-speech').checked = userSettings.enableSpeech === true;
+
+            // Program alert toggles. Browser notifications are plain-web only:
+            // inside the apps the native layer notifies.
+            document.getElementById('enable-program-alerts').checked = userSettings.programAlerts !== false;
+            document.getElementById('enable-alert-sound').checked = userSettings.alertSound !== false;
+            const notifRow = document.getElementById('browser-notifications-row');
+            const notifSupported = typeof Notification !== 'undefined' && !inNativeAlertHost();
+            notifRow.style.display = notifSupported ? '' : 'none';
+            document.getElementById('enable-browser-notifications').checked =
+                notifSupported && userSettings.browserNotifications === true && Notification.permission === 'granted';
 
             // Render color palette options
             const paletteNames = {
@@ -4242,6 +4438,9 @@
 
             // Get speech setting
             const selectedEnableSpeech = document.getElementById('enable-speech').checked;
+            const selectedProgramAlerts = document.getElementById('enable-program-alerts').checked;
+            const selectedAlertSound = document.getElementById('enable-alert-sound').checked;
+            const selectedBrowserNotifications = document.getElementById('enable-browser-notifications').checked;
 
             // Update user settings
             userSettings = {
@@ -4255,7 +4454,10 @@
                 trackHeight: selectedTrackHeight,
                 labelFontSize: selectedLabelFontSize,
                 colorPalette: selectedPalette,
-                enableSpeech: selectedEnableSpeech
+                enableSpeech: selectedEnableSpeech,
+                programAlerts: selectedProgramAlerts,
+                alertSound: selectedAlertSound,
+                browserNotifications: selectedBrowserNotifications
             };
             
             // Save to a cookie (works for the rare non-iframe render)
@@ -4958,6 +5160,11 @@
         let currentTime = 0;
         let executionTimer = null;
         let executionSpeed = 1;
+        // performance.now() of the previous execution tick. The clock advances
+        // by real elapsed wall time x speed, so a throttled hidden tab or a
+        // late timer keeps correct time; null = no baseline (paused/stopped).
+        let _lastTickWall = null;
+        let _lastSpeechHalfSecond = -1;
         let currentTimelinePosition = null;
         let renderTotalDuration = null; // Original totalDuration at render time, for stable timeScale
 
@@ -5044,6 +5251,28 @@
         let _lastTimeSyncSent = 0;
 
         let crossTrackEdgesData = []; // [{sourceId, targetId}] for S-curve updates during execution
+
+        // Path of a cross-track dependency curve from (x1,y1), the end of the
+        // source bar, to (x2,y2), the start of the target bar; both y are bar
+        // centres and h is the row height. A forward hop leaves to the right
+        // and arrives from the left. A near-vertical or backward hop (a step
+        // that starts a set time BEFORE its reference ends) leaves the bar's
+        // top or bottom edge and drops into the target's edge: sweeping
+        // sideways there sends the control points off the chart. Same
+        // geometry as rhylthyme-timeline's static renderer.
+        function crossTrackDepPath(x1, y1, x2, y2, h) {
+            const dx = x2 - x1;
+            if (dx >= 40) {
+                const reach = Math.max(20, Math.min(h * 2.5, dx * 0.6));
+                return `M${x1},${y1} C${x1 + reach},${y1} ${x2 - reach},${y2} ${x2},${y2}`;
+            }
+            const dir = y2 >= y1 ? 1 : -1;
+            const half = Math.max(4, h / 2 - 5);
+            const ya = y1 + dir * half;
+            const yb = y2 - dir * half;
+            const reachY = Math.max(10, Math.abs(yb - ya) * 0.5);
+            return `M${x1},${ya} C${x1},${ya + dir * reachY} ${x2},${yb - dir * reachY} ${x2},${yb}`;
+        }
         let lastTrackScale = null; // Stored from updateTimeline for S-curve updates
         let lastTrackHeight = 40;
         let lastIconFontSize = 17;
@@ -5977,10 +6206,7 @@
                     const y1 = lastTrackScaleEdit(src.trackId) + lastTrackHeightEdit / 2;
                     const x2 = lastTimeScaleEdit(tgt.startTime);
                     const y2 = lastTrackScaleEdit(tgt.trackId) + lastTrackHeightEdit / 2;
-                    const dx = Math.abs(x2 - x1);
-                    const minSpread = Math.max(20, lastTrackHeightEdit * 0.8);
-                    const spread = Math.max(dx * 0.75, minSpread);
-                    return `M${x1},${y1} C${x1 + spread},${y1} ${x2 - spread},${y2} ${x2},${y2}`;
+                    return crossTrackDepPath(x1, y1, x2, y2, lastTrackHeightEdit);
                 });
         }
 
@@ -7067,9 +7293,17 @@
 
             const speed = parseFloat(document.getElementById('speed-control').value);
             executionSpeed = speed;
-            
-            // Start the execution timer (update every 100ms, but advance time based on speed)
+
+            // Start the execution timer (update every 100ms; each tick advances
+            // the clock by the wall time elapsed since the previous one x speed).
+            // A fresh baseline, so time spent paused or stopped never counts.
+            _lastTickWall = performance.now();
             executionTimer = setInterval(updateExecution, 100);
+
+            // Start is a user gesture: unlock the alert chime, then tell the
+            // native layer what to arm.
+            primeAlertAudio();
+            syncAlertSchedule();
 
             // Broadcast to live session / parent (always send so parent can track bg execution)
             if (!_applyingRemoteAction) {
@@ -7091,6 +7325,9 @@
                 clearInterval(executionTimer);
                 executionTimer = null;
             }
+            _lastTickWall = null;
+            // Paused: native cancels its pending alerts but keeps the list
+            syncAlertSchedule();
 
             // Broadcast to live session / parent
             if (!_applyingRemoteAction) {
@@ -7115,9 +7352,14 @@
                 executionTimer = null;
             }
 
+            _lastTickWall = null;
+
             // Reset all visual states
             resetExecutionVisuals();
             resetSpeechTracking();
+            // A new run alerts again; native drops everything pending
+            resetStepAlerts();
+            syncAlertSchedule();
             clearEditorHighlight();
 
             // Broadcast to live session / parent
@@ -7383,6 +7625,8 @@
 
             updateManualStepButtons(stepId);
             updateManualActionsPanel();
+            // Alerts anchored to this step's actual start
+            processStepAlerts();
             showToast(I18N.t('toast.stepStarted', {stepId: stepId}), 'info');
 
             // Resume execution if paused
@@ -7599,7 +7843,7 @@
                     const state = manualStepStates[step.stepId] || 'waiting';
                     if (step.isManualStart && state === 'waiting') {
                         const label = step.negativeOffsetSeconds
-                            ? step.name + ' (caps ref at ' + formatTime(step.negativeOffsetSeconds) + ')'
+                            ? step.name + ' (' + formatDurationMinutes(step.negativeOffsetSeconds) + ' before the reference ends)'
                             : step.name;
                         chips.push({type:'start', stepId: step.stepId, name: label});
                     } else if (state !== 'completed'
@@ -7836,17 +8080,255 @@
             _spokenWarnings.clear();
         }
 
+        // === Program alerts (step `alerts`) ===
+        // The pure rules (fire times, overtaken/skip, jumps, default texts,
+        // the native schedule payload) live in static/js/step-alerts.js,
+        // inlined above as window.RhylthymeStepAlerts. This block snapshots
+        // the runtime steps for it and presents what it fires: an in-page
+        // banner, a chime, a vibration, a browser notification (plain web,
+        // hidden tab, opted in) and the native bridge posts.
+        // `var`, not const/let: execution functions defined earlier in this
+        // script may run before this point, and must see "not ready yet"
+        // (undefined) rather than hit the temporal dead zone.
+        var StepAlerts = window.RhylthymeStepAlerts || null;
+        var _alertState = StepAlerts ? StepAlerts.createState() : null;
+        // Key of the last rhylthymeAlertSchedule post; starts at the empty
+        // stopped schedule so an idle page posts nothing.
+        var _alertScheduleKey = JSON.stringify([false, 1, []]);
+        var _alertAudioCtx = null;
+
+        function alertsEnabled() {
+            return userSettings.programAlerts !== false;
+        }
+
+        function alertNativeHandler(name) {
+            try {
+                return (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers[name]) || null;
+            } catch (e) { return null; }
+        }
+
+        // Inside the iOS/Android app (the native layer delivers alerts while
+        // the app is in the background).
+        function inNativeAlertHost() {
+            return !!alertNativeHandler('rhylthymeAlertSchedule');
+        }
+
+        function postAlertBridge(name, payload) {
+            const handler = alertNativeHandler(name);
+            if (!handler) return;
+            try { handler.postMessage(JSON.stringify(payload)); } catch (e) {}
+        }
+
+        function alertT(key, params) {
+            return I18N.t(key, params);
+        }
+
+        // One snapshot per step that has alerts: actual start/end once the
+        // step has started/ended, its current projection otherwise, null when
+        // unknown (a manual step still waiting for its Start click).
+        function alertStepSnapshots() {
+            const out = [];
+            if (!timelineData || !timelineData.tracks) return out;
+            let completed = null;
+            timelineData.tracks.forEach(track => {
+                track.steps.forEach(step => {
+                    if (!Array.isArray(step.alerts) || step.alerts.length === 0) return;
+                    if (completed === null) completed = new Set(getCompletedSteps());
+                    const skipped = !isStepChoiceActive(step.stepId);
+                    const manual = !!step.isManualStart;
+                    const waiting = manual && (manualStepStates[step.stepId] || 'waiting') === 'waiting';
+                    const start = waiting ? null : (step.effectiveStartTime || step.startTime);
+                    const ended = !skipped && !waiting && completed.has(step.stepId);
+                    let end = null;
+                    if (manualCompletedSteps.has(step.stepId)) {
+                        end = step.endTime;
+                    } else if (ended) {
+                        end = start + ((step.hasDurationTrigger && step.maxSeconds) ? step.maxSeconds : step.duration);
+                    } else if (!waiting && !step.isIndefinite) {
+                        end = start + step.duration;
+                    }
+                    out.push({
+                        stepId: step.stepId,
+                        name: step.name,
+                        alerts: step.alerts,
+                        manualStart: manual,
+                        indefinite: !!step.isIndefinite,
+                        skipped: skipped,
+                        started: !waiting && (ended || currentTime >= start),
+                        ended: ended,
+                        start: start,
+                        end: end
+                    });
+                });
+            });
+            return out;
+        }
+
+        // Post rhylthymeAlertSchedule when its content (minus currentTime)
+        // changed: pending alerts, their whole-second fire times, the
+        // execution state or the speed.
+        function syncAlertSchedule(steps) {
+            if (!StepAlerts || !inNativeAlertHost()) return;
+            const payload = StepAlerts.buildSchedule(_alertState, steps || alertStepSnapshots(), {
+                state: executionState,
+                currentTime: currentTime,
+                speed: executionSpeed,
+                enabled: alertsEnabled()
+            }, alertT);
+            const key = StepAlerts.scheduleKey(payload);
+            if (key === _alertScheduleKey) return;
+            _alertScheduleKey = key;
+            postAlertBridge('rhylthymeAlertSchedule', payload);
+        }
+
+        // Run the engine at the current program time (only while running:
+        // pause freezes alerts) and refresh the native schedule.
+        function processStepAlerts() {
+            if (!StepAlerts) return;
+            const steps = alertStepSnapshots();
+            if (executionState === 'running') {
+                const result = StepAlerts.evaluate(_alertState, steps, currentTime, {
+                    native: inNativeAlertHost(),
+                    t: alertT
+                });
+                result.fire.forEach(presentStepAlert);
+            }
+            syncAlertSchedule(steps);
+        }
+
+        function resetStepAlerts() {
+            if (_alertState) StepAlerts.reset(_alertState);
+            const stack = document.getElementById('step-alert-stack');
+            if (stack) stack.textContent = '';
+        }
+
+        function presentStepAlert(entry) {
+            const msg = { id: entry.id, stepId: entry.stepId, title: entry.title, body: entry.body, level: entry.level };
+            // Native drops the id from its pending set either way.
+            postAlertBridge('rhylthymeAlertFired', msg);
+            if (!alertsEnabled()) return;
+            // Embedding hosts (like rhylthyme-step-announce).
+            try { window.parent.postMessage(Object.assign({ type: 'rhylthyme-alert' }, msg), '*'); } catch (e) {}
+            showAlertBanner(entry);
+            if (userSettings.alertSound !== false) playAlertChime(entry.level);
+            try {
+                if (navigator.vibrate) navigator.vibrate(entry.level === 'alarm' ? [300, 150, 300, 150, 300] : 200);
+            } catch (e) {}
+            showBrowserAlertNotification(entry);
+        }
+
+        // Banner text comes from the program: textContent only, never HTML.
+        function showAlertBanner(entry) {
+            let stack = document.getElementById('step-alert-stack');
+            if (!stack) {
+                stack = document.createElement('div');
+                stack.id = 'step-alert-stack';
+                stack.className = 'step-alert-stack';
+                document.body.appendChild(stack);
+            }
+            const banner = document.createElement('div');
+            banner.className = 'step-alert-banner step-alert-' + entry.level;
+            banner.setAttribute('role', 'status');
+            banner.setAttribute('aria-live', entry.level === 'alarm' ? 'assertive' : 'polite');
+            banner.setAttribute('data-alert-id', entry.id);
+            const icon = document.createElement('i');
+            icon.className = 'fas ' + (entry.level === 'alarm' ? 'fa-bell' : 'fa-circle-info') + ' step-alert-icon';
+            icon.setAttribute('aria-hidden', 'true');
+            const text = document.createElement('div');
+            text.className = 'step-alert-text';
+            const title = document.createElement('div');
+            title.className = 'step-alert-title';
+            title.textContent = entry.title;
+            const body = document.createElement('div');
+            body.className = 'step-alert-body';
+            body.textContent = entry.body;
+            text.appendChild(title);
+            text.appendChild(body);
+            const close = document.createElement('button');
+            close.type = 'button';
+            close.className = 'step-alert-dismiss';
+            close.setAttribute('aria-label', I18N.t('alerts.dismiss'));
+            close.title = I18N.t('alerts.dismiss');
+            close.textContent = '×';
+            close.addEventListener('click', () => banner.remove());
+            banner.appendChild(icon);
+            banner.appendChild(text);
+            banner.appendChild(close);
+            stack.appendChild(banner);
+            if (entry.level !== 'alarm') {
+                setTimeout(() => banner.remove(), 8000);
+            }
+        }
+
+        // Created (or resumed) from a user gesture — Start — so browsers let
+        // it play later without one.
+        function primeAlertAudio() {
+            try {
+                const Ctx = window.AudioContext || window.webkitAudioContext;
+                if (!Ctx) return null;
+                if (!_alertAudioCtx) _alertAudioCtx = new Ctx();
+                if (_alertAudioCtx.state === 'suspended') _alertAudioCtx.resume();
+                return _alertAudioCtx;
+            } catch (e) { return null; }
+        }
+
+        // A short two-tone chime; alarms ring it three times.
+        function playAlertChime(level) {
+            const ctx = primeAlertAudio();
+            if (!ctx) return;
+            try {
+                const repeats = level === 'alarm' ? 3 : 1;
+                const t0 = ctx.currentTime + 0.02;
+                for (let r = 0; r < repeats; r++) {
+                    [880, 1318.5].forEach((freq, i) => {
+                        const at = t0 + r * 0.7 + i * 0.18;
+                        const osc = ctx.createOscillator();
+                        const gain = ctx.createGain();
+                        osc.type = 'sine';
+                        osc.frequency.value = freq;
+                        gain.gain.setValueAtTime(0.0001, at);
+                        gain.gain.exponentialRampToValueAtTime(0.25, at + 0.02);
+                        gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.4);
+                        osc.connect(gain);
+                        gain.connect(ctx.destination);
+                        osc.start(at);
+                        osc.stop(at + 0.45);
+                    });
+                }
+            } catch (e) {}
+        }
+
+        // Plain web only (inside the apps the native layer notifies), only
+        // when the tab is hidden and the person opted in and granted permission.
+        function showBrowserAlertNotification(entry) {
+            if (inNativeAlertHost() || !document.hidden) return;
+            if (!userSettings.browserNotifications) return;
+            if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+            try {
+                new Notification(entry.title, { body: entry.body, tag: entry.id });
+            } catch (e) {}
+        }
+
         function updateExecution() {
-            // Advance time based on speed (0.1 seconds per tick * speed multiplier)
-            currentTime += 0.1 * executionSpeed;
+            // Advance by the real wall time since the previous tick x speed
+            // (0.1 s per tick when ticks are regular). Values written into
+            // currentTime from outside (native time sync, resume) are kept:
+            // only the elapsed delta is added.
+            const nowWall = performance.now();
+            const elapsed = _lastTickWall === null ? 0.1 : Math.max(0, (nowWall - _lastTickWall) / 1000);
+            _lastTickWall = nowWall;
+            currentTime += elapsed * executionSpeed;
 
             // Update visuals FIRST so push/slide code updates effectiveStartTime
             // before the blocking check reads them
             updateTimeDisplay(currentTime);
             updateExecutionVisuals();
 
-            // Check for speech announcements (throttled to avoid per-tick overhead)
-            if (userSettings.enableSpeech && Math.floor(currentTime * 10) % 5 === 0) {
+            // Check for speech announcements (throttled to avoid per-tick
+            // overhead: once per half second of program time)
+            const speechHalfSecond = Math.floor(currentTime * 2);
+            if (userSettings.enableSpeech && speechHalfSecond !== _lastSpeechHalfSecond) {
+                _lastSpeechHalfSecond = speechHalfSecond;
                 checkStepTransitionsForSpeech();
             }
 
@@ -8117,6 +8599,8 @@
                     }
                 }
             } catch(e) {}
+            // Program alerts: fire what is due, refresh the native schedule
+            processStepAlerts();
         }
         
         function resetExecutionVisuals() {
@@ -8576,10 +9060,7 @@
                     const y1 = lastTrackScale(edge.sourceTrackId) + lastTrackHeight / 2;
                     const x2 = timeScale(tgt.startTime);
                     const y2 = lastTrackScale(edge.targetTrackId) + lastTrackHeight / 2;
-                    const dx = Math.abs(x2 - x1);
-                    const minSpread = Math.max(20, lastTrackHeight * 0.8);
-                    const spread = Math.max(dx * 0.75, minSpread);
-                    d3.select(this).attr("d", `M${x1},${y1} C${x1 + spread},${y1} ${x2 - spread},${y2} ${x2},${y2}`);
+                    d3.select(this).attr("d", crossTrackDepPath(x1, y1, x2, y2, lastTrackHeight));
                 });
             }
         }
@@ -8705,8 +9186,12 @@
                                 }
                             }
                             // Waiting manual steps are "pending" not "active"
-                            // But include them so the panel shows the Start button
-                            if (currentTime >= step.startTime) {
+                            // But include them so the panel shows the Start button.
+                            // A negative-offset step is drawn at its planned time but
+                            // may be started as soon as its reference is running (the
+                            // check above), e.g. when the braise is going faster than
+                            // planned; starting it is what caps the reference.
+                            if (currentTime >= step.startTime || step.negativeOffsetRefStepId) {
                                 activeSteps.push(step.stepId);
                             }
                             return;
@@ -8848,6 +9333,8 @@
                 return;
             }
             executionSpeed = parseFloat(this.value);
+            // Native re-arms its alerts for the new speed
+            syncAlertSchedule();
             // Broadcast to live session / parent
             if (!_applyingRemoteAction) {
                 window.parent.postMessage({ type: 'rhylthyme-live-action', action: 'speed_change', speed: executionSpeed }, '*');
@@ -10091,6 +10578,7 @@
                         if (data.speed !== undefined) {
                             executionSpeed = data.speed;
                             document.getElementById('speed-control').value = data.speed;
+                            syncAlertSchedule();
                         }
                         break;
                     case 'time_sync':
@@ -11338,7 +11826,17 @@
                 // Recompute base so scale 1.0 fills the new container width
                 basePixelsPerSecond = Math.max(0.01, (timelineWidth - margin.left - margin.right) / Math.max(timelineData.totalDuration || 1, 1));
             }
-            if (freshHeight) timelineHeight = freshHeight;
+            // clientHeight includes the container's own padding (the 36px
+            // strip that clears the panel title in light/dark themes), but
+            // the SVG only gets the content box. Work in content-box
+            // height so the padding isn't mistaken for room for tracks —
+            // otherwise the last track gets clipped at the bottom border.
+            const _boxStyle = getComputedStyle(timelineContainer);
+            const _boxPadY = (parseFloat(_boxStyle.paddingTop) || 0)
+                + (parseFloat(_boxStyle.paddingBottom) || 0);
+            const _boxBorderY = (parseFloat(_boxStyle.borderTopWidth) || 0)
+                + (parseFloat(_boxStyle.borderBottomWidth) || 0);
+            if (freshHeight) timelineHeight = freshHeight - _boxPadY;
 
             // Use current timelineData.tracks directly to ensure we get updated data after undo
             const timelineTracks = timelineData.tracks || [];
@@ -11402,7 +11900,9 @@
                 (sum, t) => sum + t._fullHeight + trackSpacing, 0);
             const requiredHeight = totalTracksHeight + margin.top + margin.bottom;
             if (requiredHeight > timelineHeight) {
-                timelineContainer.style.height = requiredHeight + 'px';
+                const _boxChrome = _boxStyle.boxSizing === 'border-box'
+                    ? _boxPadY + _boxBorderY : 0;
+                timelineContainer.style.height = (requiredHeight + _boxChrome) + 'px';
                 timelineHeight = requiredHeight;
             }
             const timelineContentHeight = timelineHeight - margin.top - margin.bottom;
@@ -11686,6 +12186,7 @@
                     if (d.isIndefinite) cls += " indefinite-step";
                     if (d.omitted) cls += " omitted-step";
                     if (d.inJeopardy) cls += " jeopardy-step";
+                    if (d.durationEstimated) cls += " estimated-duration";
                     return cls;
                 })
                 .attr("x", d => timeScale(d.startTime))
@@ -11727,6 +12228,8 @@
                         return "#10b981"; // Green border for flex steps
                     } else if (d.optimized) {
                         return "#fbbf24"; // Yellow border for optimized steps
+                    } else if (d.durationEstimated) {
+                        return "#111827"; // Instrument step: its length is an estimate
                     }
                     return "#ffffff"; // White border to separate adjacent steps
                 })
@@ -11736,6 +12239,8 @@
                         return "2,2"; // Dotted border for flex steps
                     } else if (d.optimized) {
                         return "4,2"; // Dashed border for optimized steps
+                    } else if (d.durationEstimated) {
+                        return "1,3"; // Dotted: ends when the instrument replies
                     }
                     return "none";
                 })
@@ -11825,15 +12330,18 @@
                     // Calculate available width for text based on step duration
                     const availableWidth = timeScale(d.duration) - 8; // 8px padding
                     const maxChars = Math.floor(availableWidth / avgCharWidth);
+                    // Instrument steps carry their tool as a badge
+                    const name = d.instrument && d.instrument.tool
+                        ? '[' + d.instrument.tool + '] ' + d.name : d.name;
 
                     // Only truncate if necessary and if the step is reasonably wide
-                    if (maxChars > 10 && d.name.length > maxChars) {
-                        return d.name.substring(0, maxChars - 3) + '...';
-                    } else if (maxChars <= 10 && d.name.length > 10) {
+                    if (maxChars > 10 && name.length > maxChars) {
+                        return name.substring(0, maxChars - 3) + '...';
+                    } else if (maxChars <= 10 && name.length > 10) {
                         // For very narrow steps, use a minimal truncation
-                        return d.name.substring(0, Math.max(3, maxChars - 3)) + '...';
+                        return name.substring(0, Math.max(3, maxChars - 3)) + '...';
                     }
-                    return d.name;
+                    return name;
                 });
             
             // Add flex icons for flexible steps
@@ -11984,7 +12492,8 @@
                         stepInfoMap[s.stepId] = {
                             trackId: track.trackId,
                             startTime: s.startTime,
-                            endTime: s.endTime
+                            endTime: s.endTime,
+                            negativeOffsetRefStepId: s.negativeOffsetRefStepId || null
                         };
                     });
                 });
@@ -12006,7 +12515,8 @@
                     sourceId: edgeId(e.source),
                     targetId: edgeId(e.target),
                     sourceTrackId: stepInfoMap[edgeId(e.source)].trackId,
-                    targetTrackId: stepInfoMap[edgeId(e.target)].trackId
+                    targetTrackId: stepInfoMap[edgeId(e.target)].trackId,
+                    beforeEnd: stepInfoMap[edgeId(e.target)].negativeOffsetRefStepId === edgeId(e.source)
                 }));
 
                 if (crossTrackEdges.length > 0) {
@@ -12043,12 +12553,11 @@
                             const y1 = trackScale(src.trackId) + trackHeight / 2 + (src._laneIndex || 0) * trackHeight;
                             const x2 = timeScale(tgt.startTime);
                             const y2 = trackScale(tgt.trackId) + trackHeight / 2 + (tgt._laneIndex || 0) * trackHeight;
-                            const dx = Math.abs(x2 - x1);
-                            const minSpread = Math.max(20, trackHeight * 0.8);
-                            const spread = Math.max(dx * 0.75, minSpread);
-                            return `M${x1},${y1} C${x1 + spread},${y1} ${x2 - spread},${y2} ${x2},${y2}`;
+                            return crossTrackDepPath(x1, y1, x2, y2, trackHeight);
                         })
                         .attr("stroke-width", depStrokeWidth)
+                        // Dashed: "starts a set time before the source ends".
+                        .attr("stroke-dasharray", edge => edge.beforeEnd ? "5,4" : null)
                         .attr("marker-end", "url(#cross-track-arrow)");
                 }
             }
@@ -12562,7 +13071,7 @@
                     </div>` : '';
 
                 const negOffBadge = event.negativeOffsetSeconds
-                    ? '<span class="manual-badge" style="background:#fef3c7;color:#92400e;">&#9202; Negative Offset (-' + formatTime(event.negativeOffsetSeconds) + ')</span>'
+                    ? '<span class="manual-badge" style="background:#fef3c7;color:#92400e;">&#9202; Starts ' + formatDurationMinutes(event.negativeOffsetSeconds) + ' before its reference ends</span>'
                     : '';
                 const choiceBadge = event.choice
                     ? '<span class="manual-badge" style="background:#eef2ff;color:#4338ca;">&#9095; Choice Point</span>'

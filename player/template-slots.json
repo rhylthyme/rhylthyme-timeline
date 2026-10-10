@@ -3,6 +3,7 @@
   "'inline' if target_duration_seconds and total_duration > target_duration_seconds else 'none'",
   "'inline-flex' if target_duration_text else 'none'",
   "_AUTO_PLAN_JS",
+  "_STEP_ALERTS_JS",
   "_TAILWIND_CSS",
   "edges_json",
   "env_type_label",
