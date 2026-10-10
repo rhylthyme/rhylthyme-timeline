@@ -3,7 +3,7 @@
 
 /**
  * Canonical program hash — JavaScript twin of
- * rhylthyme_cli_runner/history/hash.py (`program_version`).
+ * rhylthyme/history/hash.py (`program_version`).
  *
  * Canonical form: object keys sorted by Unicode code point, no whitespace,
  * UTF-8 with non-ASCII left unescaped, integral numbers without a fractional
