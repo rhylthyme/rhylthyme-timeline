@@ -5,6 +5,21 @@ import type { Program, Timings } from './index';
 
 export type StepState = 'pending' | 'waiting' | 'active' | 'done';
 
+/** Who began a step: a person (`startStep()`) or the plan (its own trigger). */
+export type StepBeganBy = 'person' | 'plan';
+/**
+ * Who ended a step, from the run record's `endedBy`: `person` (completeStep(),
+ * endedBy "executor"), `timer` (a fixed duration or a variable step's maxSeconds),
+ * `trigger` (capped by a negative-offset hand-off), `abort` (stop() while it ran).
+ */
+export type StepEndedBy = 'person' | 'timer' | 'trigger' | 'abort';
+/** detail of rt-step-began / rt-step-ended: `time` is the transition's own second on the program clock. */
+export interface StepTransitionDetail<By extends string> {
+  stepId: string;
+  time: number;
+  by: By;
+}
+
 export interface RhylthymeTimelineEventMap {
   'rt-load': CustomEvent<{ program: Program }>;
   'rt-start': CustomEvent<{ time: number }>;
@@ -15,6 +30,10 @@ export interface RhylthymeTimelineEventMap {
   'rt-step-start': CustomEvent<{ stepId: string; time: number }>;
   /** A step that waits for a person was finished, or a variable step reached its maximum (automatic). */
   'rt-step-complete': CustomEvent<{ stepId: string; time: number; automatic: boolean }>;
+  /** Every step (replicate instances included) began, once per run, in time order. */
+  'rt-step-began': CustomEvent<StepTransitionDetail<StepBeganBy>>;
+  /** Every step ended, once per run, in time order (stop() ends running steps with `abort`). */
+  'rt-step-ended': CustomEvent<StepTransitionDetail<StepEndedBy>>;
   'rt-complete': CustomEvent<{ time: number }>;
   'rt-run-record': CustomEvent<{ record: unknown; outcome: 'completed' | 'aborted' | 'abandoned' }>;
   /** The variance-factor answers; `skipped` lists the declared keys left unanswered. */

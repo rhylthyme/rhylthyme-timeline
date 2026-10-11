@@ -495,6 +495,85 @@
     out.predicted.badAttribute = [q4.predictions, peelStart(q4)];
     q4.remove();
 
+    // ---- rt-step-began / rt-step-ended (issue #6) ----------------------
+    // One event per step start and end, whatever caused it, at the second
+    // of the transition rather than the tick that found it.
+    out.transitions = {};
+    const watch = (e) => {
+      const log = [];
+      for (const ev of ['rt-step-began', 'rt-step-ended', 'rt-step-start', 'rt-step-complete', 'rt-start', 'rt-stop', 'rt-complete']) {
+        e.addEventListener(ev, (x) => log.push([ev, x.detail.stepId || null, x.detail.time === undefined ? null : x.detail.time, x.detail.by || null]));
+      }
+      return log;
+    };
+    const onlySteps = (log) => log.filter((x) => x[0] === 'rt-step-began' || x[0] === 'rt-step-ended');
+
+    // (i) Thanksgiving to the end, in 120 s ticks so one tick finds several
+    //     transitions; then replay it (stop + start is a fresh run).
+    let mT = 0;
+    const t1 = makeEl(window.RHYLTHYME_EXAMPLES.thanksgiving_one_oven);
+    t1.setClock(() => mT);
+    const logT = watch(t1);
+    const advT = (sec) => { mT += sec * 1000; t1.tick(); };
+    const driveT = () => {
+      let g = 0;
+      while (t1.status === 'running' && g++ < 300) {
+        advT(120);
+        const st = t1.stepStates;
+        for (const id of Object.keys(st)) if (st[id] === 'waiting') t1.startStep(id);
+      }
+    };
+    out.transitions.stepIds = Object.keys(t1.stepStates);
+    t1.start();
+    out.transitions.firstAfterStart = onlySteps(logT).slice();
+    driveT();
+    out.transitions.status = t1.status;
+    out.transitions.full = logT.slice();
+    logT.length = 0;
+    t1.stop();
+    out.transitions.afterCompletedStop = onlySteps(logT).length;
+    t1.start();
+    advT(1300);      // turkey-prep has ended, the roast is running
+    t1.stop();       // the roast ends "abort"
+    out.transitions.replay = logT.slice();
+    t1.remove();
+
+    // (ii) replicate instances: one big tick runs the whole cookie program
+    let mC = 0;
+    const c1 = makeEl(window.RHYLTHYME_COOKIES);
+    c1.setClock(() => mC);
+    const logC = watch(c1);
+    c1.start();
+    mC += 5000 * 1000; c1.tick();
+    out.transitions.cookies = onlySteps(logC);
+    out.transitions.cookiesStatus = c1.status;
+    c1.remove();
+
+    // (iii) a person finishes an indefinite step: by "person"
+    let mR = 0;
+    const r1 = makeEl(RUNREC);
+    r1.setClock(() => mR);
+    const logR = watch(r1);
+    r1.start();
+    mR += 100000; r1.tick();
+    r1.completeStep('simmer');
+    mR += 5000; r1.tick();
+    out.transitions.person = onlySteps(logR);
+    r1.remove();
+
+    // (iv) seek: forward fires what it passes, backward fires nothing,
+    //      nothing fires twice
+    const s1 = makeEl(window.RHYLTHYME_COOKIES);
+    const logS = watch(s1);
+    s1.seek(1000);
+    out.transitions.seekForward = onlySteps(logS).slice();
+    logS.length = 0;
+    s1.seek(100);
+    out.transitions.seekBack = onlySteps(logS).slice();
+    s1.seek(2000);
+    out.transitions.seekOn = onlySteps(logS).slice();
+    s1.remove();
+
     // (d) programVersion parity: the same three programs are hashed in Node
     // with tools/hash-program.js. Base64 so multi-byte characters survive
     // the DOM dump unharmed.

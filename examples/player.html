@@ -59,7 +59,7 @@
   for (const id of ['mode', 'theme', 'fmt']) document.getElementById(id).addEventListener('change', () => {
     el.setAttribute(id === 'fmt' ? 'time-format' : id, document.getElementById(id).value);
   });
-  for (const ev of ['rt-load', 'rt-start', 'rt-pause', 'rt-stop', 'rt-step-start', 'rt-step-complete', 'rt-complete']) {
+  for (const ev of ['rt-load', 'rt-start', 'rt-pause', 'rt-stop', 'rt-step-start', 'rt-step-complete', 'rt-step-began', 'rt-step-ended', 'rt-complete']) {
     el.addEventListener(ev, (e) => {
       const d = Object.assign({}, e.detail); delete d.program;
       log.textContent = ev + ' ' + JSON.stringify(d) + '\n' + log.textContent;

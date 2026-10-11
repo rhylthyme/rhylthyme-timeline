@@ -57,6 +57,23 @@
  *
  * Events (bubbling, composed; detail carries time and step ids)
  *   rt-start rt-pause rt-stop rt-tick rt-step-start rt-step-complete rt-complete rt-load
+ *   rt-step-began         detail {stepId, time, by}: fired for EVERY step (replicate
+ *   rt-step-ended         instances included) exactly once per run, whatever started or
+ *                         ended it. `time` is the second the transition happened on the
+ *                         program clock (planned or actual), not the tick that noticed it;
+ *                         the transitions one tick finds are fired in time order (a step's
+ *                         began before its ended). `by` on rt-step-began: "person"
+ *                         (startStep()) or "plan" (it began on its own trigger). `by` on
+ *                         rt-step-ended, from the run record's endedBy: "person"
+ *                         (completeStep(); endedBy "executor"), "timer" (a fixed duration
+ *                         or a variable step's maxSeconds ran out), "trigger" (a negative-
+ *                         offset hand-off capped it), "abort" (stop() while it ran). A
+ *                         forward seek() fires what it passes over; a backward seek fires
+ *                         nothing and nothing fires twice. stop() ends the run, so the next
+ *                         start() fires every step again. A run that is dropped (program
+ *                         replaced, element removed) fires no ended for steps still running.
+ *                         rt-step-start / rt-step-complete are unchanged: they still fire
+ *                         only for startStep() and for steps the player itself finishes
  *   rt-factors            detail {factors, skipped, source}: the variance-factor answers,
  *                         once the form is submitted ("prompt") or set programmatically
  *                         ("property" / "attribute"); `skipped` lists the declared keys left
@@ -262,6 +279,16 @@
     else n = Math.floor(Math.random() * 65536);
     return ('0000' + n.toString(16)).slice(-4);
   }
+  // What rt-step-began / rt-step-ended have fired this run: began[id] is the
+  // second it began, ended[id] true once it ended; beganBy / endedBy remember
+  // who caused the transitions the player made itself.
+  function newTransitions() { return { began: {}, ended: {}, beganBy: {}, endedBy: {} }; }
+  // The run record's endedBy, as rt-step-ended's `by`: "executor" is a person;
+  // a step nobody finished ended on its timer.
+  function transitionBy(endedBy) {
+    if (endedBy === 'executor') return 'person';
+    return endedBy || 'timer';
+  }
   function durationKind(d) {
     if (!d || typeof d !== 'object') return 'fixed';
     if (d.type === 'manual') return 'indefinite';
@@ -435,6 +462,7 @@
       this._status = 'stopped';
       this._actual = {};
       this._caps = {};
+      this._transitions = newTransitions();
       this._anchorWall = 0;
       this._anchorTime = 0;
       this._timer = null;
@@ -775,6 +803,7 @@
       this._startTimer();
       this.render();
       this._emit('rt-start', { time: this._time });
+      this._emitTransitions();
     };
     proto.pause = function () {
       if (this._status !== 'running') return;
@@ -788,6 +817,7 @@
     proto.stop = function () {
       if (this._status === 'stopped') return;
       this._stopTimer();
+      this._abortTransitions();
       if (this._runActive()) this._emitRunRecord('aborted');
       this._reset();
       this.render();
@@ -804,6 +834,7 @@
 
     proto._reset = function () {
       this._time = 0; this._status = 'stopped'; this._actual = {}; this._caps = {};
+      this._transitions = newTransitions();
       this._completedAt = null; this._executionStart = null; this._run = null;
       // Answers stay as presets for the next run; the question is asked again.
       this._factorsAsked = false; this._factorsOpen = false;
@@ -863,6 +894,7 @@
           }
         });
       }
+      this._emitTransitions();
       var states = this._states(this._timings());
       if (this._run) {
         // A manual gate's trigger fires when its predecessors are done, not when the executor starts it.
@@ -893,6 +925,7 @@
       if (!step || (this._actual[id] && this._actual[id].start !== undefined)) return false;
       var now = this._time;
       this._actual[id] = { start: now };
+      this._transitions.beganBy[id] = 'person';
       var self = this;
       // A negative-offset hand-off caps the step it refers to.
       var trig = step.startTrigger || {};
@@ -928,8 +961,48 @@
       if (a.start === undefined) { a.start = this._timings()[id].start; this._noteTrigger(id, a.start); }
       a.end = Math.max(a.start, at);
       this._actual[id] = a;
-      if (this._run) { var m = this._run.meta[id] || (this._run.meta[id] = {}); m.endedBy = endedBy || (automatic ? 'timer' : 'executor'); }
+      var by = endedBy || (automatic ? 'timer' : 'executor');
+      this._transitions.endedBy[id] = by;
+      if (this._run) { var m = this._run.meta[id] || (this._run.meta[id] = {}); m.endedBy = by; }
       this._emit('rt-step-complete', { stepId: id, time: a.end, automatic: !!automatic });
+    };
+
+    // ---- step transitions (rt-step-began / rt-step-ended) -------------------
+    // Engine-driven steps never pass through startStep()/_finish(), so the
+    // transitions are found by comparing each step's state with what has been
+    // fired so far this run, not by hooking the places that change it.
+    proto._emitTransitions = function () {
+      if (this._status === 'stopped' || !this._expanded) return;
+      var tr = this._transitions, T = this._timings(), states = this._states(T), self = this, out = [];
+      this._order.forEach(function (id, i) {
+        var st = states[id], a = self._actual[id] || {}, t = T[id];
+        if (!t || (st !== 'active' && st !== 'done')) return;
+        var start = a.start !== undefined ? a.start : t.start;
+        if (tr.began[id] === undefined) {
+          tr.began[id] = start;
+          out.push({ name: 'rt-step-began', id: id, time: start, by: tr.beganBy[id] || 'plan', rank: 1, i: i });
+        }
+        if (st === 'done' && !tr.ended[id]) {
+          tr.ended[id] = true;
+          var end = Math.max(start, a.end !== undefined ? a.end : t.end);
+          // At the same second an end comes before the begins it makes way
+          // for, except a zero-length step's, which must follow its own begin.
+          out.push({ name: 'rt-step-ended', id: id, time: end, by: transitionBy(tr.endedBy[id]), rank: end > tr.began[id] ? 0 : 2, i: i });
+        }
+      });
+      out.sort(function (x, y) { return (x.time - y.time) || (x.rank - y.rank) || (x.i - y.i); });
+      out.forEach(function (e) { self._emit(e.name, { stepId: e.id, time: e.time, by: e.by }); });
+    };
+    // stop() mid-run: every step that began and has not ended ends now, "abort".
+    proto._abortTransitions = function () {
+      if (this._status === 'stopped' || this._status === 'completed') return;
+      this._emitTransitions();
+      var tr = this._transitions, now = this._time, self = this;
+      this._order.forEach(function (id) {
+        if (tr.began[id] === undefined || tr.ended[id]) return;
+        tr.ended[id] = true;
+        self._emit('rt-step-ended', { stepId: id, time: Math.max(tr.began[id], now), by: 'abort' });
+      });
     };
 
     // ---- run records --------------------------------------------------------

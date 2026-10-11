@@ -3,6 +3,21 @@
 All notable changes to this package are documented here. The format follows
 Keep a Changelog; versions follow SemVer.
 
+## [Unreleased]
+
+### Added
+- `<rhylthyme-timeline>`: `rt-step-began` and `rt-step-ended`, fired for
+  every step (replicate instances and steps that start and end on their
+  own included), exactly once per step per run, in time order within a
+  tick, with `detail {stepId, time, by}`. `time` is the transition's own
+  second, not the tick's. `by` is `person` or `plan` on began, and on
+  ended the run record's `endedBy` with `executor` called `person`
+  (`person`, `timer`, `trigger`, `abort`; `stop()` ends running steps
+  with `abort`). A forward `seek()` fires what it passes over; a new
+  `start()` after `stop()` is a fresh run. `rt-step-start` and
+  `rt-step-complete` are unchanged. Typed in `RhylthymeTimelineEventMap`
+  (`StepBeganBy`, `StepEndedBy`, `StepTransitionDetail`). (#6)
+
 ## [2.0.0-beta.6] - unreleased
 
 ### Added

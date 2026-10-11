@@ -34,7 +34,8 @@ happened.
 <script>
   const el = document.querySelector('rhylthyme-timeline');
   // or: el.program = programObject;
-  el.addEventListener('rt-step-start', (e) => console.log('started', e.detail.stepId, 'at', e.detail.time));
+  el.addEventListener('rt-step-began', (e) => console.log('began', e.detail.stepId, 'at', e.detail.time, 'by', e.detail.by));
+  el.addEventListener('rt-step-ended', (e) => console.log('ended', e.detail.stepId, 'at', e.detail.time, 'by', e.detail.by));
   el.addEventListener('rt-complete', () => console.log('all done'));
 </script>
 ```
@@ -55,8 +56,43 @@ pickers, event log). `?at=9000&theme=dark` positions it for screenshots.
 Methods: `start()`, `pause()`, `stop()`, `toggle()`, `seek(seconds)` (while
 paused), `startStep(id)`, `completeStep(id)`, `tick()`, `setClock(fn)`.
 Read-only: `currentTime`, `status`, `timings`, `stepStates`. Events (all
-bubble and cross the shadow boundary): `rt-load`, `rt-start`, `rt-pause`,
-`rt-stop`, `rt-tick`, `rt-step-start`, `rt-step-complete`, `rt-complete`.
+bubble and cross the shadow boundary):
+
+| Event | `detail` | Fires |
+|---|---|---|
+| `rt-load` | `{program}` | a program was set or fetched |
+| `rt-start` / `rt-pause` | `{time}` | the transport started or resumed / paused |
+| `rt-stop` | `{}` | `stop()`: the run is over and the player rewinds |
+| `rt-tick` | `{time}` | every clock tick while running |
+| `rt-step-began` | `{stepId, time, by}` | **every** step began, once per run; `by` is `person` (`startStep()`) or `plan` (its own trigger) |
+| `rt-step-ended` | `{stepId, time, by}` | **every** step ended, once per run; `by` is `person`, `timer`, `trigger` or `abort` (below) |
+| `rt-step-start` | `{stepId, time}` | `startStep()` only: a manual gate or negative-offset hand-off |
+| `rt-step-complete` | `{stepId, time, automatic}` | only the steps the player finishes: `completeStep()`, a variable step's `maxSeconds`, a hand-off cap |
+| `rt-complete` | `{time}` | every step is done |
+| `rt-run-record` | `{record, outcome}` | one run record per run |
+| `rt-factors` | `{factors, skipped, source}` | variance-factor answers were given |
+
+`rt-step-began` and `rt-step-ended` are what a host follows a run with (an
+ELN ticking off its own copy of each step, a notifier, a dashboard). They
+fire for every step, replicate instances included, whether a person, the
+plan or a timer caused the transition. `time` is the transition's own
+second on the program clock, not the tick that noticed it, and the
+transitions one tick finds fire in time order (at the same second an end
+comes before the begins it makes way for). `rt-step-ended`'s `by` is the
+run record's `endedBy`, with `executor` called `person`:
+
+| `by` | run record `endedBy` | Cause |
+|---|---|---|
+| `person` | `executor` | `completeStep()` (the *Done* button) |
+| `timer` | `timer` | a fixed duration, or a variable step's `maxSeconds`, ran out |
+| `trigger` | `trigger` | a negative-offset hand-off capped the step |
+| `abort` | `abort` | `stop()` while the step was running |
+
+A forward `seek()` fires what it passes over; seeking back fires nothing,
+and nothing fires twice in a run. `stop()` ends the run, so the next
+`start()` fires every step again. A run that is dropped (program replaced,
+element removed) fires no `rt-step-ended` for the steps still running,
+matching the run record, which leaves them open.
 
 How the player treats step kinds, matching the rhylthyme.com runner:
 
