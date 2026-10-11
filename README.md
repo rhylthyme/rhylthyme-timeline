@@ -27,8 +27,8 @@ happened.
 ![rhylthyme-timeline element paused at 150 minutes: the roast is active and hatched, the potato peel waits in red for the cook to start it, Done and Start actions below](docs/element-player.png)
 
 ```html
-<script src="https://cdn.jsdelivr.net/npm/@rhylthyme/timeline@2/src/index.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@rhylthyme/timeline@2/src/element.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@rhylthyme/timeline@2.0.0-beta.5/src/index.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@rhylthyme/timeline@2.0.0-beta.5/src/element.js"></script>
 
 <rhylthyme-timeline src="thanksgiving.json" mode="player" speed="1" time-format="minutes"></rhylthyme-timeline>
 <script>
@@ -293,10 +293,14 @@ R.computeStepTimings(program)
 
 ## Usage
 
+For a whole web app (the player element in React, charts, timings, and
+the hosted validator and analyzer from a backend), see
+[Embed Rhylthyme in your app](https://docs.rhylthyme.com/development/embedding/).
+
 In a page, without a build step:
 
 ```html
-<script src="https://cdn.jsdelivr.net/npm/@rhylthyme/timeline@1/src/index.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@rhylthyme/timeline@2.0.0-beta.5/src/index.js"></script>
 <div id="timeline"></div>
 <script>
   Rhylthyme.renderTimeline(document.getElementById('timeline'), program);
