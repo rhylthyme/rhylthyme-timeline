@@ -733,6 +733,77 @@
     return computeStepTimings(program, resolverOpts);
   }
 
+  // ---------- Itinerary ---------------------------------------------------
+  //
+  // The plan as a list: one entry per expanded step, in plan order (start
+  // time, then name), with step and track names, the authored step a
+  // replicate instance came from, and, when opts.startAt or opts.finishAt
+  // is given, wall-clock ISO times. The anchoring is analyzeSchedule's
+  // (src/schedule/schedule.js): finishAt wins and works backwards from the
+  // makespan; else startAt. opts.actual / opts.now go to computeStepTimings.
+
+  function _parseIsoDate(v) {
+    if (!v) return null;
+    var d = new Date(v);
+    return isNaN(d.getTime()) ? null : d;
+  }
+
+  function itinerary(program, opts) {
+    opts = opts || {};
+    program = expandReplicates(program || {});
+    var timingOpts = {};
+    if (opts.actual) timingOpts.actual = opts.actual;
+    if (typeof opts.now === 'number' && isFinite(opts.now)) timingOpts.now = opts.now;
+    var timings = computeStepTimings(program, timingOpts);
+
+    var makespan = 0;
+    Object.keys(timings).forEach(function (id) { makespan = Math.max(makespan, timings[id].end); });
+
+    var anchorStart = null;
+    var finishAt = _parseIsoDate(opts.finishAt);
+    var startAt = _parseIsoDate(opts.startAt);
+    if (finishAt) anchorStart = new Date(finishAt.getTime() - makespan * 1000);
+    else if (startAt) anchorStart = startAt;
+    function wall(sec) {
+      return anchorStart ? new Date(anchorStart.getTime() + sec * 1000).toISOString() : undefined;
+    }
+
+    // stepId -> { step, track }, built and walked exactly as analyzeSchedule
+    // does (a duplicate id keeps its first position and its last definition),
+    // so ties in the sort below come out in the same order.
+    var meta = {};
+    (Array.isArray(program && program.tracks) ? program.tracks : []).forEach(function (t) {
+      ((t && t.steps) || []).forEach(function (s) {
+        if (!s || typeof s !== 'object' || !s.stepId) return;
+        meta[s.stepId] = { step: s, track: t };
+      });
+    });
+
+    var out = Object.keys(meta).filter(function (id) { return !!timings[id]; }).map(function (id) {
+      var s = meta[id].step, t = meta[id].track, tm = timings[id];
+      var idx = Number(s.instanceIndex);
+      var entry = {
+        stepId: id,
+        name: s.name || id,
+        trackId: t.trackId,
+        trackName: t.name || t.trackId,
+        instanceOf: s.instanceOf || null,
+        instanceIndex: isFinite(idx) ? idx : null,
+        startSeconds: tm.start,
+        endSeconds: tm.end,
+        durationSeconds: tm.duration,
+        needsStart: stepNeedsStart(s),
+        needsFinish: stepNeedsFinish(s),
+        task: s.task || null
+      };
+      if (anchorStart) { entry.startAt = wall(tm.start); entry.endAt = wall(tm.end); }
+      return entry;
+    });
+    return out.sort(function (a, b) {
+      return a.startSeconds - b.startSeconds || a.name.localeCompare(b.name);
+    });
+  }
+
   // ---------- SVG rendering ----------------------------------------------
 
   var PALETTE = [
@@ -1644,6 +1715,7 @@
     computeStepTimings: computeStepTimings,
     actualFromRun: actualFromRun,
     timingsFromRun: timingsFromRun,
+    itinerary: itinerary,
     runtimeStepId: runtimeStepId,
     stepNeedsStart: stepNeedsStart,
     stepNeedsFinish: stepNeedsFinish,

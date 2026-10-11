@@ -291,6 +291,26 @@ R.computeStepTimings(program)
 // }
 ```
 
+### 5. The plan as a list: `itinerary(program, opts?)`
+
+For a to-do list, a notification scheduler or a calendar export: every
+step (replicate instances expanded) in plan order, with its name, its
+track's name, the authored step an instance came from and, given
+`startAt` or `finishAt`, wall-clock times. It is in the core, so there is
+no need to load `./schedule` for it, and it agrees with
+`analyzeSchedule(...).steps` (a test checks every example program).
+
+```js
+R.itinerary(program, { finishAt: '2026-11-26T18:00:00-05:00' })
+// [
+//   { stepId: 'turkey-prep', name: 'Season and truss', trackId: 'turkey', trackName: 'Turkey',
+//     instanceOf: null, instanceIndex: null, startSeconds: 0, endSeconds: 1200, durationSeconds: 1200,
+//     needsStart: false, needsFinish: false, task: 'prep',
+//     startAt: '2026-11-26T19:05:00.000Z', endAt: '2026-11-26T19:25:00.000Z' },
+//   ...
+// ]
+```
+
 ## Usage
 
 For a whole web app (the player element in React, charts, timings, and
@@ -364,6 +384,7 @@ and requires the same verdict (CI runs it here and in `rhylthyme`).
 | `renderTimeline(container, program, opts?)` | Injects the SVG into a DOM element and returns the markup. |
 | `actualFromRun(record, program?, opts?)` | `{ [stepId]: { start, end } }` from a run record, keyed by expanded step id, ready to pass as `computeStepTimings`' `actual`. `opts.endsOnly` keeps only the ends, which is what a replay check feeds back so that every start has to come out of the trigger graph. Arguments may be given in either order. |
 | `timingsFromRun(program, record, opts?)` | `computeStepTimings(program, { actual: actualFromRun(record, program, opts) })`. |
+| `itinerary(program, opts?)` | `[{ stepId, name, trackId, trackName, instanceOf, instanceIndex, startSeconds, endSeconds, durationSeconds, startAt?, endAt?, needsStart, needsFinish, task }]`, one entry per expanded step, sorted by start then name. `instanceOf` / `instanceIndex` link a replicate instance to its authored step (`null` otherwise). `opts.startAt` anchors the plan's start, `opts.finishAt` (wins) its end, and then `startAt` / `endAt` are ISO 8601 UTC strings, exactly as `analyzeSchedule` reports them; without an anchor they are absent. `opts.actual` and `opts.now` go to `computeStepTimings`. |
 | `runtimeStepId(entry, knownIds?)` | The expanded step id a record entry refers to: `<stepId>-r<instance>` for a replicated step, `<stepId>` otherwise, confirmed against `knownIds` when given. Python twin: `rhylthyme.history.replay.record_step_id`. |
 | `buildPlayerHtml(program, environment?)` (from `@rhylthyme/timeline/player`) | The interactive visualizer page as an HTML string, identical to the server's. Needs Node (reads `player/template.html`). |
 | `stepNeedsStart(step)` / `stepNeedsFinish(step)` | Whether the executor must start the step (manual gate, negative offset) / must end it (indefinite, variable with `triggerName`). |

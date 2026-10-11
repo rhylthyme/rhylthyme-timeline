@@ -26,6 +26,40 @@ export interface TimingOptions {
   now?: number;
 }
 
+export interface ItineraryOptions extends TimingOptions {
+  /** Anchor the plan's start at this time (ISO string, Date or epoch ms). Ignored when finishAt is given. */
+  startAt?: string | Date | number;
+  /** Anchor the plan's end (the makespan) at this time and work backwards. Wins over startAt. */
+  finishAt?: string | Date | number;
+}
+
+/** One step of the plan, as itinerary() lists it. */
+export interface ItineraryEntry {
+  /** The expanded step id (`<stepId>-r<n>` for a replicate instance). */
+  stepId: string;
+  /** The step's name, or its id when it has none. */
+  name: string;
+  trackId: string;
+  /** The track's name, or its id when it has none. */
+  trackName: string;
+  /** The authored stepId a replicate instance was expanded from; null otherwise. */
+  instanceOf: string | null;
+  /** 1-based replicate instance number; null otherwise. */
+  instanceIndex: number | null;
+  startSeconds: number;
+  endSeconds: number;
+  durationSeconds: number;
+  /** Wall-clock start, ISO 8601 UTC; present only when startAt or finishAt was given. */
+  startAt?: string;
+  /** Wall-clock end, ISO 8601 UTC; present only when startAt or finishAt was given. */
+  endAt?: string;
+  /** stepNeedsStart(step): the executor must start it (manual gate, negative offset). */
+  needsStart: boolean;
+  /** stepNeedsFinish(step): the executor must end it (indefinite, variable with triggerName). */
+  needsFinish: boolean;
+  task: string | null;
+}
+
 export type PaletteName =
   | 'classic' | 'vivid' | 'muted' | 'tableau' | 'google' | 'pastel' | 'd3' | 'cookbook' | 'okabe-ito' | 'grayscale';
 
@@ -98,6 +132,8 @@ export function actualFromRun(record: unknown, program?: Program, opts?: { endsO
 export function timingsFromRun(program: Program, record: unknown, opts?: { endsOnly?: boolean; now?: number }): Timings;
 /** knownIds: an object keyed by the expanded step ids (a timings object works). */
 export function runtimeStepId(entry: { stepId: string; instance?: number }, knownIds?: Record<string, unknown>): string;
+/** Every expanded step in plan order (start, then name), with names, replicate links and optional wall-clock times. */
+export function itinerary(program: Program, opts?: ItineraryOptions): ItineraryEntry[];
 export function stepNeedsStart(step: Step): boolean;
 export function stepNeedsFinish(step: Step): boolean;
 /** A deep copy with track and step replicates expanded into plain tracks and steps. */
