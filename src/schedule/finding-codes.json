@@ -1082,7 +1082,7 @@
         "error"
       ],
       "summary": "A compound \"each\" trigger pairs groups of different sizes.",
-      "explanation": "instance i of the step pairs with instance i of every \"each\" upstream, so all of them need the same count.",
+      "explanation": "Instance i of the step pairs with instance i of every \"each\" upstream, so all of them need the same count.",
       "examples": [
         {
           "severity": "error",
