@@ -228,6 +228,7 @@ test('the player emits one run record per run: completed, aborted, abandoned',
     // Removed from the DOM mid-run: the step that was running keeps an open
     // interval (no end, no endedBy) and the run is abandoned.
     const b = R.abandoned;
+    assert.strictEqual(R.abandonedSync, 0, 'removal is decided a microtask after remove()');
     assert.strictEqual(b.outcome, 'abandoned');
     assert.deepStrictEqual(b.steps.map((s) => [s.stepId, s.actual || null, s.endedBy || null]), [
       ['prep', { start: 0 }, null],
@@ -379,4 +380,489 @@ test('the player hashes programs exactly like tools/hash-program.js',
     }
     // ...and the record carries the hash of the program that was run.
     assert.strictEqual(out.records.mainFirst.programVersion, out.hashed[0].hash);
+  });
+
+// ---------------------------------------------------------------------
+// rt-step-began / rt-step-ended (issue #6): every step, once per run
+// ---------------------------------------------------------------------
+
+test('rt-step-began and rt-step-ended fire once per step per run, in time order',
+  { skip: chrome ? false : 'no Chrome binary found (set CHROME_BIN)' }, async () => {
+    const out = await harnessOutput();
+    assert.deepStrictEqual(out.errors, []);
+    const T = out.transitions;
+    const steps = (log) => log.filter((e) => e[0] === 'rt-step-began' || e[0] === 'rt-step-ended');
+    const nonDecreasing = (log) => log.every((e, i) => i === 0 || e[2] >= log[i - 1][2]);
+
+    // Thanksgiving played to the end: exactly one began and one ended per
+    // step, a step's began before its ended, everything in time order and
+    // before rt-complete.
+    assert.strictEqual(T.status, 'completed');
+    assert.strictEqual(T.stepIds.length, 13);
+    assert.deepStrictEqual(T.firstAfterStart, [['rt-step-began', 'turkey-prep', 0, 'plan']], 'start() fires the steps that begin at 0');
+    const full = steps(T.full);
+    assert.strictEqual(full.length, 26);
+    for (const id of T.stepIds) {
+      const began = full.filter((e) => e[0] === 'rt-step-began' && e[1] === id);
+      const ended = full.filter((e) => e[0] === 'rt-step-ended' && e[1] === id);
+      assert.strictEqual(began.length, 1, 'one rt-step-began for ' + id);
+      assert.strictEqual(ended.length, 1, 'one rt-step-ended for ' + id);
+      assert.ok(full.indexOf(began[0]) < full.indexOf(ended[0]), id + ' began before it ended');
+      assert.ok(began[0][2] <= ended[0][2], id + ' times');
+    }
+    assert.ok(nonDecreasing(full), 'transitions fire in time order');
+    const completeAt = T.full.findIndex((e) => e[0] === 'rt-complete');
+    assert.ok(completeAt > T.full.lastIndexOf(full[full.length - 1]), 'every ended precedes rt-complete');
+    // Times are the transitions' own seconds, not the 120 s ticks that found them.
+    assert.deepStrictEqual(full.find((e) => e[1] === 'stuffing-prep' && e[0] === 'rt-step-began'), ['rt-step-began', 'stuffing-prep', 5400, 'plan']);
+    assert.deepStrictEqual(full.find((e) => e[1] === 'potatoes-mash' && e[0] === 'rt-step-ended'), ['rt-step-ended', 'potatoes-mash', 11100, 'timer']);
+    // by: the gates a person started, the roast capped by the peel hand-off.
+    const beganBy = Object.fromEntries(full.filter((e) => e[0] === 'rt-step-began').map((e) => [e[1], e[3]]));
+    const endedBy = Object.fromEntries(full.filter((e) => e[0] === 'rt-step-ended').map((e) => [e[1], e[3]]));
+    assert.strictEqual(beganBy['potatoes-peel'], 'person');
+    assert.strictEqual(beganBy['guests-seated'], 'person');
+    assert.strictEqual(beganBy['turkey-prep'], 'plan');
+    assert.strictEqual(endedBy['turkey-roast'], 'trigger');
+    assert.strictEqual(endedBy['turkey-prep'], 'timer');
+    // The old events are unchanged: rt-step-start only for startStep().
+    assert.deepStrictEqual(T.full.filter((e) => e[0] === 'rt-step-start').map((e) => e[1]), ['potatoes-peel', 'guests-seated']);
+    assert.deepStrictEqual(T.full.filter((e) => e[0] === 'rt-step-complete').map((e) => e[1]), ['turkey-roast']);
+    // The same step's rt-step-start comes before its rt-step-began.
+    assert.ok(T.full.findIndex((e) => e[0] === 'rt-step-start' && e[1] === 'potatoes-peel') <
+      T.full.findIndex((e) => e[0] === 'rt-step-began' && e[1] === 'potatoes-peel'));
+
+    // stop() after completion ends nothing again; a new start() is a fresh
+    // run that fires from the top, and stop() mid-run ends the running step "abort".
+    assert.strictEqual(T.afterCompletedStop, 0);
+    assert.deepStrictEqual(steps(T.replay), [
+      ['rt-step-began', 'turkey-prep', 0, 'plan'],
+      ['rt-step-ended', 'turkey-prep', 1200, 'timer'],
+      ['rt-step-began', 'turkey-roast', 1200, 'plan'],
+      ['rt-step-ended', 'turkey-roast', 1300, 'abort'],
+    ]);
+    assert.strictEqual(T.replay[T.replay.length - 1][0], 'rt-stop', 'the abort ends fire before rt-stop');
+
+    // Replicate instances each fire, and one tick that runs the whole program
+    // fires them in time order, an end before the begins it makes way for.
+    assert.deepStrictEqual(T.cookies, [
+      ['rt-step-began', 'mix', 0, 'plan'],
+      ['rt-step-ended', 'mix', 900, 'timer'],
+      ['rt-step-began', 'bake-r1', 900, 'plan'],
+      ['rt-step-ended', 'bake-r1', 1620, 'timer'],
+      ['rt-step-began', 'bake-r2', 1620, 'plan'],
+      ['rt-step-began', 'cool-r1', 1620, 'plan'],
+      ['rt-step-ended', 'bake-r2', 2340, 'timer'],
+      ['rt-step-began', 'cool-r2', 2340, 'plan'],
+      ['rt-step-ended', 'cool-r1', 2520, 'timer'],
+      ['rt-step-began', 'bake-r3', 2520, 'plan'],
+      ['rt-step-ended', 'bake-r3', 3240, 'timer'],
+      ['rt-step-ended', 'cool-r2', 3240, 'timer'],
+      ['rt-step-began', 'cool-r3', 3240, 'plan'],
+      ['rt-step-ended', 'cool-r3', 4140, 'timer'],
+      ['rt-step-began', 'box', 4140, 'plan'],
+      ['rt-step-ended', 'box', 4440, 'timer'],
+    ]);
+
+    // completeStep() is a person (the run record's endedBy "executor").
+    assert.deepStrictEqual(T.person, [
+      ['rt-step-began', 'prep', 0, 'plan'],
+      ['rt-step-ended', 'prep', 60, 'timer'],
+      ['rt-step-began', 'simmer', 60, 'plan'],
+      ['rt-step-ended', 'simmer', 100, 'person'],
+    ]);
+
+    // A zero-length step ends right after its own begin and before the
+    // begins that wait on it, whatever the track order.
+    assert.deepStrictEqual(T.zeroLength, [
+      ['rt-step-began', 'A', 0, 'plan'],
+      ['rt-step-ended', 'A', 10, 'timer'],
+      ['rt-step-began', 'Z1', 10, 'plan'],
+      ['rt-step-ended', 'Z1', 10, 'timer'],
+      ['rt-step-began', 'Z2', 10, 'plan'],
+      ['rt-step-ended', 'Z2', 10, 'timer'],
+      ['rt-step-began', 'B', 10, 'plan'],
+      ['rt-step-ended', 'B', 20, 'timer'],
+    ]);
+
+    // stop() from a handler: the rest of the batch first, then the abort,
+    // then rt-stop, and nothing after it.
+    assert.deepStrictEqual(T.stopInHandler, [
+      ['rt-start', null, 0, null],
+      ['rt-step-began', 'A', 0, 'plan'],
+      ['rt-step-ended', 'A', 10, 'timer'],
+      ['rt-step-began', 'B', 10, 'plan'],
+      ['rt-step-ended', 'B', 20, 'timer'],
+      ['rt-step-began', 'C', 20, 'plan'],
+      ['rt-step-ended', 'C', 25, 'abort'],
+      ['rt-stop', null, null, null],
+    ]);
+    assert.strictEqual(T.stopInHandlerStatus, 'stopped');
+    // completeStep() from a handler: its end is queued behind the batch, so
+    // every step still begins before it ends and nothing repeats.
+    const k = T.completeInHandler;
+    assert.strictEqual(k.length, 8);
+    for (const id of ['A', 'V', 'P', 'Q']) {
+      const b = k.findIndex((e) => e[0] === 'rt-step-began' && e[1] === id);
+      const en = k.findIndex((e) => e[0] === 'rt-step-ended' && e[1] === id);
+      assert.ok(b >= 0 && en > b, id + ' began before it ended');
+    }
+    assert.deepStrictEqual(k.find((e) => e[0] === 'rt-step-ended' && e[1] === 'V'), ['rt-step-ended', 'V', 40, 'person']);
+
+    // startStep() on a stopped player starts a run, then the step.
+    assert.deepStrictEqual(T.startStepStopped, [true, 'running']);
+    assert.deepStrictEqual(T.startStepStoppedLog.slice(0, 4), [
+      ['rt-start', null, 0, null],
+      ['rt-step-start', 'G', 0, null],
+      ['rt-step-began', 'G', 0, 'person'],
+      ['rt-step-ended', 'G', 10, 'timer'],
+    ]);
+
+    // seek(): forward fires what it passes over, backward fires nothing, and
+    // seeking forward again fires only what is new.
+    assert.deepStrictEqual(T.seekForward, [
+      ['rt-step-began', 'mix', 0, 'plan'],
+      ['rt-step-ended', 'mix', 900, 'timer'],
+      ['rt-step-began', 'bake-r1', 900, 'plan'],
+    ]);
+    assert.deepStrictEqual(T.seekBack, []);
+    assert.deepStrictEqual(T.seekOn, [
+      ['rt-step-ended', 'bake-r1', 1620, 'timer'],
+      ['rt-step-began', 'bake-r2', 1620, 'plan'],
+      ['rt-step-began', 'cool-r1', 1620, 'plan'],
+    ]);
+  });
+
+// ---------------------------------------------------------------------
+// Delivery guarantees and policies (README): dropped runs, rt-seek,
+// stop() from a handler
+// ---------------------------------------------------------------------
+
+test('a dropped run ends its running steps "dropped", then nothing else',
+  { skip: chrome ? false : 'no Chrome binary found (set CHROME_BIN)' }, async () => {
+    const out = await harnessOutput();
+    assert.deepStrictEqual(out.errors, []);
+    const P = out.policies;
+
+    // Program replaced at t = 60 with A (0-100) and C (50-150) running: their
+    // ends in program order at the drop second, then the abandoned record,
+    // then the new program's rt-load. The record still leaves them open.
+    assert.deepStrictEqual(P.replaced, [
+      ['rt-step-ended', 'A', 60, 'dropped'],
+      ['rt-step-ended', 'C', 60, 'dropped'],
+      ['rt-run-record', 'abandoned'],
+      ['rt-load'],
+    ]);
+    assert.deepStrictEqual(P.replacedRecord, ['abandoned', [
+      ['A', { start: 0 }, null],
+      ['B', { start: 0, end: 50 }, 'timer'],
+      ['C', { start: 50 }, null],
+    ]]);
+    assert.deepStrictEqual(P.afterReplaced, [], 'nothing fires for the dropped run afterwards');
+
+    // Replaced from a handler mid-batch: the rest of the batch, then the
+    // dropped end at the tick's second, then the record; no trailing rt-tick.
+    assert.deepStrictEqual(P.replacedInHandler, [
+      ['rt-start', 0],
+      ['rt-step-began', 'A', 0, 'plan'],
+      ['rt-step-ended', 'A', 10, 'timer'],
+      ['rt-step-began', 'B', 10, 'plan'],
+      ['rt-step-ended', 'B', 20, 'timer'],
+      ['rt-step-began', 'C', 20, 'plan'],
+      ['rt-step-ended', 'C', 25, 'dropped'],
+      ['rt-run-record', 'abandoned'],
+      ['rt-load'],
+    ]);
+
+    // Removed for good: nothing during remove(), the dropped ends and the
+    // record one microtask later. Put back afterwards it stays still (no
+    // tick, no step events, even on visibilitychange); stop() starts over.
+    assert.deepStrictEqual(P.removedSync, []);
+    assert.deepStrictEqual(P.removed, [
+      ['rt-step-ended', 'A', 60, 'dropped'],
+      ['rt-step-ended', 'C', 60, 'dropped'],
+      ['rt-run-record', 'abandoned'],
+    ]);
+    assert.deepStrictEqual(P.afterRemoved, []);
+    assert.strictEqual(P.afterRemovedStatus, 'running');
+    assert.deepStrictEqual(P.afterRemovedStop, [['rt-stop']]);
+
+    // Moved (appendChild to another parent; remove() and re-insert in one
+    // script): not dropped, the clock resumes and the run completes normally.
+    assert.deepStrictEqual(P.moved, []);
+    assert.strictEqual(P.movedStatus, 'running');
+    assert.strictEqual(P.movedTimer, true, 'the clock restarts on reconnect');
+    assert.deepStrictEqual(P.movedRunOn, [
+      ['rt-step-ended', 'A', 100, 'timer'],
+      ['rt-step-ended', 'C', 150, 'timer'],
+      ['rt-complete', 160],
+      ['rt-run-record', 'completed'],
+    ]);
+    assert.strictEqual(P.movedRecord, 'completed');
+  });
+
+test('stop() from a handler: the rest of the batch, the abort ends, rt-stop, then nothing',
+  { skip: chrome ? false : 'no Chrome binary found (set CHROME_BIN)' }, async () => {
+    const out = await harnessOutput();
+    assert.deepStrictEqual(out.errors, []);
+    assert.deepStrictEqual(out.policies.stopInHandler, [
+      ['rt-start', 0],
+      ['rt-step-began', 'A', 0, 'plan'],
+      ['rt-step-ended', 'A', 10, 'timer'],
+      ['rt-step-began', 'B', 10, 'plan'],
+      ['rt-step-ended', 'B', 20, 'timer'],
+      ['rt-step-began', 'C', 20, 'plan'],
+      ['rt-step-ended', 'C', 25, 'abort'],
+      ['rt-run-record', 'aborted'],
+      ['rt-stop'],
+    ]);
+  });
+
+test('seek() fires rt-seek {from, to} after the step events it causes, never a step twice',
+  { skip: chrome ? false : 'no Chrome binary found (set CHROME_BIN)' }, async () => {
+    const out = await harnessOutput();
+    assert.deepStrictEqual(out.errors, []);
+    const P = out.policies;
+    assert.deepStrictEqual(P.seekNoopAtZero, [], 'a seek to the current time fires nothing');
+    assert.deepStrictEqual(P.seekForward, [
+      ['rt-step-began', 'mix', 0, 'plan'],
+      ['rt-step-ended', 'mix', 900, 'timer'],
+      ['rt-step-began', 'bake-r1', 900, 'plan'],
+      ['rt-seek', 0, 1000],
+    ]);
+    assert.deepStrictEqual(P.seekBack, [['rt-seek', 1000, 100]], 'backward: rt-seek only');
+    assert.deepStrictEqual(P.seekSame, []);
+    assert.deepStrictEqual(P.seekOn, [
+      ['rt-step-ended', 'bake-r1', 1620, 'timer'],
+      ['rt-step-began', 'bake-r2', 1620, 'plan'],
+      ['rt-step-began', 'cool-r1', 1620, 'plan'],
+      ['rt-seek', 100, 2000],
+    ], 'forward again: only what has not fired, then rt-seek');
+    assert.deepStrictEqual(P.seekWhileRunning, [], 'seek() is ignored while running');
+  });
+
+test('seek() from a handler: rt-seek events arrive in call order, from chaining to',
+  { skip: chrome ? false : 'no Chrome binary found (set CHROME_BIN)' }, async () => {
+    const out = await harnessOutput();
+    assert.deepStrictEqual(out.errors, []);
+    assert.deepStrictEqual(out.policies.nestedSeek, [
+      ['rt-step-began', 'A', 0, 'plan'],
+      ['rt-step-began', 'B', 0, 'plan'],
+      ['rt-step-ended', 'B', 50, 'timer'],  // its handler calls seek(70)
+      ['rt-step-began', 'C', 50, 'plan'],
+      ['rt-seek', 0, 60],
+      ['rt-seek', 60, 70],
+    ]);
+  });
+
+test('an idle element has no run to drop: removed, put back and started, it runs',
+  { skip: chrome ? false : 'no Chrome binary found (set CHROME_BIN)' }, async () => {
+    const out = await harnessOutput();
+    assert.deepStrictEqual(out.errors, []);
+    const P = out.policies;
+    const run = [
+      ['rt-start', 0],
+      ['rt-step-began', 'A', 0, 'plan'],
+      ['rt-step-began', 'B', 0, 'plan'],
+      ['rt-step-ended', 'B', 50, 'timer'],
+      ['rt-step-began', 'C', 50, 'plan'],
+    ];
+    for (const k of ['idleNeverStarted', 'idleStopped']) {
+      assert.deepStrictEqual(P[k].removed, [], k + ': removal fires nothing');
+      assert.deepStrictEqual(P[k].run, run, k + ': the next start() is a normal run');
+      assert.strictEqual(P[k].time, 60, k + ': the clock moves');
+    }
+    // Removed mid-run, then the program replaced while detached: the setter
+    // drops the run at once; the deferred removal check finds nothing left,
+    // so the new program's run is not frozen.
+    assert.deepStrictEqual(P.idleReplacedWhileDetached.log, [
+      ['rt-step-ended', 'A', 10, 'dropped'],
+      ['rt-step-ended', 'B', 10, 'dropped'],
+      ['rt-run-record', 'abandoned'],
+      ['rt-load'],
+    ].concat(run));
+    assert.strictEqual(P.idleReplacedWhileDetached.time, 60);
+  });
+
+test('a dropped run is inert until stop(); a dropped end is never before its begin',
+  { skip: chrome ? false : 'no Chrome binary found (set CHROME_BIN)' }, async () => {
+    const out = await harnessOutput();
+    assert.deepStrictEqual(out.errors, []);
+    const P = out.policies;
+    // Dropped while running, put back: completeStep / startStep refuse,
+    // start / pause / toggle / tick fire nothing and the clock stays still.
+    assert.deepStrictEqual(P.inertRunning, {
+      calls: { completeA: false, completeC: false, startB: false },
+      log: [], status: 'running', time: 60,
+    });
+    assert.deepStrictEqual(P.inertStop, [['rt-stop']], 'stop(): no abort ends, no second record');
+    assert.deepStrictEqual(P.inertFresh.log, [
+      ['rt-start', 0],
+      ['rt-step-began', 'A', 0, 'plan'],
+      ['rt-step-began', 'B', 0, 'plan'],
+      ['rt-step-ended', 'B', 50, 'timer'],
+      ['rt-step-began', 'C', 50, 'plan'],
+    ]);
+    assert.strictEqual(P.inertFresh.time, 60);
+    // Dropped while paused: seek() and start() are ignored too (no rt-seek).
+    assert.deepStrictEqual(P.inertPaused, { log: [], status: 'paused', time: 10 });
+
+    // Paused at 60, sought back to 20, program replaced: A (began 0) ends at
+    // 20, C (began 50) at its own begin, not before it.
+    assert.deepStrictEqual(P.droppedAfterSeekBack, [
+      ['rt-step-ended', 'A', 20, 'dropped'],
+      ['rt-step-ended', 'C', 50, 'dropped'],
+      ['rt-run-record', 'abandoned'],
+      ['rt-load'],
+    ]);
+
+    // An await between remove() and the re-insert is a removal for good.
+    assert.deepStrictEqual(P.awaitThenReinsert, {
+      log: [
+        ['rt-step-ended', 'A', 10, 'dropped'],
+        ['rt-step-ended', 'B', 10, 'dropped'],
+        ['rt-run-record', 'abandoned'],
+      ],
+      status: 'running', time: 10, timer: false,
+    });
+  });
+
+// ---------------------------------------------------------------------
+// Translatable labels and accessible buttons (issue #7)
+// ---------------------------------------------------------------------
+
+test('the player translates its text through the labels property',
+  { skip: chrome ? false : 'no Chrome binary found (set CHROME_BIN)' }, async () => {
+    const out = await harnessOutput();
+    assert.deepStrictEqual(out.errors, []);
+    const l = out.labels;
+
+    // English stays exactly as before; the glyph is aria-hidden and the
+    // button's aria-label is the text alone.
+    assert.deepStrictEqual(l.defaultStart, ['▶ Start', 'Start', '▶']);
+    assert.deepStrictEqual(l.defaultStop, ['■ Stop', 'Stop', '■']);
+    assert.deepStrictEqual(l.defaultPause, ['❚❚ Pause', 'Pause', '❚❚']);
+    assert.deepStrictEqual(l.defaultResume, ['▶ Resume', 'Resume', '▶']);
+    assert.strictEqual(l.defaultStatus, 'stopped');
+    assert.match(l.defaultStepStart[0], /^▶ Start: \S/);
+    assert.strictEqual(l.defaultStepStart[1], l.defaultStepStart[0].slice(2));
+    assert.strictEqual(l.defaultStepStart[2], '▶');
+    assert.match(l.defaultStepDone[0], /^✓ Done: \S/);
+    assert.strictEqual(l.defaultStepDone[2], '✓');
+    assert.deepStrictEqual(l.defaultFormStart, ['▶ Start', 'Start', '▶']);
+    assert.strictEqual(l.emptyDefault,
+      'No program loaded. Set the <code>program</code> property or a <code>src</code> URL.');
+    assert.ok(l.defaultKeys >= 20, 'labels getter returns the whole table');
+
+    // Overrides: plain strings, {0} placeholders and functions.
+    assert.deepStrictEqual(l.frResume, ['▶ Reprendre', 'Reprendre', '▶']);
+    assert.deepStrictEqual(l.frStop, ['■ Arrêter', 'Arrêter', '■']);
+    assert.match(l.frStepStart[0], /^▶ Démarrer : \S/);
+    assert.strictEqual(l.frStepStart[1], l.frStepStart[0].slice(2));
+    assert.match(l.frStepDone[0], /^✓ Terminé : \S/);
+    assert.strictEqual(l.frSpeed, 'Vitesse ');
+    assert.deepStrictEqual(l.frStatus, ['en pause', 'paused']);
+    assert.strictEqual(l.frHintEscaped, '<b>not markup</b>', 'label text is escaped, never parsed as HTML');
+    assert.deepStrictEqual(l.ignoredKeys, [true, true], 'unknown keys and non-string values are ignored');
+    assert.deepStrictEqual(l.untranslatedPause, ['❚❚ Pause', 'Pause', '❚❚'], 'keys left out stay English');
+    assert.strictEqual(l.throwingFallsBack, true);
+    assert.deepStrictEqual(l.cleared, ['❚❚ Pause', 'Pause', '❚❚']);
+
+    // The variance-factor form.
+    assert.strictEqual(l.formTitle, 'Avant de commencer');
+    assert.deepStrictEqual(l.formStart, ['▶ Commencer', 'Commencer', '▶']);
+    assert.strictEqual(l.formSkip, '— passer —');
+    assert.strictEqual(l.formError, "« lourd » n'est pas un nombre");
+    assert.strictEqual(l.emptyFr, 'Aucun programme : propriété <code>program</code> ou URL <code>src</code>.');
+    assert.strictEqual(l.emptyFn, 'Kein Programm: PROGRAM / src &lt;b&gt;',
+      'a noProgram function gets the plain words and its text is escaped');
+
+    // Relabelling an open factor form keeps the typed answers and errors.
+    assert.deepStrictEqual(l.typedKept, ['6.5', 'gas', 'Avant']);
+    assert.deepStrictEqual(l.errorBefore, ["'heavy' is not a number", false]);
+    assert.deepStrictEqual(l.errorAfter, ['heavy', 'pas un nombre : heavy', false, 'stopped']);
+
+    // The chart: English unchanged, translated keys drawn.
+    assert.strictEqual(l.chartDefaultSame, true, 'untranslated chart is the renderer default byte for byte');
+    assert.ok(l.chartDefault.some((t) => /^\d+ tracks · \S+ total$/.test(t)));
+    assert.ok(l.chartDefault.includes('dependency'));
+    assert.ok(l.chartFr.some((t) => /^\d+ pistes · \S+ · \d+ s$/.test(t)), JSON.stringify(l.chartFr));
+    const enSub = l.chartDefault.find((t) => / tracks · /.test(t)).match(/^(\d+) tracks · (\S+) total$/);
+    const frSub = l.chartFr.find((t) => / pistes · /.test(t)).match(/^(\d+) pistes · (\S+) · /);
+    assert.deepStrictEqual(frSub.slice(1), enSub.slice(1), 'same track count and total as the renderer');
+    assert.ok(l.chartFr.includes('dépendance'));
+    assert.ok(l.chartFr.includes('manuel'));
+    assert.ok(!l.chartFr.includes('dependency'));
+    assert.ok(!l.chartFr.some((t) => / tracks · /.test(t)));
+
+    // Locale formatting is opt-in.
+    const loc = l.loc;
+    assert.strictEqual(loc.plainSeconds, '45s');
+    assert.strictEqual(loc.plainMinutes, '02:05');
+    assert.strictEqual(loc.plainSpeed, '0.5×');
+    assert.strictEqual(loc.attr, 'de');
+    assert.strictEqual(loc.deMinutes, '02:05');
+    assert.strictEqual(loc.deSpeed, '0,5×');
+    assert.strictEqual(loc.deSeconds, loc.intlSeconds);
+    assert.notStrictEqual(loc.arMinutes, '02:05', 'native digits in ar-EG');
+    assert.match(loc.enClock, /^01:05:09\sPM$/);
+    assert.strictEqual(loc.badClock, '13:05:09', 'an invalid locale falls back to the fixed format');
+    assert.deepStrictEqual(loc.cleared, [false, '13:05:09']);
+  });
+
+test('the labels attribute translates declaratively, last setter wins',
+  { skip: chrome ? false : 'no Chrome binary found (set CHROME_BIN)' }, async () => {
+    const out = await harnessOutput();
+    assert.deepStrictEqual(out.errors, []);
+    const a = out.labels.attr;
+    // Present before upgrade (innerHTML), together with locale.
+    assert.strictEqual(a.upgraded, true);
+    assert.deepStrictEqual(a.declarativeLocale, ['de', '02:05']);
+    assert.deepStrictEqual(a.declStop, ['■ Arrêter', 'Arrêter', '■']);
+    assert.strictEqual(a.declSpeed, '0,5 fois', '{1} placeholder from the attribute, formatted in the locale');
+    assert.deepStrictEqual(a.declGetter, ['Arrêter', 'Démarrer : {0}', 'Pause', 'Start'],
+      'non-string values are dropped; the getter returns the whole table in effect');
+    assert.match(a.declStepStart[0], /^▶ Démarrer : \S/, '{0} placeholder from the attribute');
+    assert.strictEqual(a.declStepStart[1], a.declStepStart[0].slice(2));
+    assert.strictEqual(a.warningsAfterDecl, 0);
+    // A change replaces the table rather than merging into it.
+    assert.deepStrictEqual(a.changedResume, ['▶ Reprendre', 'Reprendre', '▶']);
+    assert.deepStrictEqual(a.changedStop, ['■ Stop', 'Stop', '■']);
+    // Invalid values: one warning each, previous labels kept.
+    assert.strictEqual(a.invalidWarnings, 1);
+    assert.deepStrictEqual(a.invalidKept, ['▶ Reprendre', 'Reprendre', '▶']);
+    assert.strictEqual(a.arrayWarnings, 2);
+    assert.strictEqual(a.arrayKept, 'Reprendre');
+    // Property after attribute wins; the attribute is not rewritten.
+    assert.deepStrictEqual(a.propertyWins, ['▶ Weiter', 'Weiter', '▶']);
+    assert.strictEqual(a.propertyAttrUntouched, '["stop"]');
+    assert.deepStrictEqual(a.removeKeepsProperty, ['▶ Weiter', 'Weiter', '▶'],
+      'removing the attribute leaves labels the property supplied');
+    // Attribute after property wins; removing it clears what it supplied.
+    assert.deepStrictEqual(a.attributeWins, [['▶ Continuer', 'Continuer', '▶'], 'Continuer']);
+    assert.deepStrictEqual(a.removed, [['▶ Resume', 'Resume', '▶'], 'Resume']);
+    assert.deepStrictEqual(a.empty, [['■ Stop', 'Stop', '■'], 2], 'an empty attribute is no labels, no warning');
+    assert.deepStrictEqual(a.invalidDecl, ['Stop', 3]);
+    assert.strictEqual(a.warnings.length, 3);
+    assert.ok(a.warnings.every((w) => /^rhylthyme-timeline: the labels attribute is not a JSON object/.test(w)));
+    // Re-setting the attribute to its current value after the property took
+    // over is still the last set: the attribute's labels come back.
+    assert.deepStrictEqual(a.sameValueAfterProperty, ['AttrStop', ['■ AttrStop', 'AttrStop', '■']]);
+    assert.strictEqual(a.sameValueThenRemoved, 'Stop');
+  });
+
+test('properties set before the element is defined go through its setters',
+  { skip: chrome ? false : 'no Chrome binary found (set CHROME_BIN)' }, async () => {
+    const out = await harnessOutput();
+    assert.deepStrictEqual(out.errors, []);
+    const p = out.labels.preUpgrade;
+    assert.deepStrictEqual(p.attachedOwn, [false, false], 'no own property hides the accessors after upgrade');
+    assert.deepStrictEqual(p.attachedMode, ['static', 'static'], 'an attribute-backed property set before upgrade is applied');
+    assert.deepStrictEqual(p.attachedLabels, ['PropStop', 'Start', ['■ PropStop', 'PropStop', '■']],
+      'the property set before upgrade wins over the attribute present at upgrade, and the getter reports the whole table');
+    assert.strictEqual(p.attachedAttrKept, '{"stop":"AttrStop"}', 'the attribute is not rewritten');
+    assert.deepStrictEqual(p.attachedAttrAfter, ['AttrStop', ['■ AttrStop', 'AttrStop', '■']]);
+    assert.strictEqual(p.detachedBefore, true);
+    assert.strictEqual(p.detachedOwn, false);
+    assert.deepStrictEqual(p.detachedLabels, ['PropStop', 'PropStop'], 'getter and rendered table agree');
+    assert.deepStrictEqual(p.propOnly, [false, 'Los', 'Stop']);
   });

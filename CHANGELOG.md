@@ -3,7 +3,230 @@
 All notable changes to this package are documented here. The format follows
 Keep a Changelog; versions follow SemVer.
 
-## [2.0.0-beta.6] - unreleased
+## [2.0.0-beta.7] - unreleased
+
+### Added
+- `findingCodes` in `@rhylthyme/timeline/schedule` (and its browser entry,
+  without the LabMCP catalogue): `src/schedule/finding-codes.json`, every
+  code `validateProgram` can emit with its area, severities, summary,
+  explanation, a triggering program fragment, fix and Python counterpart
+  (`rhylthyme validate --json` and `validate_program_structured`). Types
+  `FindingCodeCatalogue`, `FindingCode`, `FindingCodeExample`.
+  `test/finding-codes.test.js` checks it both ways: every code literal in
+  `src/schedule/*.js` and every schema keyword the checker reports is
+  catalogued, every catalogued code is in the source, each example makes
+  `validateProgram` report its code with its severity, the codes reported
+  on test fixtures, rhylthyme-examples and the parity mutations are all
+  catalogued, also with an instances error added to each (the path where
+  schema findings do not quiet the logic checks), every finding helper call
+  passes its code as a literal the scan reads, and (with Python) the Python
+  column is right, `--strict` included (`python.strict`). The parity
+  test's program builders moved to `test/helpers/parity-programs.js` so
+  both tests share them.
+- `itinerary(program, { startAt?, finishAt?, actual?, now? })` in the core
+  engine: every expanded step in plan order with `name`, `trackName`,
+  `instanceOf` / `instanceIndex`, seconds, `needsStart` / `needsFinish`,
+  `task`, and ISO `startAt` / `endAt` when anchored (the same anchoring as
+  `analyzeSchedule`). Lets an app list the plan without loading
+  `./schedule` (#4). Types `ItineraryOptions` and `ItineraryEntry`;
+  `test/itinerary.test.js` checks it against `analyzeSchedule(...).steps`
+  on every rhylthyme-examples and gold program. The core has no LabMCP
+  catalogue, so a LabMCP step with no duration gets the generic instrument
+  estimate there.
+- `itinerary` in `@rhylthyme/timeline/schedule`: the core `itinerary` after
+  the LabMCP catalogue estimates, so it agrees with `analyzeSchedule` on
+  every program.
+- `labmcp.registerCatalog(catalog)` and `labmcp.hasCatalog()`;
+  `labmcp.CATALOG` is now the registered catalogue or `null`.
+- `<rhylthyme-timeline>`: `rt-step-began` and `rt-step-ended`, fired for
+  every step (replicate instances and steps that start and end on their
+  own included), exactly once per step per run, in time order within a
+  tick, with `detail {stepId, time, by}`. `time` is the transition's own
+  second, not the tick's. `by` is `person` or `plan` on began, and on
+  ended the run record's `endedBy` with `executor` called `person`
+  (`person`, `timer`, `trigger`, `abort`; `stop()` ends running steps
+  with `abort`). A forward `seek()` fires what it passes over; a new
+  `start()` after `stop()` is a fresh run. `rt-step-start` and
+  `rt-step-complete` are unchanged. Typed in `RhylthymeTimelineEventMap`
+  (`StepBeganBy`, `StepEndedBy`, `StepTransitionDetail`). (#6)
+- `<rhylthyme-timeline>`: `by: 'dropped'` on `rt-step-ended`. When a run
+  under way is dropped while steps are running (the program replaced
+  through `program` or `src`, or the element removed from the document for
+  good), each of them ends `dropped` at `currentTime` (clamped to the
+  step's own begin after a backward seek, as `abort` ends are), in program
+  order, before the `abandoned` run record. Begins and ends therefore
+  always pair. Nothing else fires for that run: it is inert (`start()`,
+  `pause()`, `seek()` do nothing; `startStep()` / `completeStep()` return
+  `false`) until `stop()`, which fires only `rt-stop`, or a new program.
+  An idle element (never started, stopped, completed) has no run to drop:
+  removing it or replacing its program fires nothing, and its next
+  `start()` is a normal run. The run record is unchanged (those steps stay
+  open). `dropped` is not `abort`: filter it out to see only real ends; a
+  framework re-render that swaps the program produces it. Added to
+  `StepEndedBy`. (#6)
+- `<rhylthyme-timeline>`: an `rt-seek` event, `detail {from, to}` in
+  program-clock seconds, once per `seek()` that changes the time, after the
+  step events a forward seek fires; a `seek()` from a handler queues
+  behind the outer seek's `rt-seek`, so they arrive in call order. A
+  backward seek still fires no step
+  events (each step fires at most once per run); a host that mirrors the
+  playhead resyncs from `stepStates` on `rt-seek`, a record-keeping host can
+  ignore it. Typed as `SeekDetail` in `RhylthymeTimelineEventMap`. (#6)
+- README: "Delivery guarantees and policies" under the element's events
+  states the rule, reason and consequences for host pages of the three
+  policies: dropped runs end with `dropped`; seeks never fire a step twice
+  and announce themselves with `rt-seek`; a `stop()` called from a handler
+  takes effect after the current batch (the rest of the batch, then the
+  `abort` ends, then `rt-stop`), so the events always agree with the run
+  record. The last is the existing behaviour, now documented; the one
+  change is that the tick whose handler called `stop()` (or replaced the
+  program) no longer fires a trailing `rt-tick` after `rt-stop`.
+- `<rhylthyme-timeline>`: a `labels` property for translating the player
+  (#7). Every user-visible string now comes from one `MESSAGES` table in
+  `src/element.js`; `labels` merges a partial override over the English
+  defaults, as strings (with `{0}`, `{1}`… placeholders) or functions.
+  Unknown keys and non-string values are ignored, a throwing function
+  falls back to English, and the text is always escaped. Typed as
+  `RhylthymeTimelineLabels` in `types/element.d.ts`. English output is
+  unchanged.
+- Accessible buttons: the glyphs (▶ ❚❚ ■ ✓) are wrapped in
+  `aria-hidden` spans and every transport, step and factor-form button
+  carries an `aria-label` with its text. The status element gains a
+  `data-status` attribute holding the untranslated state.
+- The chart inside the player is translatable too: `chartSubtitle` and
+  the `legend*` keys are passed to the renderer when set (English
+  output unchanged).
+- A `locale` attribute/property (opt-in): the clock, durations and speed
+  options are formatted with `Intl` in that locale (`""`/`"auto"`: the
+  browser's). Without it, times keep their fixed formats.
+- `validateProgram` checks the JSON Schema too (#8). The 0.2.0-alpha and
+  0.3.0-alpha program schemas from rhylthyme-spec are bundled
+  (`src/schedule/schemas/`, byte-for-byte copies) and checked by a small
+  zero-dependency Draft 7 checker (`src/schedule/json-schema.js`) for the
+  keywords they use, with Python `jsonschema`'s semantics: `oneOf` means
+  exactly one, `integer` rejects 2.5 and `"2"`, `format` is not checked,
+  siblings of `$ref` are ignored. `schemaVersion` 0.3.x selects
+  0.3.0-alpha, anything else 0.2.0-alpha. Failures are errors coded
+  `schema_<keyword>` with a `where` path and a `fix`. Time strings are
+  read as seconds first, as the Python validator does; the authored
+  program is checked, then (when that passes) the expanded one.
+- `schemaFindings(program)`, `programSchema(schemaVersion)` and
+  `checkJsonSchema(value, schema)` in `./schedule`, with types.
+- `test/parity.test.js`: the issue #8 programs and schema mutations of
+  every example program (a required key dropped, a wrong type, a float for
+  an integer, an ambiguous `oneOf`, unknown keys) must get the same
+  verdict from JS and Python.
+- `<rhylthyme-timeline labels='{"stop":"Arrêter","startStep":"Démarrer : {0}"}'>`:
+  the player's translations can be set from HTML as a JSON object of
+  strings (`{0}`, `{1}`… placeholders included), observed like the other
+  attributes. As with `data-factors` / `factors`, whichever of the
+  attribute and the `labels` property was set last supplies the whole
+  table, and the getter returns the table in effect. A value that is not
+  a JSON object is ignored with one `console.warn`, keeping the labels in
+  effect; removing the attribute clears the labels it supplied. Writing
+  the attribute again with the value it already has counts as setting it
+  (the same now holds for `data-factors`).
+
+### Changed
+- `<rhylthyme-timeline>`: removing the element no longer drops its run at
+  once. The decision runs in a microtask queued at disconnect: an element
+  re-inserted synchronously (`appendChild` to another parent, or
+  `remove()` and re-insert with no `await` in between) has been moved,
+  keeps its run, and its clock resumes; any `await`, `setTimeout` or later
+  render before the re-insert counts as removal for good;
+  previously any disconnect abandoned the run and left the moved element
+  showing "running" with no clock. As a result, the `abandoned` run record
+  of an element removed mid-run arrives a microtask after `remove()`
+  rather than during it. Replacing the program still drops the run
+  synchronously.
+- `@rhylthyme/timeline/schedule` no longer bundles the 350 KB LabMCP
+  instrument catalogue for browsers (#5). The Node entry (`require` and
+  `import`) still registers it, so Node results are unchanged. A new
+  `browser` export condition gives the module without it, the side-effect
+  subpath `@rhylthyme/timeline/schedule/labmcp-catalog` registers it
+  (eagerly or through a lazy `import()`), and `browser/labmcp-catalog.js`
+  does the same for `browser/schedule.js` (465 KB → 223 KB). Without the
+  catalogue, a LabMCP step gets an `instrument_catalog_not_loaded` warning
+  instead of its call checks, and programs without LabMCP steps are
+  unaffected. `validateProgram` and `analyzeSchedule` stay synchronous.
+- Programs that break the schema are now invalid in JS as they already
+  were in Python. Most visible: a program with no `resourceConstraints`,
+  `environment` or `environmentType` (`schema_anyOf`; add
+  `"resourceConstraints": []`), an indefinite step without
+  `defaultSeconds` (`schema_oneOf`), a missing track or step `name`
+  (`schema_required`, previously a warning only), and a string or
+  fractional `maxConcurrent` (`schema_type`).
+- `browser/schedule.js` grows by about 77 KB (14 KB gzipped) for the two
+  schemas and the checker.
+- `validateProgram` checks the JSON Schema on the expanded program only, as
+  the Python validator does, instead of on the authored program and then
+  the expanded one. Programs whose authored form breaks the schema but
+  whose expansion does not are now accepted on both sides (a number as a
+  replicated step's or track's name, a replicate `count` of 0, a track
+  without steps, which expansion leaves out with an `empty_track`
+  warning; a `replicates` of `null`, `[]` or `{}`, which Python's expander
+  treats as absent). A program the expander cannot run on (a track with no
+  `trackId`; a replicated track or step with no `name` or `stepId`; a
+  replicate `count` or legacy `batch_size` that is not a whole number; a
+  replicated step whose `mode` is not parallel, serial or stagger), where
+  Python's expander raises or drops the step, is checked as written; an expansion that fails reports
+  `expansion_failed` together with the schema findings on the program as
+  written, as Python does. Schema paths are moved back to the authored
+  program: a finding on a replicate copy is reported once, at the step or
+  track it is copied from, and its message names the copy.
+- Each problem the schema reports is reported once, by its `schema_*`
+  finding. These logic-check codes are gone: `missing_program_id`,
+  `missing_name`, `no_tracks`, `bad_track`, `bad_step`,
+  `missing_track_id`, `missing_track_name`, `missing_step_id`,
+  `missing_step_name`, `missing_start_trigger`, `bad_duration_type`,
+  `fixed_without_seconds`, `variable_without_bounds`,
+  `indefinite_without_default`, `choice_too_few_options` and `bad_alert`.
+  `compound_without_triggers`, `bad_trigger_logic`, `bad_trigger`,
+  `unknown_trigger_type`, `trigger_without_step_id`,
+  `buffer_without_seconds`, `bad_trigger_event`, `offset_without_seconds`,
+  `bad_resource_constraint`, `bad_max_concurrent` and `unparseable_duration`
+  remain only for what the schema accepts (`{"type": "programStart",
+  "logic": "xor"}`, an empty task name, `seconds: "abc"`), and an overlap
+  is no longer reported for a step whose `startTrigger` the schema rejects.
+  An empty `programId`, `name` or `stepId` string is no longer an error
+  (the schema and Python accept it).
+- The `schema_*` findings say more: the fix for a missing `programId`,
+  track or step `name`, `stepId` or `startTrigger` carries the advice the
+  old codes gave (the startTrigger fix names the step before it), a
+  message on a track or step names its id (`tracks[0].steps[2].duration
+  (step "bake") ...`), an unknown duration or trigger `type` lists every
+  allowed value, a missing top-level key is `schema_required` rather than
+  part of `schema_anyOf`, the fix names every key the closest shape lacks,
+  and a value of the wrong type is one `schema_type` finding, not also a
+  `schema_oneOf` one.
+
+### Fixed
+- `startStep(id)` (and a gate's *Start* button) on a stopped player now
+  starts a run first, as the transport's Start would. Before, the step
+  went active on a clock that never moved and no `rt-step-began` fired.
+  If the program declares variance factors, the form opens instead and
+  `startStep` returns `false`.
+- `analyzeSchedule(...).steps` (and `itinerary`) link the steps of a
+  replicated track (`replicates` or legacy `batch_size` on the track) to
+  their authored step through `instanceOf` / `instanceIndex`; they were
+  `null`. `expandReplicates` itself is unchanged.
+- An epoch-ms anchor of `0` (`startAt` / `finishAt`) is no longer ignored by
+  `itinerary` or `analyzeSchedule`.
+- Setting `labels` while the variance-factor form is open no longer
+  erases what was typed or hides the error shown; the error is re-worded
+  in the new labels.
+- A `noProgram` function override receives `'program'` and `'src'`, not
+  internal placeholders; templates still draw `{0}`/`{1}` as `<code>`.
+- Properties set on a `<rhylthyme-timeline>` before `element.js` defined
+  it (`program`, `labels`, `factors`, `predictions`, `mode`, `speed`,
+  `timeFormat`, `locale`, `startAt`) are now passed through the element's
+  setters when it upgrades. They used to stay as plain own properties
+  that hid the element's accessors, so `el.labels` (for one) returned the
+  raw object while the player showed something else. Where such a
+  property and its attribute (`src`, `labels`, `data-factors`,
+  `data-predictions`) were both present at upgrade, the property wins.
+
+## [2.0.0-beta.6] - 2026-10-11
 
 ### Added
 - `@rhylthyme/timeline/schedule`: the program validator and schedule

@@ -15,10 +15,31 @@ test('the package resolves its own subpaths', () => {
   assert.equal(require('@rhylthyme/timeline/core'), require('../src/index.js'));
   assert.equal(typeof require('@rhylthyme/timeline/schedule').validateProgram, 'function');
   assert.equal(typeof require('@rhylthyme/timeline/player').buildPlayerHtml, 'function');
+  assert.equal(require('@rhylthyme/timeline/schedule/labmcp-catalog'), require('../src/schedule/labmcp.js').CATALOG);
+});
+
+test('the Node entry of ./schedule registers the LabMCP catalogue; the browser entry does not reach it', () => {
+  assert.equal(require('@rhylthyme/timeline/schedule').labmcp.hasCatalog(), true);
+  const browser = pkg.exports['./schedule'].browser;
+  assert.deepEqual(browser, { import: './esm/schedule.browser.mjs', default: './src/schedule/browser.js' });
+  // Every module the browser entry can reach, by its static requires/imports
+  const seen = new Set();
+  const walk = (file) => {
+    if (seen.has(file)) return;
+    seen.add(file);
+    if (file.endsWith('.json')) return;
+    for (const m of fs.readFileSync(file, 'utf8').matchAll(/\b(?:require\(\s*|from\s+)["'](\.[^"']+)["']/g)) {
+      walk(path.resolve(path.dirname(file), m[1]));
+    }
+  };
+  Object.values(browser).forEach((t) => walk(path.join(__dirname, '..', t)));
+  assert.ok(seen.has(path.join(__dirname, '..', 'src', 'schedule', 'labmcp.js')));
+  assert.ok(![...seen].some((f) => f.endsWith('labmcp-catalog.json')), [...seen].join('\n'));
 });
 
 test('the ES module entries export every public member by name', async () => {
-  for (const [spec, cjs] of [['@rhylthyme/timeline', '../src/index.js'], ['@rhylthyme/timeline/schedule', '../src/schedule/index.js']]) {
+  for (const [spec, cjs] of [['@rhylthyme/timeline', '../src/index.js'], ['@rhylthyme/timeline/schedule', '../src/schedule/index.js'],
+    ['../esm/schedule.browser.mjs', '../src/schedule/browser.js']]) {
     const esm = await import(spec);
     const named = Object.keys(esm).filter((k) => k !== 'default').sort();
     assert.deepEqual(named, publicKeys(require(cjs)), `${spec}: run npm run build (tools/build-esm.js)`);

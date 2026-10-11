@@ -27,14 +27,15 @@ happened.
 ![rhylthyme-timeline element paused at 150 minutes: the roast is active and hatched, the potato peel waits in red for the cook to start it, Done and Start actions below](docs/element-player.png)
 
 ```html
-<script src="https://cdn.jsdelivr.net/npm/@rhylthyme/timeline@2.0.0-beta.6/src/index.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@rhylthyme/timeline@2.0.0-beta.6/src/element.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@rhylthyme/timeline@2.0.0-beta.7/src/index.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@rhylthyme/timeline@2.0.0-beta.7/src/element.js"></script>
 
 <rhylthyme-timeline src="thanksgiving.json" mode="player" speed="1" time-format="minutes"></rhylthyme-timeline>
 <script>
   const el = document.querySelector('rhylthyme-timeline');
   // or: el.program = programObject;
-  el.addEventListener('rt-step-start', (e) => console.log('started', e.detail.stepId, 'at', e.detail.time));
+  el.addEventListener('rt-step-began', (e) => console.log('began', e.detail.stepId, 'at', e.detail.time, 'by', e.detail.by));
+  el.addEventListener('rt-step-ended', (e) => console.log('ended', e.detail.stepId, 'at', e.detail.time, 'by', e.detail.by));
   el.addEventListener('rt-complete', () => console.log('all done'));
 </script>
 ```
@@ -54,14 +55,225 @@ pickers, event log). `?at=9000&theme=dark` positions it for screenshots.
 
 Methods: `start()`, `pause()`, `stop()`, `toggle()`, `seek(seconds)` (while
 paused), `startStep(id)`, `completeStep(id)`, `tick()`, `setClock(fn)`.
-Read-only: `currentTime`, `status`, `timings`, `stepStates`. Events (all
-bubble and cross the shadow boundary): `rt-load`, `rt-start`, `rt-pause`,
-`rt-stop`, `rt-tick`, `rt-step-start`, `rt-step-complete`, `rt-complete`.
+Read-only: `currentTime`, `status`, `timings`, `stepStates`. Read/write:
+`labels` (translations, below). Events (all bubble and cross the shadow
+boundary):
+
+| Event | `detail` | Fires |
+|---|---|---|
+| `rt-load` | `{program}` | a program was set or fetched |
+| `rt-start` / `rt-pause` | `{time}` | the transport started or resumed / paused |
+| `rt-stop` | `{}` | `stop()`: the run is over and the player rewinds |
+| `rt-tick` | `{time}` | every clock tick while running |
+| `rt-step-began` | `{stepId, time, by}` | **every** step began, once per run; `by` is `person` (`startStep()`) or `plan` (its own trigger) |
+| `rt-step-ended` | `{stepId, time, by}` | **every** step ended, once per run; `by` is `person`, `timer`, `trigger`, `abort` or `dropped` (below) |
+| `rt-seek` | `{from, to}` | `seek()` changed the time (program-clock seconds), after the step events it fired |
+| `rt-step-start` | `{stepId, time}` | `startStep()` only: a manual gate or negative-offset hand-off |
+| `rt-step-complete` | `{stepId, time, automatic}` | only the steps the player finishes: `completeStep()`, a variable step's `maxSeconds`, a hand-off cap |
+| `rt-complete` | `{time}` | every step is done |
+| `rt-run-record` | `{record, outcome}` | one run record per run |
+| `rt-factors` | `{factors, skipped, source}` | variance-factor answers were given |
+
+`rt-step-began` and `rt-step-ended` are what a host follows a run with (an
+ELN ticking off its own copy of each step, a notifier, a dashboard). They
+fire for every step, replicate instances included, whether a person, the
+plan or a timer caused the transition. `time` is the transition's own
+second on the program clock, not the tick that noticed it, and the
+transitions one tick finds fire in time order (at the same second an end
+comes before the begins it makes way for). `rt-step-ended`'s `by` is the
+run record's `endedBy`, with `executor` called `person`:
+
+| `by` | run record `endedBy` | Cause |
+|---|---|---|
+| `person` | `executor` | `completeStep()` (the *Done* button) |
+| `timer` | `timer` | a fixed duration, or a variable step's `maxSeconds`, ran out |
+| `trigger` | `trigger` | a negative-offset hand-off capped the step |
+| `abort` | `abort` | `stop()` while the step was running |
+| `dropped` | *(none: the step stays open)* | the run was dropped while the step was running: program replaced, element removed |
+
+A forward `seek()` fires what it passes over; seeking back fires nothing,
+and nothing fires twice in a run. `stop()` ends the run, so the next
+`start()` fires every step again.
+
+#### Delivery guarantees and policies
+
+Three situations could break the simple "every step begins once and ends
+once" picture. Each has a fixed rule.
+
+**1. Dropped runs end their running steps with `by: 'dropped'`.**
+
+- *Rule.* A run is dropped when the program is replaced (setting
+  `program`, or a new `src` once it has loaded) or when the element is
+  removed from the document for good, while a run is under way: started
+  and not yet stopped or completed, or paused after a `seek()` that
+  began steps. An element that is idle (never started, stopped,
+  completed) has nothing to drop; removing it or replacing its program
+  fires nothing and its next `start()` is an ordinary fresh run. If
+  steps are running when a run is dropped, each gets one
+  `rt-step-ended` with `by: 'dropped'`, in program order, the same order
+  `stop()` uses for its `abort` ends. Its `time` is `currentTime` (the
+  program-clock second the run was dropped at), or the step's own begin
+  second if that is later, which happens after a backward `seek()`
+  while paused: an end is never earlier than its begin (`abort` ends are
+  clamped the same way). Any transitions already queued are delivered
+  first. Then comes the run's `rt-run-record` with outcome `abandoned`.
+  The run record itself is unchanged: the dropped steps keep an open
+  interval (an `actual.start`, no end, no `endedBy`).
+- *After the drop, the run is inert.* Nothing else fires for that run:
+  `start()`, `pause()`, `toggle()` and `seek()` do nothing, and
+  `startStep()` and `completeStep()` return `false`. The element keeps
+  the `status` it had (`running` or `paused`) and its clock stays still.
+  Two things move on from it: setting a program (a fresh element state),
+  or `stop()`, which rewinds and fires only `rt-stop` (no `abort` ends,
+  since the steps already ended `dropped`, and no second run record).
+  After that, `start()` is a fresh run.
+- *Moves are not drops.* The element decides in a microtask queued when
+  it is disconnected. If it is back in a document by then, it was
+  moved: the run goes on with its clock and no events fire. That covers
+  `appendChild` or `insertBefore` to another parent, and `remove()`
+  followed by a re-insert **in the same synchronous code**. Any `await`
+  between the two (even `await null` or a resolved promise), a
+  `setTimeout`, or a framework that re-inserts in a later render counts
+  as removal for good: the run is dropped as above and the re-inserted
+  element is left inert. Pausing first does not help (a paused run is
+  dropped too); to move an element across an `await`, re-insert it
+  before awaiting, or keep it in the document and hide it with CSS. Because of this, the `abandoned`
+  run record of a removed element arrives a microtask after `remove()`,
+  not during it. A program replacement drops the run at once, inside
+  the setter.
+- *Why.* Without it, a host that counts begins minus ends would be left
+  with steps "in progress" forever. With it, begins and ends always
+  pair, so in-progress counters and "what is running now" lists stay
+  exact.
+- *Consequences for host pages.*
+  - `dropped` is not `abort`. Nobody pressed Stop: the person may still
+    be stirring the pot, the page just stopped watching. Don't record
+    `dropped` as "cancelled" or as a finish time.
+  - A framework re-render that swaps the program (React passing a new
+    `program` object, for example) produces `dropped` ends for the old
+    run. If you only want real stops, filter: `if (e.detail.by ===
+    'dropped') return;`. Passing the same object again is still a new
+    program; keep the reference stable to keep the run.
+  - For the authoritative history keep using the run record: it says
+    `abandoned`, with those steps open.
+
+**2. `seek()` never fires a step twice; it fires `rt-seek` instead.**
+
+- *Rule.* Each step fires `rt-step-began` and `rt-step-ended` at most
+  once per run. A forward seek fires the transitions it passes over; a
+  backward seek fires no step events, and seeking forward again fires
+  only what has not fired yet. Every seek that changes the time fires
+  one `rt-seek` with `{from, to}` in program-clock seconds, after the
+  step events it caused. A seek to the current time, a seek while
+  running (ignored), or a seek on a dropped run (ignored) fires nothing.
+- *Seeks from handlers.* A handler may call `seek()` while the events of
+  an earlier seek are being delivered. The inner seek's events (its step
+  events, then its own `rt-seek`) are queued behind the outer seek's
+  `rt-seek`, so the `rt-seek` events arrive in the order the seeks were
+  made and each one's `from` is the previous one's `to`. A handler that
+  reacts to `rt-step-ended` of the outer seek therefore sees the outer
+  `rt-seek` only after it has returned, followed by the inner one.
+- *Why.* The step events describe what happened in the run, and a seek
+  does not undo what happened. Re-firing would turn every scrub of the
+  playhead into duplicate entries.
+- *Consequences for host pages.* Record-keeping hosts (an ELN, a
+  notifier, an audit log) never see duplicates and can ignore
+  `rt-seek`. Hosts that mirror the playhead (a demo, a training view, a
+  "now" highlight) should resync on `rt-seek` by reading `stepStates`
+  (and `currentTime`), because after a backward seek steps that ended
+  are pending or active again on screen without any step event saying
+  so.
+
+**3. A `stop()` from a handler takes effect after the current batch.**
+
+- *Rule.* The transitions found together (one tick, one seek, one
+  `start()`) are delivered as one ordered batch. If a handler calls
+  `stop()` in the middle of it, the rest of the batch is delivered first,
+  then the `abort` ends of the steps still running, then `rt-stop`.
+  Nothing fires after `rt-stop`. Other calls from handlers
+  (`completeStep()`, `pause()`…) queue their events behind the batch in
+  the same way.
+- *Why.* The batch describes things that already happened before the
+  stop, and the run record holds them. Cutting the batch short would make
+  the events disagree with the record.
+- *Consequences for host pages.* Events always agree with the run
+  record. A handler that stops the run (for example on the first
+  `rt-step-ended` it sees) will still receive the later transitions of
+  that batch before the `abort` ends (`el.status` still reads `running`
+  while they are delivered), so set your own flag if a handler should
+  ignore them.
+
+**Translating the player.** Every piece of text the player writes itself (not the program's own names) is a key of one
+table; set `labels` to a partial object and the keys you leave out stay
+English. Use a string, with `{0}`, `{1}`… for arguments, or a function:
+
+```js
+el.labels = {
+  start: 'Démarrer', pause: 'Pause', resume: 'Reprendre', stop: 'Arrêter',
+  speed: 'Vitesse', statusRunning: 'en cours',
+  startStep: (name) => `Démarrer : ${name}`,
+  doneStep: 'Terminé : {0}',
+};
+console.log(Object.keys(el.labels)); // the full key list, with the text in effect
+```
+
+Without script, put the same table in the `labels` attribute as JSON.
+Only strings fit in an attribute (no functions); `{0}`, `{1}`… work the
+same way:
+
+```html
+<rhylthyme-timeline src="dinner.json" locale="fr"
+  labels='{"stop": "Arrêter", "resume": "Reprendre", "startStep": "Démarrer : {0}"}'>
+</rhylthyme-timeline>
+```
+
+The attribute and the property are two ways to supply one table, as with
+`data-factors` and `factors`: whichever was set last replaces it
+wholesale (the two are not merged), and reading `el.labels` returns the
+table in effect, whichever supplied it. Setting the property does not
+rewrite the attribute. An attribute value that is not a JSON object is
+ignored with one `console.warn` and the labels in effect stay; an empty
+value means no labels. Removing the attribute clears the labels it
+supplied, but leaves a table set through the property after it. Writing
+the attribute again with the value it already has counts as setting it.
+If script set `labels` before `element.js` defined the element and the
+attribute was also there, the order cannot be known: the property wins.
+
+The keys are typed as `RhylthymeTimelineLabels` in
+`@rhylthyme/timeline/element`: transport (`start`, `pause`, `resume`,
+`stop`, `speed`, `speedOption`), status (`statusStopped`, `statusRunning`,
+`statusPaused`, `statusCompleted`), step actions (`startStep`, `doneStep`,
+`instance`, `groupProgress`, `actionsHint`), the empty state (`loading`,
+`noProgram`, `loadError`), the variance-factor form (`factorsTitle`,
+`factorsHint`, `factorSkip`, `factorsStart`, `factorNotNumber`,
+`factorNotInteger`, `factorNotOneOf`) and the chart: its subtitle
+(`chartSubtitle(tracks, total, totalSeconds)`) and legend terms
+(`legendDependency`, `legendNegativeOffset`, `legendIndefinite`,
+`legendVariable`, `legendManual`, `legendBarrier`, `legendBarrierAny`,
+`legendInFlight`). Chart keys reach the renderer only when you set them,
+so the English chart is unchanged; translating a legend term draws the
+renderer's configurable legend, which lists the step kinds the program
+uses. Program content (track and step names) and the small brand mark
+are not labels. Text is escaped, never parsed as HTML. In the
+`noProgram` template `{0}` and `{1}` are drawn as `<code>program</code>`
+and `<code>src</code>`; a function receives `'program'` and `'src'` and
+its text is shown as is. Setting `labels` while the variance-factor form
+is open keeps what was typed and any error on screen, re-worded.
+
+Times are fixed-format ASCII (`mm:ss`, `HH:MM:SS`, `45s`) unless you set
+the `locale` attribute (or property): `locale="fr"` formats the clock,
+durations and the speed options with `Intl` in that locale, and an
+empty value or `"auto"` uses the browser's. `formatTime(seconds)`
+returns the clock text, and you can replace it on an instance. The glyphs (▶ ❚❚ ■ ✓) are not part of the text: they are drawn
+beside it with `aria-hidden="true"`, and each button's `aria-label` is
+the text alone. The status element keeps the untranslated state in
+`data-status` for styling.
 
 How the player treats step kinds, matching the rhylthyme.com runner:
 
 - **Manual gates** (`startTrigger.type: "manual"`) and **negative-offset
-  hand-offs** wait for `startStep()`. Until then they float forward with
+  hand-offs** wait for `startStep()`. On a stopped player `startStep()` starts a
+  run first, so the step begins on a moving clock. Until then they float forward with
   the cursor (shown as a red dashed bar with a *Start* button), and
   everything downstream moves with them.
 - **Indefinite steps** run until `completeStep()` (*Done* button).
@@ -291,6 +503,31 @@ R.computeStepTimings(program)
 // }
 ```
 
+### 5. The plan as a list: `itinerary(program, opts?)`
+
+For a to-do list, a notification scheduler or a calendar export: every
+step (replicate instances expanded) in plan order, with its name, its
+track's name, the authored step an instance came from and, given
+`startAt` or `finishAt`, wall-clock times. It is in the core, so there is
+no need to load `./schedule` for it, and it agrees with
+`analyzeSchedule(...).steps` (a test checks every example program), with
+one exception: a LabMCP instrument step with no duration is timed by the
+core's generic instrument estimate, while `analyzeSchedule` uses the LabMCP
+catalogue's. For those programs use the `itinerary` exported by
+`@rhylthyme/timeline/schedule`, which applies the catalogue estimates first
+and always agrees with `analyzeSchedule`.
+
+```js
+R.itinerary(program, { finishAt: '2026-11-26T18:00:00-05:00' })
+// [
+//   { stepId: 'turkey-prep', name: 'Season and truss', trackId: 'turkey', trackName: 'Turkey',
+//     instanceOf: null, instanceIndex: null, startSeconds: 0, endSeconds: 1200, durationSeconds: 1200,
+//     needsStart: false, needsFinish: false, task: 'prep',
+//     startAt: '2026-11-26T19:05:00.000Z', endAt: '2026-11-26T19:25:00.000Z' },
+//   ...
+// ]
+```
+
 ## Usage
 
 For a whole web app (the player element in React, charts, timings, and
@@ -300,7 +537,7 @@ the hosted validator and analyzer from a backend), see
 In a page, without a build step:
 
 ```html
-<script src="https://cdn.jsdelivr.net/npm/@rhylthyme/timeline@2.0.0-beta.6/src/index.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@rhylthyme/timeline@2.0.0-beta.7/src/index.js"></script>
 <div id="timeline"></div>
 <script>
   Rhylthyme.renderTimeline(document.getElementById('timeline'), program);
@@ -340,20 +577,118 @@ const a = analyzeSchedule(program, { finishAt: '2026-11-26T18:00:00-05:00' });
 // { makespanSeconds, criticalPath, resourceConflicts, steps: [{ stepId, startAt, ... }], ... }
 ```
 
+`validateProgram` expands replicates first and checks the JSON Schema on
+the expanded program, as the Python validator does. The program schemas from
+rhylthyme-spec ship inside the package (`src/schedule/schemas/`), and a
+small built-in checker applies them with the semantics of Python's
+`jsonschema` (Draft 7; `format` is not checked). `schemaVersion` picks the
+schema: `0.3.x` uses 0.3.0-alpha, anything else 0.2.0-alpha. Each failure
+is an error with the code `schema_<keyword>` (`schema_required`,
+`schema_type`, `schema_oneOf`, `schema_additionalProperties`, ...), a
+`where` path such as `tracks[0].steps[1].duration` and a `fix`. Paths
+point at the program as written: a finding on a copy that `replicates`
+makes (`"boil-r2"`) is reported once, at the step it is copied from, and
+its message names the copy. Because the expanded program is what is
+checked, an authored shape the expander resolves is accepted (a number as
+a replicated step's name becomes `"42 (1 of 2)"`; a track without steps is
+left out, with an `empty_track` warning), while a program the expander
+cannot run on (a track with no `trackId`, a replicated step with no `name`
+or `stepId`) is checked as written. A problem the schema reports is not
+reported again by the logic checks: a missing `programId`, track `name` or
+`startTrigger`, an unknown duration or trigger type and a malformed alert
+are `schema_*` findings only. Two rules
+the logic checks never enforced come from the schema: a program needs
+`resourceConstraints` (an empty list is fine), an `environment` or an
+`environmentType`, and an indefinite step needs `defaultSeconds`. A value that
+cannot be written as JSON (a circular reference, a BigInt) gets the single
+error `not_json` instead of a schema check. Patterns are read as Python's
+`re.search` reads them (`$` also matches before a final newline).
+
+Every code `validateProgram` can report is catalogued in `findingCodes`
+(`src/schedule/finding-codes.json`): per code its area, severities, a
+summary, an explanation, a program fragment that triggers it, the fix, and
+what Python's `rhylthyme` validator reports for the same program. An app
+can show the explanation next to a finding:
+
+```js
+import { validateProgram, findingCodes } from '@rhylthyme/timeline/schedule';
+
+for (const f of validateProgram(program).errors) {
+  const about = findingCodes.codes[f.code];   // { area, severity, summary, explanation, examples, fix, python }
+  console.log(`${f.code}: ${f.message}\n  ${about.summary} ${about.fix}`);
+}
+```
+
+`test/finding-codes.test.js` keeps the catalogue complete both ways: every
+code in the source is in it, and every example in it makes `validateProgram`
+report its code with its severity. A few codes the source can emit but no
+program reaches today (`bad_trigger`, and `schema_<keyword>` for keywords
+the bundled schemas do not assert) are listed with `reachable: false` and
+the reason. The rendered reference is docs/development/finding-codes.md in
+rhylthyme-docs. These are the codes of this package's `validateProgram`;
+the hosted MCP server's `validate_program` (rhylthyme-mcp's
+`mcp-api/schedule.js`) still runs its own validator, whose codes differ
+(`missing_program_id` where this one reports `schema_required`, for one).
+
+```js
+import { schemaFindings, programSchema, checkJsonSchema } from '@rhylthyme/timeline/schedule';
+
+schemaFindings(program);              // only the schema_* findings
+checkJsonSchema(value, programSchema('0.3.0-alpha'));
+// [{ keyword, path: ['tracks', 0, 'name'], message, fix }], [] when valid
+```
+
+Both functions are synchronous. The LabMCP instrument catalogue (about
+350 KB) that checks LabMCP instrument steps (`instrument.toolType`
+starting with `labmcp-`) is loaded separately in the browser:
+
+- In Node (`require` or `import` of `@rhylthyme/timeline/schedule`) it is
+  registered for you; nothing changes.
+- In a bundler, the `browser` export condition gives the module without it.
+  Programs without LabMCP steps never need it. For those with them, import
+  `@rhylthyme/timeline/schedule/labmcp-catalog` once, eagerly or lazily
+  (a separate chunk), before validating:
+
+  ```js
+  import { validateProgram, labmcp } from '@rhylthyme/timeline/schedule';
+  if (program.tracks.some((t) => t.steps.some(labmcp.isLabmcpStep)) && !labmcp.hasCatalog()) {
+    await import('@rhylthyme/timeline/schedule/labmcp-catalog');
+  }
+  const v = validateProgram(program);
+  ```
+
+  Until it is loaded, each LabMCP step gets an
+  `instrument_catalog_not_loaded` warning (not an error) instead of its
+  call checks; once it is loaded the findings are the same as in Node.
+  `labmcp.registerCatalog(json)` registers a catalogue you load yourself.
+
 In a page without a build step, `browser/schedule.js` is the same module
-as one script (about 470 KB, most of it the LabMCP instrument catalogue)
-that sets `window.RhylthymeSchedule`:
+as one script that sets `window.RhylthymeSchedule`, and
+`browser/labmcp-catalog.js` adds the catalogue (before or after it):
 
 ```html
-<script src="https://cdn.jsdelivr.net/npm/@rhylthyme/timeline@2.0.0-beta.6/browser/schedule.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@rhylthyme/timeline@2.0.0-beta.7/browser/schedule.js"></script>
+<!-- only for programs with LabMCP instrument steps: -->
+<script src="https://cdn.jsdelivr.net/npm/@rhylthyme/timeline@2.0.0-beta.7/browser/labmcp-catalog.js"></script>
 <script>
   const { valid, errors } = RhylthymeSchedule.validateProgram(program);
 </script>
 ```
 
+Sizes, before and after the catalogue was split out (2.0.0-beta.6 →
+unreleased):
+
+| | before | after |
+|---|---|---|
+| `browser/schedule.js` | 465 KB | 223 KB (+ 244 KB `browser/labmcp-catalog.js` when needed) |
+| esbuild bundle of `./schedule` (`--platform=browser`) | 658 KB | 209 KB |
+| same, minified | 338 KB | 112 KB (+ 226 KB lazy catalogue chunk when needed) |
+
 It agrees with the Python validator in the `rhylthyme` package:
-`test/parity.test.js` gives every program in rhylthyme-examples to both
-and requires the same verdict (CI runs it here and in `rhylthyme`).
+`test/parity.test.js` gives every program in rhylthyme-examples to both,
+along with schema-breaking mutations of each (of plain and of replicated
+tracks and steps), and requires the same verdict (CI runs it here and in
+`rhylthyme`).
 
 ## API
 
@@ -364,6 +699,7 @@ and requires the same verdict (CI runs it here and in `rhylthyme`).
 | `renderTimeline(container, program, opts?)` | Injects the SVG into a DOM element and returns the markup. |
 | `actualFromRun(record, program?, opts?)` | `{ [stepId]: { start, end } }` from a run record, keyed by expanded step id, ready to pass as `computeStepTimings`' `actual`. `opts.endsOnly` keeps only the ends, which is what a replay check feeds back so that every start has to come out of the trigger graph. Arguments may be given in either order. |
 | `timingsFromRun(program, record, opts?)` | `computeStepTimings(program, { actual: actualFromRun(record, program, opts) })`. |
+| `itinerary(program, opts?)` | `[{ stepId, name, trackId, trackName, instanceOf, instanceIndex, startSeconds, endSeconds, durationSeconds, startAt?, endAt?, needsStart, needsFinish, task }]`, one entry per expanded step, sorted by start then name. `instanceOf` / `instanceIndex` link a replicate instance, of a step or of its track, to its authored step (`null` otherwise). `opts.startAt` anchors the plan's start, `opts.finishAt` (wins) its end (an ISO string, a `Date` or epoch ms), and then `startAt` / `endAt` are ISO 8601 UTC strings, exactly as `analyzeSchedule` reports them; without an anchor they are absent. `opts.actual` and `opts.now` go to `computeStepTimings`. LabMCP steps with no duration get the generic instrument estimate; `itinerary` from `./schedule` applies the LabMCP catalogue estimates, as `analyzeSchedule` does. |
 | `runtimeStepId(entry, knownIds?)` | The expanded step id a record entry refers to: `<stepId>-r<instance>` for a replicated step, `<stepId>` otherwise, confirmed against `knownIds` when given. Python twin: `rhylthyme.history.replay.record_step_id`. |
 | `buildPlayerHtml(program, environment?)` (from `@rhylthyme/timeline/player`) | The interactive visualizer page as an HTML string, identical to the server's. Needs Node (reads `player/template.html`). |
 | `stepNeedsStart(step)` / `stepNeedsFinish(step)` | Whether the executor must start the step (manual gate, negative offset) / must end it (indefinite, variable with `triggerName`). |

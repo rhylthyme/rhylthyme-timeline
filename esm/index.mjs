@@ -14,6 +14,7 @@ export const {
   computeStepTimings,
   actualFromRun,
   timingsFromRun,
+  itinerary,
   runtimeStepId,
   stepNeedsStart,
   stepNeedsFinish,

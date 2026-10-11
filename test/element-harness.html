@@ -4,6 +4,32 @@
 <rhylthyme-timeline id="el" mode="player" speed="1"></rhylthyme-timeline>
 <pre id="results"></pre>
 <script src="../src/index.js"></script>
+<script>
+// Properties set before element.js defines the element (a deferred or lazy
+// script): they land as own properties of plain elements and must still go
+// through the element's setters once it upgrades.
+window.PRE_UPGRADE = (function () {
+  const make = (attrs) => {
+    const e = document.createElement('rhylthyme-timeline');
+    Object.keys(attrs).forEach((k) => e.setAttribute(k, attrs[k]));
+    return e;
+  };
+  // Attached: upgrades when the element is defined. Attribute first, then
+  // property: the property's labels must be the ones shown and reported.
+  const attached = make({ labels: '{"stop":"AttrStop"}', mode: 'player' });
+  attached.labels = { stop: 'PropStop', resume: (x) => 'Weiter' + (x === undefined ? '' : x) };
+  attached.mode = 'static';
+  attached.style.display = 'none';
+  document.documentElement.appendChild(attached);
+  // Detached: upgraded by hand with customElements.upgrade.
+  const detached = make({ labels: '{"stop":"AttrStop"}' });
+  detached.labels = { stop: 'PropStop' };
+  // Property only, no attribute.
+  const propOnly = make({});
+  propOnly.labels = { start: 'Los' };
+  return { attached, detached, propOnly };
+})();
+</script>
 <script src="../src/element.js"></script>
 <script src="../examples/programs.js"></script>
 <script id="cookies">window.RHYLTHYME_COOKIES = {
@@ -135,7 +161,11 @@
 };</script>
 <script>
 // Drives the element with a fake clock and records what a test can assert on.
-(function () {
+// Async only to let microtasks run (a removed element drops its run one
+// microtask after disconnect); every await is on an already-settled promise,
+// so the results are written before the load event and the DOM dump.
+(async function () {
+  const microtask = () => new Promise((resolve) => queueMicrotask(resolve));
   const out = { checks: {}, events: [], errors: [] };
   try {
     const el = document.getElementById('el');
@@ -285,6 +315,7 @@
     out.checks.runRecordGetterMatches = !!(rec2[0] && el2.runRecord && el2.runRecord.runId === rec2[0].record.runId);
     el2.stop();    // the run is already recorded: no second record
     el2.remove();  // nor on disconnect
+    await microtask();
     out.checks.recordsAfterStopAndRemove = rec2.length;
 
     // (b) stop() mid-run at speed 10 -> aborted
@@ -308,6 +339,8 @@
     el4.start();
     m4 += 30000; w4 += 30000; el4.tick();
     el4.remove();
+    out.records.abandonedSync = rec4.length; // decided a microtask later
+    await microtask();
     out.records.abandoned = rec4[0] ? rec4[0].record : null;
 
     // ---- declared variance factors (Phase 4) ---------------------------
@@ -494,6 +527,644 @@
     q4.setAttribute('data-predictions', 'not json');
     out.predicted.badAttribute = [q4.predictions, peelStart(q4)];
     q4.remove();
+
+    // ---- rt-step-began / rt-step-ended (issue #6) ----------------------
+    // One event per step start and end, whatever caused it, at the second
+    // of the transition rather than the tick that found it.
+    out.transitions = {};
+    const watch = (e) => {
+      const log = [];
+      for (const ev of ['rt-step-began', 'rt-step-ended', 'rt-step-start', 'rt-step-complete', 'rt-start', 'rt-stop', 'rt-complete']) {
+        e.addEventListener(ev, (x) => log.push([ev, x.detail.stepId || null, x.detail.time === undefined ? null : x.detail.time, x.detail.by || null]));
+      }
+      return log;
+    };
+    const onlySteps = (log) => log.filter((x) => x[0] === 'rt-step-began' || x[0] === 'rt-step-ended');
+
+    // (i) Thanksgiving to the end, in 120 s ticks so one tick finds several
+    //     transitions; then replay it (stop + start is a fresh run).
+    let mT = 0;
+    const t1 = makeEl(window.RHYLTHYME_EXAMPLES.thanksgiving_one_oven);
+    t1.setClock(() => mT);
+    const logT = watch(t1);
+    const advT = (sec) => { mT += sec * 1000; t1.tick(); };
+    const driveT = () => {
+      let g = 0;
+      while (t1.status === 'running' && g++ < 300) {
+        advT(120);
+        const st = t1.stepStates;
+        for (const id of Object.keys(st)) if (st[id] === 'waiting') t1.startStep(id);
+      }
+    };
+    out.transitions.stepIds = Object.keys(t1.stepStates);
+    t1.start();
+    out.transitions.firstAfterStart = onlySteps(logT).slice();
+    driveT();
+    out.transitions.status = t1.status;
+    out.transitions.full = logT.slice();
+    logT.length = 0;
+    t1.stop();
+    out.transitions.afterCompletedStop = onlySteps(logT).length;
+    t1.start();
+    advT(1300);      // turkey-prep has ended, the roast is running
+    t1.stop();       // the roast ends "abort"
+    out.transitions.replay = logT.slice();
+    t1.remove();
+
+    // (ii) replicate instances: one big tick runs the whole cookie program
+    let mC = 0;
+    const c1 = makeEl(window.RHYLTHYME_COOKIES);
+    c1.setClock(() => mC);
+    const logC = watch(c1);
+    c1.start();
+    mC += 5000 * 1000; c1.tick();
+    out.transitions.cookies = onlySteps(logC);
+    out.transitions.cookiesStatus = c1.status;
+    c1.remove();
+
+    // (iii) a person finishes an indefinite step: by "person"
+    let mR = 0;
+    const r1 = makeEl(RUNREC);
+    r1.setClock(() => mR);
+    const logR = watch(r1);
+    r1.start();
+    mR += 100000; r1.tick();
+    r1.completeStep('simmer');
+    mR += 5000; r1.tick();
+    out.transitions.person = onlySteps(logR);
+    r1.remove();
+
+    // (iv) seek: forward fires what it passes, backward fires nothing,
+    //      nothing fires twice
+    const s1 = makeEl(window.RHYLTHYME_COOKIES);
+    const logS = watch(s1);
+    s1.seek(1000);
+    out.transitions.seekForward = onlySteps(logS).slice();
+    logS.length = 0;
+    s1.seek(100);
+    out.transitions.seekBack = onlySteps(logS).slice();
+    s1.seek(2000);
+    out.transitions.seekOn = onlySteps(logS).slice();
+    s1.remove();
+
+    // (v) zero-length steps: each ends right after its own begin, before the
+    //     begins that wait on it, even when the waiting step's track comes first.
+    const tprog = (tracks) => ({
+      schemaVersion: '0.2.0-alpha', programId: 'zero', name: 'zero', environmentType: 'kitchen',
+      tracks: tracks.map((steps, i) => ({ trackId: 't' + i, name: 't' + i, steps: steps })),
+      resourceConstraints: [{ task: 'x', maxConcurrent: 5 }],
+    });
+    const fx = (id, sec, trig) => ({ stepId: id, name: id, task: 'x', duration: { type: 'fixed', seconds: sec }, startTrigger: trig || { type: 'programStart' } });
+    let mZ = 0;
+    const z1 = makeEl(tprog([
+      [fx('B', 10, { type: 'afterStep', stepId: 'Z2' })],
+      [fx('A', 10), fx('Z1', 0, { type: 'afterStep', stepId: 'A' }), fx('Z2', 0, { type: 'afterStep', stepId: 'Z1' })],
+    ]));
+    z1.setClock(() => mZ);
+    const logZ = watch(z1);
+    z1.start();
+    mZ += 30000; z1.tick();
+    out.transitions.zeroLength = onlySteps(logZ);
+    z1.remove();
+
+    // (vi) a handler that calls back into the element: stop() from an
+    //      rt-step-ended handler sees the rest of the batch out before its
+    //      abort ends and rt-stop, and nothing fires after rt-stop;
+    //      completeStep() from a handler keeps the time order.
+    let mH = 0;
+    const h1 = makeEl(tprog([[fx('A', 10), fx('B', 10, { type: 'afterStep', stepId: 'A' }), fx('C', 10, { type: 'afterStep', stepId: 'B' })]]));
+    h1.setClock(() => mH);
+    const logH = watch(h1);
+    let stopped = false;
+    h1.addEventListener('rt-step-ended', (x) => { if (!stopped && x.detail.stepId === 'A') { stopped = true; h1.stop(); } });
+    h1.start();
+    mH += 25000; h1.tick();
+    out.transitions.stopInHandler = logH.slice();
+    out.transitions.stopInHandlerStatus = h1.status;
+    h1.remove();
+
+    let mK = 0;
+    const k1 = makeEl(tprog([
+      [fx('A', 10), { stepId: 'V', name: 'V', task: 'x', duration: { type: 'indefinite', defaultSeconds: 100 }, startTrigger: { type: 'afterStep', stepId: 'A' } }],
+      [fx('P', 5), fx('Q', 20, { type: 'afterStep', stepId: 'P' })],
+    ]));
+    k1.setClock(() => mK);
+    const logK = watch(k1);
+    k1.addEventListener('rt-step-began', (x) => { if (x.detail.stepId === 'V') k1.completeStep('V'); });
+    k1.start();
+    mK += 40000; k1.tick();
+    out.transitions.completeInHandler = onlySteps(logK);
+    k1.remove();
+
+    // (viii) startStep() on a stopped player starts a run first, so the
+    //        step begins on a moving clock and fires rt-step-began.
+    let mG = 0;
+    const g1 = makeEl(tprog([[{ stepId: 'G', name: 'G', task: 'x', duration: { type: 'fixed', seconds: 10 }, startTrigger: { type: 'manual' } }]]));
+    g1.setClock(() => mG);
+    const logG = watch(g1);
+    out.transitions.startStepStopped = [g1.startStep('G'), g1.status];
+    mG += 20000; g1.tick();
+    out.transitions.startStepStoppedLog = logG.filter((x) => x[0] !== 'rt-tick');
+    g1.remove();
+
+    // (vii) delivery policies: dropped runs, rt-seek, stop() from a handler.
+    const P3 = out.policies = {};
+    const watchAll = (e) => {
+      const log = [];
+      for (const ev of ['rt-step-began', 'rt-step-ended', 'rt-start', 'rt-stop', 'rt-complete', 'rt-load', 'rt-run-record', 'rt-seek', 'rt-tick']) {
+        e.addEventListener(ev, (x) => {
+          const d = x.detail;
+          if (ev === 'rt-run-record') log.push([ev, d.outcome]);
+          else if (ev === 'rt-seek') log.push([ev, d.from, d.to]);
+          else if (ev === 'rt-load' || ev === 'rt-stop') log.push([ev]);
+          else if (ev === 'rt-tick' || ev === 'rt-start' || ev === 'rt-complete') log.push([ev, d.time]);
+          else log.push([ev, d.stepId, d.time, d.by]);
+        });
+      }
+      return log;
+    };
+    const noTicks = (log) => log.filter((x) => x[0] !== 'rt-tick');
+    // A runs 0-100 on its own track; B 0-50 then C 50-150 on another.
+    const DROP = tprog([[fx('A', 100)], [fx('B', 50), fx('C', 100, { type: 'afterStep', stepId: 'B' })]]);
+    const OTHER = tprog([[fx('X', 10)]]);
+    const recordSteps = (r) => r.steps.map((x) => [x.stepId, x.actual || null, x.endedBy || null]);
+
+    // (a) the program is replaced mid-run
+    let mD = 0;
+    const d1 = makeEl(DROP);
+    d1.setClock(() => mD);
+    const logD1 = watchAll(d1);
+    let recD1 = null;
+    d1.addEventListener('rt-run-record', (x) => { recD1 = x.detail.record; });
+    d1.start();
+    mD += 60000; d1.tick();
+    logD1.length = 0;
+    d1.program = JSON.parse(JSON.stringify(OTHER));
+    P3.replaced = logD1.slice();
+    P3.replacedRecord = recD1 ? [recD1.outcome, recordSteps(recD1)] : null;
+    mD += 500000; d1.tick();
+    P3.afterReplaced = logD1.slice(P3.replaced.length);
+    d1.remove();
+
+    // (b) the program is replaced from a handler in the middle of a batch:
+    //     the rest of the batch first, then the dropped ends, no rt-tick.
+    let mD2 = 0;
+    const d2 = makeEl(tprog([[fx('A', 10), fx('B', 10, { type: 'afterStep', stepId: 'A' }), fx('C', 10, { type: 'afterStep', stepId: 'B' })]]));
+    d2.setClock(() => mD2);
+    const logD2 = watchAll(d2);
+    let swapped = false;
+    d2.addEventListener('rt-step-ended', (x) => { if (!swapped && x.detail.stepId === 'A') { swapped = true; d2.program = JSON.parse(JSON.stringify(OTHER)); } });
+    d2.start();
+    mD2 += 25000; d2.tick();
+    P3.replacedInHandler = logD2.slice();
+    d2.remove();
+
+    // (c) removed from the document mid-run: nothing during remove(), the
+    //     dropped ends and the record a microtask later; put back, it stays still.
+    let mD3 = 0;
+    const d3 = makeEl(DROP);
+    d3.setClock(() => mD3);
+    const logD3 = watchAll(d3);
+    d3.start();
+    mD3 += 60000; d3.tick();
+    logD3.length = 0;
+    d3.remove();
+    P3.removedSync = logD3.slice();
+    await microtask();
+    P3.removed = logD3.slice();
+    document.body.appendChild(d3);
+    mD3 += 500000; d3.tick();
+    document.dispatchEvent(new Event('visibilitychange'));
+    P3.afterRemoved = logD3.slice(P3.removed.length);
+    P3.afterRemovedStatus = d3.status;
+    d3.stop();
+    P3.afterRemovedStop = logD3.slice(P3.removed.length + P3.afterRemoved.length);
+    d3.remove();
+
+    // (d) moved: appendChild to another parent, and remove() + re-insert in
+    //     one script. The run goes on, nothing is dropped, the clock resumes.
+    let mD4 = 0;
+    const d4 = makeEl(DROP);
+    d4.setClock(() => mD4);
+    const logD4 = watchAll(d4);
+    d4.start();
+    mD4 += 60000; d4.tick();
+    logD4.length = 0;
+    const host2 = document.createElement('div');
+    document.body.appendChild(host2);
+    host2.appendChild(d4);
+    await microtask();
+    d4.remove();
+    document.body.appendChild(d4);
+    await microtask();
+    P3.moved = logD4.slice();
+    P3.movedStatus = d4.status;
+    P3.movedTimer = d4._timer !== null;
+    mD4 += 100000; d4.tick();
+    mD4 += 5000; d4.tick();  // completion is confirmed three seconds later
+    P3.movedRunOn = noTicks(logD4);
+    P3.movedRecord = d4.runRecord ? d4.runRecord.outcome : null;
+    d4.stop();
+    host2.remove();
+    d4.remove();
+
+    // (f) stop() from a handler, with every event logged: the rest of the
+    //     batch, the abort end, rt-stop, then nothing (no rt-tick either).
+    let mD5 = 0;
+    const d5 = makeEl(tprog([[fx('A', 10), fx('B', 10, { type: 'afterStep', stepId: 'A' }), fx('C', 10, { type: 'afterStep', stepId: 'B' })]]));
+    d5.setClock(() => mD5);
+    const logD5 = watchAll(d5);
+    let stopped5 = false;
+    d5.addEventListener('rt-step-ended', (x) => { if (!stopped5 && x.detail.stepId === 'A') { stopped5 = true; d5.stop(); } });
+    d5.start();
+    mD5 += 25000; d5.tick();
+    P3.stopInHandler = logD5.slice();
+    d5.remove();
+
+    // (e) seek: rt-seek after the step events it causes; backward and no-op.
+    const s2 = makeEl(window.RHYLTHYME_COOKIES);
+    const logS2 = watchAll(s2);
+    s2.seek(0);
+    P3.seekNoopAtZero = logS2.slice();
+    s2.seek(1000);
+    P3.seekForward = logS2.slice();
+    logS2.length = 0;
+    s2.seek(100);
+    P3.seekBack = logS2.slice();
+    logS2.length = 0;
+    s2.seek(100);
+    P3.seekSame = logS2.slice();
+    s2.seek(2000);
+    P3.seekOn = logS2.slice();
+    logS2.length = 0;
+    s2.start();
+    s2.seek(3000);
+    P3.seekWhileRunning = noTicks(logS2).filter((x) => x[0] === 'rt-seek');
+    s2.stop();
+    s2.remove();
+
+    // (g) an idle element has no run to drop: removed for good (never
+    //     started; stopped after a run; program replaced while detached),
+    //     put back, started, it runs normally.
+    const idleCase = async (prep) => {
+      let mI = 0;
+      const e = makeEl(DROP);
+      e.setClock(() => mI);
+      const log = watchAll(e);
+      await prep(e, () => { mI += 10000; e.tick(); });
+      log.length = 0;
+      e.remove();
+      await microtask();
+      const removed = log.slice();
+      document.body.appendChild(e);
+      e.start();
+      mI += 60000; e.tick();
+      const res = { removed: removed, run: noTicks(log).slice(removed.length), status: e.status, time: e.currentTime };
+      e.stop();
+      e.remove();
+      return res;
+    };
+    P3.idleNeverStarted = await idleCase(async () => {});
+    P3.idleStopped = await idleCase(async (e, adv) => { e.start(); adv(); e.stop(); });
+    {
+      let mI = 0;
+      const e = makeEl(DROP);
+      e.setClock(() => mI);
+      const log = watchAll(e);
+      e.start();
+      mI += 10000; e.tick();
+      log.length = 0;
+      e.remove();
+      e.program = JSON.parse(JSON.stringify(DROP));  // drops the run, at once
+      await microtask();                             // nothing left to drop
+      document.body.appendChild(e);
+      e.start();
+      mI += 60000; e.tick();
+      P3.idleReplacedWhileDetached = { log: noTicks(log), status: e.status, time: e.currentTime };
+      e.stop();
+      e.remove();
+    }
+
+    // (h) a dropped run is inert once put back: no method fires anything
+    //     for it until stop() (rt-stop only); then start() is a fresh run.
+    {
+      let mI = 0;
+      const e = makeEl(DROP);
+      e.setClock(() => mI);
+      const log = watchAll(e);
+      for (const ev of ['rt-step-start', 'rt-step-complete', 'rt-pause']) {
+        e.addEventListener(ev, (x) => log.push([ev, x.detail.stepId, x.detail.time]));
+      }
+      e.start();
+      mI += 60000; e.tick();
+      e.remove();
+      await microtask();
+      document.body.appendChild(e);
+      log.length = 0;
+      const calls = {
+        completeA: e.completeStep('A'),
+        completeC: e.completeStep('C'),
+        startB: e.startStep('B'),
+      };
+      e.start(); e.pause(); e.toggle();
+      mI += 10000; e.tick();
+      P3.inertRunning = { calls: calls, log: log.slice(), status: e.status, time: e.currentTime };
+      e.stop();
+      P3.inertStop = log.slice(P3.inertRunning.log.length);
+      log.length = 0;
+      e.start();
+      mI += 60000; e.tick();
+      P3.inertFresh = { log: noTicks(log), status: e.status, time: e.currentTime };
+      e.stop();
+      e.remove();
+      // Dropped while paused: seek() and start() are ignored as well.
+      let mJ = 0;
+      const f = makeEl(DROP);
+      f.setClock(() => mJ);
+      const logF = watchAll(f);
+      f.start();
+      mJ += 10000; f.tick();
+      f.pause();
+      f.remove();
+      await microtask();
+      document.body.appendChild(f);
+      logF.length = 0;
+      f.seek(500);
+      f.start();
+      mJ += 10000; f.tick();
+      P3.inertPaused = { log: logF.slice(), status: f.status, time: f.currentTime };
+      f.stop();
+      f.remove();
+    }
+
+    // (i) a dropped end is never before its own begin: paused at 60, sought
+    //     back to 20, program replaced. C began at 50, so it ends at 50.
+    {
+      let mI = 0;
+      const e = makeEl(DROP);
+      e.setClock(() => mI);
+      const log = watchAll(e);
+      e.start();
+      mI += 60000; e.tick();
+      e.pause();
+      e.seek(20);
+      log.length = 0;
+      e.program = JSON.parse(JSON.stringify(OTHER));
+      P3.droppedAfterSeekBack = log.slice();
+      e.remove();
+    }
+
+    // (j) an await between remove() and the re-insert is a removal for
+    //     good: the run is dropped and the re-inserted element is inert.
+    {
+      let mI = 0;
+      const e = makeEl(DROP);
+      e.setClock(() => mI);
+      const log = watchAll(e);
+      e.start();
+      mI += 10000; e.tick();
+      log.length = 0;
+      e.remove();
+      await microtask();
+      document.body.appendChild(e);
+      mI += 10000; e.tick();
+      P3.awaitThenReinsert = { log: log.slice(), status: e.status, time: e.currentTime, timer: e._timer !== null };
+      e.stop();
+      e.remove();
+    }
+
+    // (k) seek() from a handler during a seek: rt-seek events in call
+    //     order, each from equal to the previous to.
+    {
+      const e = makeEl(DROP);
+      const log = watchAll(e);
+      let once = false;
+      e.addEventListener('rt-step-ended', () => { if (!once) { once = true; e.seek(70); } });
+      e.seek(60);
+      P3.nestedSeek = log.slice();
+      e.stop();
+      e.remove();
+    }
+
+    // ---- translatable labels and accessible buttons (issue #7) ---------
+    out.labels = {};
+    const buttonInfo = (e, sel) => {
+      const b = e.shadowRoot.querySelector(sel);
+      if (!b) return null;
+      const glyph = b.querySelector('[aria-hidden="true"]');
+      return [b.textContent, b.getAttribute('aria-label'), glyph ? glyph.textContent : null];
+    };
+    let lm = 0;
+    const l1 = makeEl(window.RHYLTHYME_EXAMPLES.thanksgiving_one_oven);
+    l1.setClock(() => lm);
+    out.labels.defaultStart = buttonInfo(l1, '.controls button[data-act="start"]');
+    out.labels.defaultStop = buttonInfo(l1, '.controls button[data-act="stop"]');
+    out.labels.defaultStatus = l1.shadowRoot.querySelector('.status').textContent;
+    out.labels.defaultKeys = Object.keys(l1.labels).length;
+    l1.start();
+    for (let i = 0; i < 400 && !l1.shadowRoot.querySelector('button[data-step-start]'); i++) { lm += 60000; l1.tick(); }
+    out.labels.defaultPause = buttonInfo(l1, '.controls button[data-act="pause"]');
+    out.labels.defaultStepStart = buttonInfo(l1, 'button[data-step-start]');
+    out.labels.defaultStepDone = buttonInfo(l1, 'button[data-step-done]');
+    l1.pause();
+    out.labels.defaultResume = buttonInfo(l1, '.controls button[data-act="start"]');
+    // Partial French overrides: strings, a {0} placeholder and functions.
+    l1.labels = {
+      resume: 'Reprendre', stop: 'Arrêter', speed: 'Vitesse', statusPaused: 'en pause',
+      startStep: (name) => `Démarrer : ${name}`, doneStep: 'Terminé : {0}',
+      actionsHint: '<b>not markup</b>', bogusKey: 'ignored', pause: 42,
+    };
+    out.labels.frResume = buttonInfo(l1, '.controls button[data-act="start"]');
+    out.labels.frStop = buttonInfo(l1, '.controls button[data-act="stop"]');
+    out.labels.frStepStart = buttonInfo(l1, 'button[data-step-start]');
+    out.labels.frStepDone = buttonInfo(l1, 'button[data-step-done]');
+    out.labels.frSpeed = l1.shadowRoot.querySelector('.controls label').firstChild.textContent;
+    out.labels.frStatus = [l1.shadowRoot.querySelector('.status').textContent, l1.shadowRoot.querySelector('.status').getAttribute('data-status')];
+    out.labels.frHintEscaped = l1.shadowRoot.querySelector('.actions .hint').textContent;
+    out.labels.ignoredKeys = [l1.labels.bogusKey === undefined, l1.labels.pause === 'Pause'];
+    l1.start();
+    out.labels.untranslatedPause = buttonInfo(l1, '.controls button[data-act="pause"]');
+    // A function override that throws falls back to English.
+    l1.labels = { startStep: () => { throw new Error('boom'); } };
+    out.labels.throwingFallsBack = buttonInfo(l1, 'button[data-step-start]')[0].indexOf('▶ Start: ') === 0;
+    // null clears every override.
+    l1.labels = null;
+    out.labels.cleared = buttonInfo(l1, '.controls button[data-act="pause"]');
+    l1.remove();
+    // The factor form.
+    const l2 = makeEl(withFactors());
+    l2.labels = { factorsTitle: 'Avant de commencer', factorsStart: 'Commencer', factorSkip: '— passer —',
+      factorNotNumber: (text) => `« ${text} » n'est pas un nombre` };
+    l2.start();
+    out.labels.formTitle = l2.shadowRoot.querySelector('.factors h3').textContent;
+    out.labels.formStart = buttonInfo(l2, '.factors button[data-act="factors-start"]');
+    out.labels.formSkip = l2.shadowRoot.querySelector('.factors select[data-factor="oven"] option').textContent;
+    l2.shadowRoot.querySelector('.factors [data-factor="turkeyKg"]').value = 'lourd';
+    l2.shadowRoot.querySelector('.factors button[data-act="factors-start"]').click();
+    out.labels.formError = l2.shadowRoot.querySelector('.factors [data-factor-error="turkeyKg"]:not([hidden])').textContent;
+    l2.remove();
+    const l3 = makeEl(withFactors());
+    l3.start();
+    out.labels.defaultFormStart = buttonInfo(l3, '.factors button[data-act="factors-start"]');
+    l3.remove();
+    // The empty state keeps its <code> markup around the translated text.
+    const l4 = document.createElement('rhylthyme-timeline');
+    document.body.appendChild(l4);
+    out.labels.emptyDefault = l4.shadowRoot.querySelector('.empty').innerHTML;
+    l4.labels = { noProgram: 'Aucun programme : propriété {0} ou URL {1}.' };
+    out.labels.emptyFr = l4.shadowRoot.querySelector('.empty').innerHTML;
+    // A function gets the plain words, never internal placeholders.
+    l4.labels = { noProgram: (p, a) => 'Kein Programm: ' + String(p).toUpperCase() + ' / ' + a + ' <b>' };
+    out.labels.emptyFn = l4.shadowRoot.querySelector('.empty').innerHTML;
+    l4.remove();
+    // Changing labels while the factor form is open keeps what was typed
+    // and the error on screen (re-worded).
+    const l5 = makeEl(withFactors());
+    l5.start();
+    const kg = () => l5.shadowRoot.querySelector('.factors [data-factor="turkeyKg"]');
+    const kgError = () => l5.shadowRoot.querySelector('.factors [data-factor-error="turkeyKg"]');
+    kg().value = '6.5';
+    l5.shadowRoot.querySelector('.factors select[data-factor="oven"]').value = 'gas';
+    l5.labels = { factorsTitle: 'Avant' };
+    out.labels.typedKept = [kg().value, l5.shadowRoot.querySelector('.factors select[data-factor="oven"]').value,
+      l5.shadowRoot.querySelector('.factors h3').textContent];
+    kg().value = 'heavy';
+    l5.shadowRoot.querySelector('.factors button[data-act="factors-start"]').click();
+    out.labels.errorBefore = [kgError().textContent, kgError().hidden];
+    l5.labels = { factorNotNumber: 'pas un nombre : {0}' };
+    out.labels.errorAfter = [kg().value, kgError().textContent, kgError().hidden, l5.status];
+    l5.remove();
+    // Chart text: unchanged by default, translated keys reach the renderer.
+    const chartTexts = (e) => Array.prototype.map.call(e.shadowRoot.querySelectorAll('.chart svg text'), (t) => t.textContent);
+    const l6 = makeEl(window.RHYLTHYME_EXAMPLES.thanksgiving_one_oven);
+    out.labels.chartDefault = chartTexts(l6);
+    const reference = document.createElement('div');
+    reference.innerHTML = Rhylthyme.renderTimelineSvg(
+      l6._expanded, { timings: l6.timings, now: 0, states: l6.stepStates, width: Math.max(820, l6.clientWidth || 0) });
+    out.labels.chartDefaultSame = l6.shadowRoot.querySelector('.chart').innerHTML === reference.innerHTML;
+    l6.labels = { chartSubtitle: (tracks, total, seconds) => tracks + ' pistes · ' + total + ' · ' + seconds + ' s',
+      legendDependency: 'dépendance', legendManual: 'manuel' };
+    out.labels.chartFr = chartTexts(l6);
+    l6.remove();
+    // Opt-in locale formatting.
+    const l7 = makeEl(window.RHYLTHYME_EXAMPLES.thanksgiving_one_oven);
+    l7.timeFormat = 'seconds';
+    out.labels.loc = { plainSeconds: l7.formatTime(45) };
+    l7.timeFormat = 'minutes';
+    out.labels.loc.plainMinutes = l7.formatTime(125);
+    out.labels.loc.plainSpeed = l7.shadowRoot.querySelector('select[data-set="speed"] option').textContent;
+    l7.locale = 'de';
+    out.labels.loc.attr = l7.getAttribute('locale');
+    out.labels.loc.deMinutes = l7.formatTime(125);
+    out.labels.loc.deSpeed = l7.shadowRoot.querySelector('select[data-set="speed"] option').textContent;
+    l7.timeFormat = 'seconds';
+    out.labels.loc.deSeconds = l7.formatTime(45);
+    out.labels.loc.intlSeconds = new Intl.NumberFormat('de', { style: 'unit', unit: 'second', unitDisplay: 'narrow' }).format(45);
+    l7.locale = 'ar-EG';
+    l7.timeFormat = 'minutes';
+    out.labels.loc.arMinutes = l7.formatTime(125);
+    l7.locale = 'en-US';
+    l7.timeFormat = 'clock';
+    l7.startAt = '2026-01-01T13:05:09';
+    out.labels.loc.enClock = l7.formatTime(0);
+    l7.locale = 'not a locale!!';
+    out.labels.loc.badClock = l7.formatTime(0);
+    l7.locale = null;
+    out.labels.loc.cleared = [l7.hasAttribute('locale'), l7.formatTime(0)];
+    l7.remove();
+
+    // The labels attribute: JSON strings, declared before the element
+    // upgrades, then changed, broken, removed and mixed with the property.
+    const la = out.labels.attr = {};
+    const warnings = [];
+    const realWarn = console.warn;
+    console.warn = (...args) => { warnings.push(args.join(' ')); };
+    try {
+      const host = document.createElement('div');
+      document.body.appendChild(host);
+      host.innerHTML = '<rhylthyme-timeline mode="player" locale="de" labels=\'{"stop":"Arrêter","startStep":"Démarrer : {0}","speedOption":"{1} fois","pause":7}\'></rhylthyme-timeline>';
+      const a1 = host.firstElementChild;
+      la.upgraded = a1.shadowRoot !== null;
+      la.declarativeLocale = [a1.locale, a1.formatTime(125)];
+      let am = 0;
+      a1.setClock(() => am);
+      a1.program = JSON.parse(JSON.stringify(window.RHYLTHYME_EXAMPLES.thanksgiving_one_oven));
+      la.declStop = buttonInfo(a1, '.controls button[data-act="stop"]');
+      la.declSpeed = a1.shadowRoot.querySelector('select[data-set="speed"] option').textContent;
+      la.declGetter = [a1.labels.stop, a1.labels.startStep, a1.labels.pause, a1.labels.start];
+      a1.start();
+      for (let i = 0; i < 400 && !a1.shadowRoot.querySelector('button[data-step-start]'); i++) { am += 60000; a1.tick(); }
+      la.declStepStart = buttonInfo(a1, 'button[data-step-start]');
+      a1.pause();
+      la.warningsAfterDecl = warnings.length;
+      // Changing the attribute replaces the table.
+      a1.setAttribute('labels', '{"resume":"Reprendre"}');
+      la.changedResume = buttonInfo(a1, '.controls button[data-act="start"]');
+      la.changedStop = buttonInfo(a1, '.controls button[data-act="stop"]');
+      // Invalid JSON (and JSON that is not an object): one warning each,
+      // the labels in effect stay.
+      a1.setAttribute('labels', '{"resume": Reprendre');
+      la.invalidWarnings = warnings.length;
+      la.invalidKept = buttonInfo(a1, '.controls button[data-act="start"]');
+      a1.setAttribute('labels', '["stop"]');
+      la.arrayWarnings = warnings.length;
+      la.arrayKept = a1.labels.resume;
+      // The property set after the attribute wins, and the getter says so.
+      a1.labels = { resume: (x) => 'Weiter' + (x === undefined ? '' : x) };
+      la.propertyWins = buttonInfo(a1, '.controls button[data-act="start"]');
+      la.propertyAttrUntouched = a1.getAttribute('labels');
+      // Removing the attribute leaves labels the property supplied.
+      a1.removeAttribute('labels');
+      la.removeKeepsProperty = buttonInfo(a1, '.controls button[data-act="start"]');
+      // The attribute set after the property wins.
+      a1.setAttribute('labels', '{"resume":"Continuer"}');
+      la.attributeWins = [buttonInfo(a1, '.controls button[data-act="start"]'), a1.labels.resume];
+      // Removing it now clears what it supplied: back to English.
+      a1.removeAttribute('labels');
+      la.removed = [buttonInfo(a1, '.controls button[data-act="start"]'), a1.labels.resume];
+      // An empty attribute is no labels, without a warning.
+      a1.setAttribute('labels', '{"stop":"Arrêter"}');
+      a1.setAttribute('labels', '');
+      la.empty = [buttonInfo(a1, '.controls button[data-act="stop"]'), warnings.length];
+      // Writing the attribute again with the value it already has, after the
+      // property took over, still takes the table back: last setter wins.
+      a1.setAttribute('labels', '{"stop":"AttrStop"}');
+      a1.labels = { stop: 'PropStop' };
+      a1.setAttribute('labels', '{"stop":"AttrStop"}');
+      la.sameValueAfterProperty = [a1.labels.stop, buttonInfo(a1, '.controls button[data-act="stop"]')];
+      a1.removeAttribute('labels');
+      la.sameValueThenRemoved = a1.labels.stop;
+      // An invalid attribute before upgrade: English, one warning.
+      host.innerHTML = '<rhylthyme-timeline labels="not json"></rhylthyme-timeline>';
+      la.invalidDecl = [host.firstElementChild.labels.stop, warnings.length];
+      host.remove();
+    } finally {
+      console.warn = realWarn;
+    }
+    la.warnings = warnings;
+
+    // Properties set before the element was defined (see the script before
+    // element.js): the class's accessors are not hidden, and the property
+    // wins over an attribute that was also there at upgrade.
+    const pu = out.labels.preUpgrade = {};
+    const P = window.PRE_UPGRADE;
+    const prog = () => JSON.parse(JSON.stringify(window.RHYLTHYME_EXAMPLES.thanksgiving_one_oven));
+    pu.attachedOwn = [Object.prototype.hasOwnProperty.call(P.attached, 'labels'), Object.prototype.hasOwnProperty.call(P.attached, 'mode')];
+    pu.attachedMode = [P.attached.mode, P.attached.getAttribute('mode')];
+    P.attached.mode = 'player';
+    P.attached.program = prog();
+    pu.attachedLabels = [P.attached.labels.stop, P.attached.labels.start, buttonInfo(P.attached, '.controls button[data-act="stop"]')];
+    pu.attachedAttrKept = P.attached.getAttribute('labels');
+    // The attribute set again afterwards wins as usual.
+    P.attached.setAttribute('labels', '{"stop":"AttrStop"}');
+    pu.attachedAttrAfter = [P.attached.labels.stop, buttonInfo(P.attached, '.controls button[data-act="stop"]')];
+    P.attached.remove();
+    pu.detachedBefore = P.detached.shadowRoot === null;
+    customElements.upgrade(P.detached);
+    pu.detachedOwn = Object.prototype.hasOwnProperty.call(P.detached, 'labels');
+    pu.detachedLabels = [P.detached.labels.stop, P.detached._labels.stop];
+    customElements.upgrade(P.propOnly);
+    pu.propOnly = [Object.prototype.hasOwnProperty.call(P.propOnly, 'labels'), P.propOnly.labels.start, P.propOnly.labels.stop];
 
     // (d) programVersion parity: the same three programs are hashed in Node
     // with tools/hash-program.js. Base64 so multi-byte characters survive

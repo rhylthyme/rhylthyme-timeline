@@ -5,6 +5,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const G = require("../src/schedule/galago.js");
+require("../src/schedule/labmcp-catalog.js"); // as the Node entry does
 const S = require("../src/schedule/schedule.js");
 const CASES = require("./fixtures/schedule/galago-command-cases.json");
 
@@ -25,6 +26,7 @@ function program(...steps) {
   return {
     programId: "shake-plate", name: "Shake a plate", schemaVersion: "0.2.0-alpha",
     tracks: [{ trackId: "bench", name: "Bench", steps }],
+    resourceConstraints: [],
   };
 }
 const load = { stepId: "load", name: "Load", duration: { type: "fixed", seconds: 3 }, startTrigger: { type: "programStart" } };

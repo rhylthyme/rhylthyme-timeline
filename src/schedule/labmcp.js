@@ -18,9 +18,35 @@
 //
 // Workcells (addresses, the lab's own limits) never reach this server; a
 // workcell check is `rhylthyme validate --workcell` on the lab machine.
+//
+// The catalogue (about 350 KB) is not required here: it is registered with
+// registerCatalog(). The Node entry (src/schedule/index.js) registers it;
+// the browser entry (src/schedule/browser.js) does not, and a page that has
+// LabMCP steps loads it with src/schedule/labmcp-catalog.js (the subpath
+// @rhylthyme/timeline/schedule/labmcp-catalog) or browser/labmcp-catalog.js.
+// Until then a LabMCP step gets one instrument_catalog_not_loaded warning
+// instead of its call checks, and estimates use no schema defaults.
 "use strict";
 
-const CATALOG = require("./labmcp-catalog.json");
+let CATALOG = null;
+
+// Use `catalog` (labmcp-catalog.json's contents) for every LabMCP check.
+// Registering again replaces it. Returns the catalogue.
+function registerCatalog(catalog) {
+  if (!_isObj(catalog) || !_isObj(catalog.packages) || !_isObj(catalog.source)) {
+    throw new TypeError("registerCatalog: expected the LabMCP catalogue (labmcp-catalog.json), an object with packages and source");
+  }
+  CATALOG = catalog;
+  return catalog;
+}
+
+function hasCatalog() {
+  return CATALOG !== null;
+}
+
+// The catalogue's parts, empty while none is registered.
+const _compat = () => (CATALOG && CATALOG.compat) || {};
+const _limitTargets = () => (CATALOG && CATALOG.limitTargets) || {};
 
 const PREFIX = "labmcp-";
 const DEFAULT_SECONDS = 10;
@@ -197,9 +223,9 @@ function schemaProblems(schema, params) {
 // A catalogued server, with the galago commands it can stand in for
 // (catalogue `compat`, from rhylthyme_labmcp/compat.py) among its tools.
 function serverEntry(pkg) {
-  const entry = CATALOG.packages[pkg];
+  const entry = CATALOG && CATALOG.packages[pkg];
   if (!entry || entry.error) return null;
-  const extra = (CATALOG.compat || {})[pkg];
+  const extra = _compat()[pkg];
   if (!extra) return entry;
   const tools = Object.assign({}, entry.tools || {});
   for (const [command, spec] of Object.entries(extra)) {
@@ -236,7 +262,7 @@ function _limitedValues(pkg, command, params) {
       out.push([name, match[2], params[match[2]]]);
     }
   }
-  const targets = (CATALOG.limitTargets || {})[pkg] || {};
+  const targets = _limitTargets()[pkg] || {};
   if (Object.values(targets).some((byTool) => command in byTool)) {
     const [merged] = _withDefaults(pkg, command, params);
     for (const [name, byTool] of Object.entries(targets)) {
@@ -272,6 +298,7 @@ function _limitProblems(pkg, command, params) {
 // [[code, problem]] for one call, as rhylthyme_labmcp.checks.call_problems
 // with the server's default limits.
 function callProblems(pkg, command, params) {
+  if (!CATALOG) return [["instrument_catalog_not_loaded", `the LabMCP catalogue is not loaded; ${pkg} ${command} not checked`]];
   const entry = serverEntry(pkg) || { tools: {} };
   const spec = entry.tools[command];
   if (!spec) {
@@ -322,7 +349,7 @@ function estimateCall(pkg, command, params) {
   if (timeout && timeout[1] > 0) {
     return { seconds: timeout[1], source: "params", detail: detail(timeout[0]) + " (an upper bound)" };
   }
-  const typical = (((CATALOG.compat || {})[pkg] || {})[command] || {}).estimateSeconds;
+  const typical = ((_compat()[pkg] || {})[command] || {}).estimateSeconds;
   if (typical) return { seconds: typical, source: "default", detail: "" };
   return { seconds: DEFAULT_SECONDS, source: "default", detail: "" };
 }
@@ -383,7 +410,7 @@ function _ownCalls(inst) {
 // [{code, message, where, fix, severity}], as rhylthyme_labmcp.check_calls.
 function instrumentFindings(program) {
   const out = [];
-  const version = CATALOG.source.labmcp || "";
+  const version = (CATALOG && CATALOG.source.labmcp) || "";
   for (const track of (program && program.tracks) || []) {
     for (const step of (track && track.steps) || []) {
       if (!isLabmcpStep(step)) continue;
@@ -391,6 +418,15 @@ function instrumentFindings(program) {
       const where = `step:${id}`;
       const prefix = `Step ${pyRepr(String(id))}`;
       const inst = step.instrument;
+      if (!CATALOG) {
+        out.push({
+          severity: "warning", code: "instrument_catalog_not_loaded", where,
+          fix: "Load the LabMCP catalogue before validating: import '@rhylthyme/timeline/schedule/labmcp-catalog' " +
+            "(or include browser/labmcp-catalog.js after browser/schedule.js).",
+          message: `${prefix}: the LabMCP catalogue is not loaded; ${inst.tool} (${inst.toolType}) calls not checked`,
+        });
+        continue;
+      }
       for (const call of _ownCalls(inst)) {
         if (!serverEntry(inst.toolType)) {
           out.push({
@@ -445,6 +481,7 @@ function withEstimates(program) {
 }
 
 module.exports = {
-  CATALOG, DEFAULT_SECONDS, callProblems, doseSeconds, estimateCall, fmtG, instrumentFindings, timingProblems,
+  get CATALOG() { return CATALOG; },
+  registerCatalog, hasCatalog, DEFAULT_SECONDS, callProblems, doseSeconds, estimateCall, fmtG, instrumentFindings, timingProblems,
   isLabmcpStep, pyRepr, schemaProblems, serverEntry, stepEstimate, withEstimates,
 };

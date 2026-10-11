@@ -10,6 +10,6 @@ cd "$ROOT" && npm pack --silent --pack-destination "$WORK" >/dev/null
 cd "$WORK"
 printf '{ "name": "types-check", "private": true, "type": "module" }\n' > package.json
 npm install --silent --no-audit --no-fund ./rhylthyme-timeline-*.tgz
-cp "$ROOT"/test/types/usage.ts "$ROOT"/test/types/usage-cjs.cts "$ROOT"/test/types/usage-element.ts "$ROOT"/test/types/tsconfig.json .
+cp "$ROOT"/test/types/usage.ts "$ROOT"/test/types/usage-cjs.cts "$ROOT"/test/types/usage-element.ts "$ROOT"/test/types/usage-labmcp.ts "$ROOT"/test/types/tsconfig.json .
 npx -y -p typescript@5 tsc -p .
 echo "types: OK"
