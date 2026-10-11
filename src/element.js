@@ -26,6 +26,11 @@
  *   no-factor-prompt  present: never show the variance-factor form (presets still recorded)
  *   data-predictions  JSON object of history-based duration predictions, the same shape
  *                as the `predictions` property below
+ *   labels       translations as a JSON object of strings ('{"stop":"Arrêter",
+ *                "startStep":"Démarrer : {0}"}'), the attribute form of the `labels`
+ *                property below. Text that is not a JSON object is ignored with a
+ *                console warning and the labels in effect stay; removing the
+ *                attribute clears the labels it supplied
  *
  * Methods
  *   start() pause() stop() toggle() seek(seconds)
@@ -62,7 +67,10 @@
  *                         may use {0}, {1}... for the arguments; a function receives
  *                         them, e.g. { startStep: function (name) { return 'Démarrer : ' + name; } }.
  *                         Reading it returns the whole table in effect. Glyphs are kept
- *                         out of the text (aria-hidden); buttons carry an aria-label
+ *                         out of the text (aria-hidden); buttons carry an aria-label.
+ *                         As with factors / data-factors, the property and the labels
+ *                         attribute each replace the whole table: whichever was set
+ *                         last wins, and the getter reports that one
  *
  * Events (bubbling, composed; detail carries time and step ids)
  *   rt-start rt-pause rt-stop rt-tick rt-step-start rt-step-complete rt-complete rt-load
@@ -564,7 +572,7 @@
   }
 
   class RhylthymeTimeline extends HTMLElement {
-    static get observedAttributes() { return ['src', 'mode', 'speed', 'time-format', 'start-at', 'theme', 'view', 'data-factors', 'no-factor-prompt', 'data-predictions', 'locale']; }
+    static get observedAttributes() { return ['src', 'mode', 'speed', 'time-format', 'start-at', 'theme', 'view', 'data-factors', 'no-factor-prompt', 'data-predictions', 'locale', 'labels']; }
     constructor() {
       super();
       this._program = null;
@@ -596,6 +604,8 @@
       this._factorAnswers = {};    // ...coerced against the declared factors
       this._factorsAsked = false;  // the form has been shown (and submitted) for this run
       this._factorsOpen = false;   // the form is on screen right now
+      this._labels = {};           // translations in effect (see `labels`)
+      this._labelsSource = null;   // ...supplied by 'attribute' | 'property' | null
       this._predictions = {};      // {authored stepId: {seconds, low, high, basis}}
       this._projected = null;      // program copy with predicted defaultSeconds
       this._predictedAnchors = {}; // {gated stepId: seconds used for its anchor}
@@ -640,6 +650,7 @@
       if (name === 'src' && newV) this._fetch(newV);
       else if (name === 'data-factors') { this._applyFactors(parseFactorAttribute(newV), 'attribute'); return; }
       else if (name === 'data-predictions') { this.predictions = parsePredictionsAttribute(newV); return; }
+      else if (name === 'labels') { this._applyLabelsAttribute(newV); return; }
       else if (name === 'speed' && this._status === 'running') { this._reanchor(); }
       else if (name === 'view' && newV && newV !== 'timeline') {
         console.warn('rhylthyme-timeline: view="' + newV + '" is not available yet; showing the timeline');
@@ -735,18 +746,42 @@
         Object.keys(MESSAGES).forEach(function (k) { out[k] = own[k] !== undefined && own[k] !== null ? own[k] : MESSAGES[k]; });
         return out;
       },
-      set: function (v) {
-        var own = {};
-        if (v && typeof v === 'object') {
-          Object.keys(v).forEach(function (k) {
-            if (Object.prototype.hasOwnProperty.call(MESSAGES, k) && (typeof v[k] === 'string' || typeof v[k] === 'function')) own[k] = v[k];
-          });
-        }
-        this._labels = own;
-        this._relabelFactorForm();
-        this.render();
-      }
+      set: function (v) { this._applyLabels(v, 'property'); }
     });
+    // Like factors / data-factors, the property and the attribute are two
+    // ways to supply one table, and whichever was set last replaces it
+    // wholesale (no merging of the two). Removing the attribute clears the
+    // table only when the attribute supplied it: a table set through the
+    // property afterwards stays.
+    proto._applyLabels = function (v, source) {
+      var own = {};
+      if (v && typeof v === 'object') {
+        Object.keys(v).forEach(function (k) {
+          if (Object.prototype.hasOwnProperty.call(MESSAGES, k) && (typeof v[k] === 'string' || typeof v[k] === 'function')) own[k] = v[k];
+        });
+      }
+      this._labels = own;
+      this._labelsSource = source;
+      this._relabelFactorForm();
+      this.render();
+    };
+    // labels="...": a JSON object of strings ({0}, {1}... for arguments);
+    // an empty value means no labels. Text that is not a JSON object is ignored with a warning and the
+    // labels in effect stay.
+    proto._applyLabelsAttribute = function (text) {
+      if (text === null) {
+        if (this._labelsSource === 'attribute') this._applyLabels(null, null);
+        return;
+      }
+      if (!String(text).trim()) { this._applyLabels(null, 'attribute'); return; }
+      var parsed;
+      try { parsed = JSON.parse(String(text)); } catch (e) { parsed = undefined; }
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        console.warn('rhylthyme-timeline: the labels attribute is not a JSON object; keeping the labels in effect');
+        return;
+      }
+      this._applyLabels(parsed, 'attribute');
+    };
     proto._msg = function (key, args) { return message(this._labels, key, args || []); };
     Object.defineProperty(proto, 'currentTime', { get: function () { return this._time; } });
     Object.defineProperty(proto, 'status', { get: function () { return this._status; } });

@@ -604,3 +604,40 @@ test('the player translates its text through the labels property',
     assert.strictEqual(loc.badClock, '13:05:09', 'an invalid locale falls back to the fixed format');
     assert.deepStrictEqual(loc.cleared, [false, '13:05:09']);
   });
+
+test('the labels attribute translates declaratively, last setter wins',
+  { skip: chrome ? false : 'no Chrome binary found (set CHROME_BIN)' }, async () => {
+    const out = await harnessOutput();
+    assert.deepStrictEqual(out.errors, []);
+    const a = out.labels.attr;
+    // Present before upgrade (innerHTML), together with locale.
+    assert.strictEqual(a.upgraded, true);
+    assert.deepStrictEqual(a.declarativeLocale, ['de', '02:05']);
+    assert.deepStrictEqual(a.declStop, ['■ Arrêter', 'Arrêter', '■']);
+    assert.strictEqual(a.declSpeed, '0,5 fois', '{1} placeholder from the attribute, formatted in the locale');
+    assert.deepStrictEqual(a.declGetter, ['Arrêter', 'Démarrer : {0}', 'Pause', 'Start'],
+      'non-string values are dropped; the getter returns the whole table in effect');
+    assert.match(a.declStepStart[0], /^▶ Démarrer : \S/, '{0} placeholder from the attribute');
+    assert.strictEqual(a.declStepStart[1], a.declStepStart[0].slice(2));
+    assert.strictEqual(a.warningsAfterDecl, 0);
+    // A change replaces the table rather than merging into it.
+    assert.deepStrictEqual(a.changedResume, ['▶ Reprendre', 'Reprendre', '▶']);
+    assert.deepStrictEqual(a.changedStop, ['■ Stop', 'Stop', '■']);
+    // Invalid values: one warning each, previous labels kept.
+    assert.strictEqual(a.invalidWarnings, 1);
+    assert.deepStrictEqual(a.invalidKept, ['▶ Reprendre', 'Reprendre', '▶']);
+    assert.strictEqual(a.arrayWarnings, 2);
+    assert.strictEqual(a.arrayKept, 'Reprendre');
+    // Property after attribute wins; the attribute is not rewritten.
+    assert.deepStrictEqual(a.propertyWins, ['▶ Weiter', 'Weiter', '▶']);
+    assert.strictEqual(a.propertyAttrUntouched, '["stop"]');
+    assert.deepStrictEqual(a.removeKeepsProperty, ['▶ Weiter', 'Weiter', '▶'],
+      'removing the attribute leaves labels the property supplied');
+    // Attribute after property wins; removing it clears what it supplied.
+    assert.deepStrictEqual(a.attributeWins, [['▶ Continuer', 'Continuer', '▶'], 'Continuer']);
+    assert.deepStrictEqual(a.removed, [['▶ Resume', 'Resume', '▶'], 'Resume']);
+    assert.deepStrictEqual(a.empty, [['■ Stop', 'Stop', '■'], 2], 'an empty attribute is no labels, no warning');
+    assert.deepStrictEqual(a.invalidDecl, ['Stop', 3]);
+    assert.strictEqual(a.warnings.length, 3);
+    assert.ok(a.warnings.every((w) => /^rhylthyme-timeline: the labels attribute is not a JSON object/.test(w)));
+  });

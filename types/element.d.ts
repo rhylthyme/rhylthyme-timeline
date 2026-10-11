@@ -131,6 +131,14 @@ export interface RhylthymeTimelineElement extends HTMLElement {
   /**
    * Translations: a partial table merged over the English defaults (null
    * clears it). Reading it returns the whole table in effect.
+   *
+   * The `labels` attribute takes the same table as JSON (strings only, with
+   * `{0}`, `{1}`... for arguments): `labels='{"stop":"Arrêter"}'`. As with
+   * `factors` / `data-factors`, whichever of the attribute and the property
+   * was set last supplies the whole table and the getter reports it; setting
+   * the property does not rewrite the attribute. An attribute that is not a
+   * JSON object is ignored with a console warning (the labels in effect
+   * stay); removing the attribute clears the labels it supplied.
    */
   get labels(): RhylthymeTimelineLabels;
   set labels(value: Partial<RhylthymeTimelineLabels> | null);

@@ -109,6 +109,25 @@ el.labels = {
 console.log(Object.keys(el.labels)); // the full key list, with the text in effect
 ```
 
+Without script, put the same table in the `labels` attribute as JSON.
+Only strings fit in an attribute (no functions); `{0}`, `{1}`… work the
+same way:
+
+```html
+<rhylthyme-timeline src="dinner.json" locale="fr"
+  labels='{"stop": "Arrêter", "resume": "Reprendre", "startStep": "Démarrer : {0}"}'>
+</rhylthyme-timeline>
+```
+
+The attribute and the property are two ways to supply one table, as with
+`data-factors` and `factors`: whichever was set last replaces it
+wholesale (the two are not merged), and reading `el.labels` returns the
+table in effect, whichever supplied it. Setting the property does not
+rewrite the attribute. An attribute value that is not a JSON object is
+ignored with one `console.warn` and the labels in effect stay; an empty
+value means no labels. Removing the attribute clears the labels it
+supplied, but leaves a table set through the property after it.
+
 The keys are typed as `RhylthymeTimelineLabels` in
 `@rhylthyme/timeline/element`: transport (`start`, `pause`, `resume`,
 `stop`, `speed`, `speedOption`), status (`statusStopped`, `statusRunning`,

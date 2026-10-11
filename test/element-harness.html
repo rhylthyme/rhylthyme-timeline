@@ -750,6 +750,68 @@
     out.labels.loc.cleared = [l7.hasAttribute('locale'), l7.formatTime(0)];
     l7.remove();
 
+    // The labels attribute: JSON strings, declared before the element
+    // upgrades, then changed, broken, removed and mixed with the property.
+    const la = out.labels.attr = {};
+    const warnings = [];
+    const realWarn = console.warn;
+    console.warn = (...args) => { warnings.push(args.join(' ')); };
+    try {
+      const host = document.createElement('div');
+      document.body.appendChild(host);
+      host.innerHTML = '<rhylthyme-timeline mode="player" locale="de" labels=\'{"stop":"Arrêter","startStep":"Démarrer : {0}","speedOption":"{1} fois","pause":7}\'></rhylthyme-timeline>';
+      const a1 = host.firstElementChild;
+      la.upgraded = a1.shadowRoot !== null;
+      la.declarativeLocale = [a1.locale, a1.formatTime(125)];
+      let am = 0;
+      a1.setClock(() => am);
+      a1.program = JSON.parse(JSON.stringify(window.RHYLTHYME_EXAMPLES.thanksgiving_one_oven));
+      la.declStop = buttonInfo(a1, '.controls button[data-act="stop"]');
+      la.declSpeed = a1.shadowRoot.querySelector('select[data-set="speed"] option').textContent;
+      la.declGetter = [a1.labels.stop, a1.labels.startStep, a1.labels.pause, a1.labels.start];
+      a1.start();
+      for (let i = 0; i < 400 && !a1.shadowRoot.querySelector('button[data-step-start]'); i++) { am += 60000; a1.tick(); }
+      la.declStepStart = buttonInfo(a1, 'button[data-step-start]');
+      a1.pause();
+      la.warningsAfterDecl = warnings.length;
+      // Changing the attribute replaces the table.
+      a1.setAttribute('labels', '{"resume":"Reprendre"}');
+      la.changedResume = buttonInfo(a1, '.controls button[data-act="start"]');
+      la.changedStop = buttonInfo(a1, '.controls button[data-act="stop"]');
+      // Invalid JSON (and JSON that is not an object): one warning each,
+      // the labels in effect stay.
+      a1.setAttribute('labels', '{"resume": Reprendre');
+      la.invalidWarnings = warnings.length;
+      la.invalidKept = buttonInfo(a1, '.controls button[data-act="start"]');
+      a1.setAttribute('labels', '["stop"]');
+      la.arrayWarnings = warnings.length;
+      la.arrayKept = a1.labels.resume;
+      // The property set after the attribute wins, and the getter says so.
+      a1.labels = { resume: (x) => 'Weiter' + (x === undefined ? '' : x) };
+      la.propertyWins = buttonInfo(a1, '.controls button[data-act="start"]');
+      la.propertyAttrUntouched = a1.getAttribute('labels');
+      // Removing the attribute leaves labels the property supplied.
+      a1.removeAttribute('labels');
+      la.removeKeepsProperty = buttonInfo(a1, '.controls button[data-act="start"]');
+      // The attribute set after the property wins.
+      a1.setAttribute('labels', '{"resume":"Continuer"}');
+      la.attributeWins = [buttonInfo(a1, '.controls button[data-act="start"]'), a1.labels.resume];
+      // Removing it now clears what it supplied: back to English.
+      a1.removeAttribute('labels');
+      la.removed = [buttonInfo(a1, '.controls button[data-act="start"]'), a1.labels.resume];
+      // An empty attribute is no labels, without a warning.
+      a1.setAttribute('labels', '{"stop":"Arrêter"}');
+      a1.setAttribute('labels', '');
+      la.empty = [buttonInfo(a1, '.controls button[data-act="stop"]'), warnings.length];
+      // An invalid attribute before upgrade: English, one warning.
+      host.innerHTML = '<rhylthyme-timeline labels="not json"></rhylthyme-timeline>';
+      la.invalidDecl = [host.firstElementChild.labels.stop, warnings.length];
+      host.remove();
+    } finally {
+      console.warn = realWarn;
+    }
+    la.warnings = warnings;
+
     // (d) programVersion parity: the same three programs are hashed in Node
     // with tools/hash-program.js. Base64 so multi-byte characters survive
     // the DOM dump unharmed.
