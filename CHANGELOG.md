@@ -3,6 +3,24 @@
 All notable changes to this package are documented here. The format follows
 Keep a Changelog; versions follow SemVer.
 
+## [Unreleased]
+
+### Changed
+- `@rhylthyme/timeline/schedule` no longer bundles the 350 KB LabMCP
+  instrument catalogue for browsers (#5). The Node entry (`require` and
+  `import`) still registers it, so Node results are unchanged. A new
+  `browser` export condition gives the module without it, the side-effect
+  subpath `@rhylthyme/timeline/schedule/labmcp-catalog` registers it
+  (eagerly or through a lazy `import()`), and `browser/labmcp-catalog.js`
+  does the same for `browser/schedule.js` (465 KB → 223 KB). Without the
+  catalogue, a LabMCP step gets an `instrument_catalog_not_loaded` warning
+  instead of its call checks, and programs without LabMCP steps are
+  unaffected. `validateProgram` and `analyzeSchedule` stay synchronous.
+
+### Added
+- `labmcp.registerCatalog(catalog)` and `labmcp.hasCatalog()`;
+  `labmcp.CATALOG` is now the registered catalogue or `null`.
+
 ## [2.0.0-beta.6] - unreleased
 
 ### Added
