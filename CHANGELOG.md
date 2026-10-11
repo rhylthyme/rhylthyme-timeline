@@ -17,6 +17,15 @@ Keep a Changelog; versions follow SemVer.
   catalogue, a LabMCP step gets an `instrument_catalog_not_loaded` warning
   instead of its call checks, and programs without LabMCP steps are
   unaffected. `validateProgram` and `analyzeSchedule` stay synchronous.
+- Programs that break the schema are now invalid in JS as they already
+  were in Python. Most visible: a program with no `resourceConstraints`,
+  `environment` or `environmentType` (`schema_anyOf`; add
+  `"resourceConstraints": []`), an indefinite step without
+  `defaultSeconds` (`schema_oneOf`), a missing track or step `name`
+  (`schema_required`, previously a warning only), and a string or
+  fractional `maxConcurrent` (`schema_type`).
+- `browser/schedule.js` grows by about 77 KB (14 KB gzipped) for the two
+  schemas and the checker.
 
 ### Fixed
 - `analyzeSchedule(...).steps` (and `itinerary`) link the steps of a

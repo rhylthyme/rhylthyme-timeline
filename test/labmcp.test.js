@@ -46,7 +46,7 @@ test("Python's number formats", () => {
 });
 
 function program(...steps) {
-  return { programId: "t", name: "T", schemaVersion: "0.2.0-alpha", tracks: [{ trackId: "bench", name: "Bench", steps }] };
+  return { programId: "t", name: "T", schemaVersion: "0.2.0-alpha", tracks: [{ trackId: "bench", name: "Bench", steps }], resourceConstraints: [] };
 }
 const heat = {
   stepId: "heat", name: "Heat",

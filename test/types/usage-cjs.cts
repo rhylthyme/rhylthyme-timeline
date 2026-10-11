@@ -7,5 +7,6 @@ export const svg: string = Rhylthyme.renderTimelineSvg({ tracks: [] });
 export const steps: number = Rhylthyme.itinerary({ tracks: [] }).length;
 export const ok: boolean = Schedule.validateProgram({ tracks: [] }).valid;
 export const catalog: Schedule.LabmcpCatalog = Schedule.labmcp.registerCatalog(LabmcpCatalog);
+export const schemaOk: boolean = Schedule.schemaFindings({ tracks: [] }).length === 0;
 // @ts-expect-error there is no default export under require()
 export const nope = Rhylthyme.default;

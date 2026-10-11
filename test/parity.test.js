@@ -2,7 +2,11 @@
 // Parity: the JS validator (src/schedule) and the Python one (the
 // `rhylthyme` package) must give every program in rhylthyme-examples the
 // same verdict, valid or not, and every invalid/<CODE>.json its declared
-// code. The Python side runs in a subprocess; the test skips when Python
+// code. They must also agree on schema-invalid programs: the three from
+// issue #8 and mutations of every example (a required key dropped, a wrong
+// type, an unknown key, a float where an integer goes, an ambiguous oneOf),
+// plus controls the schema accepts (an unparseable date-time, since neither
+// side checks `format`). The Python side runs in a subprocess; the test skips when Python
 // with `rhylthyme` or the rhylthyme-examples checkout is missing (CI has
 // both). Its twin, rhylthyme's tests/test_js_parity.py, runs the same check
 // from the Python repository against the published package.
@@ -51,8 +55,22 @@ def schema_for(program):
             schemas[version] = json.load(fh)
     return schemas[version]
 
+def check(program):
+    # The Python logic checks can raise on a schema-invalid program (a step
+    # with no name, say). A raise rejects the program, so it counts as
+    # invalid here; "crashed" keeps the reason.
+    try:
+        r = validate_program_structured(program, schema_for(program))
+    except Exception as e:
+        return {"valid": False, "codes": [], "schemaErrors": [], "crashed": f"{type(e).__name__}: {e}"[:200]}
+    return {"valid": r["is_valid"], "codes": sorted({f["code"] for f in r["findings"]}),
+            "schemaErrors": [str(e)[:200] for e in r["schema_errors"]]}
+
+data = json.load(sys.stdin)
 out = {}
-for rel in json.load(sys.stdin)["files"]:
+for key, program in data.get("inline", {}).items():
+    out[key] = check(program)
+for rel in data["files"]:
     with open(sys.argv[1] + "/" + rel) as fh:
         program = json.load(fh)
     r = validate_program_structured(program, schema_for(program))
@@ -61,16 +79,84 @@ for rel in json.load(sys.stdin)["files"]:
 json.dump(out, sys.stdout)
 `;
 
-function pythonVerdicts(files) {
+// The three programs from issue #8. The first two are valid to the logic
+// checks and invalid to the schema (the missing track name; an unknown
+// startTrigger key alone is allowed, no trigger shape sets
+// additionalProperties). The third is valid to both validators: neither
+// program schema sets additionalProperties at the top level either.
+function issue8Programs() {
+  const base = () => ({
+    programId: 'issue-8', name: 'Issue 8', schemaVersion: '0.2.0-alpha',
+    tracks: [{ trackId: 't', name: 'T', steps: [
+      { stepId: 'a', name: 'A', task: 'prep', duration: { type: 'fixed', seconds: 60 }, startTrigger: { type: 'programStart' } },
+      { stepId: 'b', name: 'B', task: 'prep', duration: { type: 'fixed', seconds: 60 }, startTrigger: { type: 'afterStep', stepId: 'a' } },
+    ] }],
+    resourceConstraints: [{ task: 'prep', maxConcurrent: 2 }],
+  });
+  const noNameExtraKey = base();
+  delete noNameExtraKey.tracks[0].name;
+  noNameExtraKey.tracks[0].steps[1].startTrigger.delay = 5;
+  const stringMax = base();
+  stringMax.resourceConstraints[0].maxConcurrent = '2';
+  const colour = base();
+  colour.colour = 'red';
+  return {
+    'issue-8/control': base(),
+    'issue-8/track-without-name-and-unknown-trigger-key': noNameExtraKey,
+    'issue-8/maxConcurrent-string': stringMax,
+    'issue-8/unknown-top-level-key': colour,
+  };
+}
+
+// Schema mutations of one example program, keyed "<rel> :: <mutation>".
+// Each targets a part every example has (or skips), so the set grows with
+// rhylthyme-examples.
+function mutations(rel, program) {
+  const out = {};
+  const add = (name, edit) => {
+    const p = JSON.parse(JSON.stringify(program));
+    if (edit(p) !== false) out[`${rel} :: ${name}`] = p;
+  };
+  // Mutate a track and a step that expansion leaves alone (no `replicates`,
+  // no `instances` trigger). Python checks the schema after expansion only,
+  // and its expander turns a nameless replicated step into named copies (or
+  // raises); JS checks the authored program first, so it rejects those,
+  // which test/schedule.test.js covers.
+  const plain = (x) => x && !x.replicates && !/"instances"/.test(JSON.stringify(x.startTrigger || {}));
+  const track = (p) => (Array.isArray(p.tracks) && p.tracks.find((t) => plain(t) && Array.isArray(t.steps) && t.steps.some(plain))) || null;
+  const step = (p) => { const t = track(p); return (t && t.steps.find(plain)) || null; };
+  const rc = (p) => (Array.isArray(p.resourceConstraints) && p.resourceConstraints[0]) || null;
+  add('unknown top-level key', (p) => { p.colour = 'red'; });
+  add('track without name', (p) => { if (!track(p) || !('name' in track(p))) return false; delete track(p).name; });
+  add('step without name', (p) => { if (!step(p)) return false; delete step(p).name; });
+  add('step name is a number', (p) => { if (!step(p)) return false; step(p).name = 42; });
+  add('unknown key in a startTrigger (allowed)', (p) => { if (!step(p) || !step(p).startTrigger) return false; step(p).startTrigger.delay = 5; });
+  add('unknown duration type', (p) => { if (!step(p) || !step(p).duration) return false; step(p).duration.type = 'fixd'; });
+  add('maxConcurrent is a string', (p) => { if (!rc(p)) return false; rc(p).maxConcurrent = String(rc(p).maxConcurrent); });
+  add('maxConcurrent is a fraction', (p) => { if (!rc(p)) return false; rc(p).maxConcurrent = 1.5; });
+  add('resource constraint without task', (p) => { if (!rc(p)) return false; delete rc(p).task; });
+  add('actors is not an integer', (p) => { p.actors = 2.5; });
+  add('program duration matching two oneOf shapes', (p) => { p.duration = { type: 'fixed', seconds: 3600, timeString: '1h' }; });
+  add('program duration matching one oneOf shape (control)', (p) => { p.duration = { type: 'fixed', seconds: 3600 }; });
+  add('absolute start with a bad date-time (control: format is not checked)', (p) => { p.startTrigger = { type: 'absolute', time: 'not a date' }; });
+  return out;
+}
+
+function pythonVerdicts(files, inline) {
   const r = spawnSync(PYTHON, ['-W', 'ignore', '-c', PY, EXAMPLES], {
-    input: JSON.stringify({ files }), encoding: 'utf8', maxBuffer: 64 * 1024 * 1024,
+    input: JSON.stringify({ files, inline }), encoding: 'utf8', maxBuffer: 64 * 1024 * 1024,
   });
   if (r.error || r.status !== 0) return { skip: (r.error && r.error.message) || r.stderr.trim().split('\n').pop() };
   return { verdicts: JSON.parse(r.stdout) };
 }
 
 const files = programFiles();
-const py = files.length ? pythonVerdicts(files) : { skip: `no rhylthyme-examples at ${EXAMPLES}` };
+const inline = issue8Programs();
+for (const rel of files) {
+  if (rel.startsWith('invalid/') || KNOWN_DIFFERENCES[rel]) continue;
+  Object.assign(inline, mutations(rel, JSON.parse(fs.readFileSync(path.join(EXAMPLES, rel), 'utf8'))));
+}
+const py = files.length ? pythonVerdicts(files, inline) : { skip: `no rhylthyme-examples at ${EXAMPLES}` };
 const skip = py.skip ? `parity needs Python with rhylthyme and rhylthyme-examples: ${py.skip}` : false;
 // CI's parity job sets this so a broken setup fails instead of skipping.
 if (skip && process.env.RHYLTHYME_PARITY_REQUIRED) throw new Error(skip);
@@ -109,4 +195,33 @@ test('both validators emit the code each invalid/<CODE>.json declares', { skip }
       assert.ok(py.verdicts[rel].codes.includes(code), `${rel}: Python emitted ${py.verdicts[rel].codes.join(',') || 'nothing'}`);
     }
   }
+});
+
+test('both validators give the issue #8 programs the same verdict', { skip }, () => {
+  for (const [key, program] of Object.entries(issue8Programs())) {
+    const js = validateProgram(program);
+    const control = key.endsWith('/control') || key.endsWith('/unknown-top-level-key');
+    assert.equal(js.valid, control, `${key}: JS ${JSON.stringify(js.errors)}`);
+    assert.equal(py.verdicts[key].valid, control, `${key}: Python ${py.verdicts[key].schemaErrors}`);
+    if (!control) assert.ok(js.errors.length && js.errors.every((e) => e.code.startsWith('schema_')), `${key}: ${js.errors.map((e) => e.code)}`);
+  }
+});
+
+test('the JS and Python validators agree on schema mutations of every example', { skip }, (t) => {
+  const keys = Object.keys(inline).filter((k) => !k.startsWith('issue-8/'));
+  assert.ok(keys.length > 500, `only ${keys.length} mutations`);
+  const disagreements = [];
+  let invalid = 0;
+  for (const key of keys) {
+    const js = validateProgram(inline[key]);
+    const p = py.verdicts[key];
+    if (!p.valid) invalid++;
+    if (js.valid === p.valid) continue;
+    disagreements.push(`${key}: JS ${js.valid ? 'valid' : 'invalid ' + js.errors.map((e) => e.code).join(',')}, ` +
+      `Python ${p.valid ? 'valid' : 'invalid ' + p.codes.concat(p.schemaErrors, p.crashed || []).join(',')}`);
+  }
+  t.diagnostic(`${keys.length} mutations, ${invalid} invalid, ${keys.filter((k) => py.verdicts[k].crashed).length} raised in Python`);
+  assert.deepEqual(disagreements, []);
+  // The mutations exercise the schema: most of them are rejected.
+  assert.ok(invalid > keys.length / 2, `only ${invalid} of ${keys.length} mutations are invalid`);
 });

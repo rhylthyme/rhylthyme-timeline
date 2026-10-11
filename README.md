@@ -446,6 +446,29 @@ const a = analyzeSchedule(program, { finishAt: '2026-11-26T18:00:00-05:00' });
 // { makespanSeconds, criticalPath, resourceConflicts, steps: [{ stepId, startAt, ... }], ... }
 ```
 
+`validateProgram` checks the JSON Schema first. The program schemas from
+rhylthyme-spec ship inside the package (`src/schedule/schemas/`), and a
+small built-in checker applies them with the semantics of Python's
+`jsonschema` (Draft 7; `format` is not checked). `schemaVersion` picks the
+schema: `0.3.x` uses 0.3.0-alpha, anything else 0.2.0-alpha. Each failure
+is an error with the code `schema_<keyword>` (`schema_required`,
+`schema_type`, `schema_oneOf`, `schema_additionalProperties`, ...), a
+`where` path such as `tracks[0].steps[1].duration` and a `fix`. Two rules
+the logic checks never enforced come from the schema: a program needs
+`resourceConstraints` (an empty list is fine), an `environment` or an
+`environmentType`, and an indefinite step needs `defaultSeconds`. A value that
+cannot be written as JSON (a circular reference, a BigInt) gets the single
+error `not_json` instead of a schema check. Patterns are read as Python's
+`re.search` reads them (`$` also matches before a final newline).
+
+```js
+import { schemaFindings, programSchema, checkJsonSchema } from '@rhylthyme/timeline/schedule';
+
+schemaFindings(program);              // only the schema_* findings
+checkJsonSchema(value, programSchema('0.3.0-alpha'));
+// [{ keyword, path: ['tracks', 0, 'name'], message, fix }], [] when valid
+```
+
 Both functions are synchronous. The LabMCP instrument catalogue (about
 350 KB) that checks LabMCP instrument steps (`instrument.toolType`
 starting with `labmcp-`) is loaded separately in the browser:
@@ -493,8 +516,9 @@ unreleased):
 | same, minified | 338 KB | 112 KB (+ 226 KB lazy catalogue chunk when needed) |
 
 It agrees with the Python validator in the `rhylthyme` package:
-`test/parity.test.js` gives every program in rhylthyme-examples to both
-and requires the same verdict (CI runs it here and in `rhylthyme`).
+`test/parity.test.js` gives every program in rhylthyme-examples to both,
+along with schema-breaking mutations of each, and requires the same
+verdict (CI runs it here and in `rhylthyme`).
 
 ## API
 
