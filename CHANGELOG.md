@@ -6,6 +6,20 @@ Keep a Changelog; versions follow SemVer.
 ## [2.0.0-beta.7] - unreleased
 
 ### Added
+- `findingCodes` in `@rhylthyme/timeline/schedule` (and its browser entry,
+  without the LabMCP catalogue): `src/schedule/finding-codes.json`, every
+  code `validateProgram` can emit with its area, severities, summary,
+  explanation, a triggering program fragment, fix and Python counterpart
+  (`rhylthyme validate --json` and `validate_program_structured`). Types
+  `FindingCodeCatalogue`, `FindingCode`, `FindingCodeExample`.
+  `test/finding-codes.test.js` checks it both ways: every code literal in
+  `src/schedule/*.js` and every schema keyword the checker reports is
+  catalogued, every catalogued code is in the source, each example makes
+  `validateProgram` report its code with its severity, the codes reported
+  on test fixtures, rhylthyme-examples and the parity mutations are all
+  catalogued, and (with Python) the Python column is right. The parity
+  test's program builders moved to `test/helpers/parity-programs.js` so
+  both tests share them.
 - `itinerary(program, { startAt?, finishAt?, actual?, now? })` in the core
   engine: every expanded step in plan order with `name`, `trackName`,
   `instanceOf` / `instanceIndex`, seconds, `needsStart` / `needsFinish`,

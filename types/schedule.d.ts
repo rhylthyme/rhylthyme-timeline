@@ -205,6 +205,74 @@ export function inFlightGroups(program: Program): unknown[];
 export function inFlightWindows(program: Program, timings: Timings): unknown[];
 export function inFlightConflicts(program: Program, timings: Timings): unknown[];
 
+/** A finding's severity: the ValidationResult list it is reported in. */
+export type FindingSeverity = 'error' | 'warning' | 'info';
+
+/** The group a finding code belongs to in findingCodes. */
+export type FindingArea = 'schema' | 'structure' | 'timing' | 'resources' | 'instances' | 'alerts' | 'instruments';
+
+/** A program that triggers a code: a fragment merged over findingCodes.baseProgram. */
+export interface FindingCodeExample {
+  /** The list (errors, warnings, info) the code is reported in for this example. */
+  severity: FindingSeverity;
+  /** Top-level keys that replace baseProgram's (or, with `whole`, the value passed as is). */
+  program: unknown;
+  /** Top-level keys deleted from the merged program. */
+  omit?: string[];
+  /** The program is passed to validateProgram as it is, not merged. */
+  whole?: boolean;
+  /** A path whose number is passed as a BigInt (not_json). */
+  bigint?: Array<string | number>;
+  /** "browser": validated by the browser entry before the LabMCP catalogue is registered. */
+  entry?: 'browser';
+  note?: string;
+}
+
+/** What Python's `rhylthyme` validator reports for a code's examples. */
+export interface FindingCodePython {
+  /** The code `rhylthyme validate --json` reports, or null when it reports nothing. */
+  cli: string | null;
+  /** The code rhylthyme.validate_program_structured reports, or null. */
+  library: string | null;
+  /** Python's severity, when it differs from the JS one. */
+  severity?: FindingSeverity;
+  /** Python packages besides rhylthyme the examples need (instrument drivers). */
+  requires?: string[];
+  note?: string;
+}
+
+export interface FindingCode {
+  area: FindingArea;
+  /** Every severity the code can be reported with. */
+  severity: FindingSeverity[];
+  summary: string;
+  explanation: string;
+  /** At least one per severity; empty when `reachable` is false. */
+  examples: FindingCodeExample[];
+  fix: string;
+  python: FindingCodePython;
+  /** For schema_<keyword> codes: the JSON Schema keyword. */
+  schemaKeyword?: string;
+  /** false for a code the source can emit but no program reaches today. */
+  reachable?: false;
+  unreachableBecause?: string;
+}
+
+/** Every finding code validateProgram can emit (src/schedule/finding-codes.json). */
+export interface FindingCodeCatalogue {
+  version: number;
+  /** How an example's program is completed into the program validated. */
+  completion: string;
+  /** What the python field of each code means. */
+  python: string;
+  /** The valid program every example's fragment is merged over. */
+  baseProgram: Program;
+  areas: Record<FindingArea, { title: string; description: string }>;
+  codes: Record<string, FindingCode>;
+}
+
+export const findingCodes: FindingCodeCatalogue;
+
 export { expandReplicates, parseSeconds, stepDurationSeconds, computeStepTimings } from './index';
 
 /** galago-tools instrument commands. */
