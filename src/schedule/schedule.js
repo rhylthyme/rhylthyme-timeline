@@ -708,7 +708,7 @@ function _fmtDur(sec) {
 }
 
 function _parseIso(v) {
-  if (!v) return null;
+  if (v === undefined || v === null || v === "" || typeof v === "boolean") return null;
   const d = new Date(v);
   return isNaN(d.getTime()) ? null : d;
 }
@@ -1157,7 +1157,7 @@ function analyzeSchedule(program, opts) {
   const anchors = { finishAt: opts.finishAt, startAt: opts.startAt };
   // An empty array is no history: nothing to predict from, so nothing to add.
   const history = Array.isArray(opts.history) && opts.history.length ? opts.history : null;
-  if (!history) return _analyzeCore(program, anchors);
+  if (!history) return _linkTracks(program, _analyzeCore(program, anchors));
 
   const expanded = expandReplicates(program || {});
   const predictions = History.predictDurations(
@@ -1186,7 +1186,24 @@ function analyzeSchedule(program, opts) {
   out.predictedMakespanSeconds = predicted.makespanSeconds;
   out.predictedMakespan = predicted.makespan;
   out.predictedCriticalPath = predicted.criticalPath;
-  return out;
+  // After the prediction lookup above, which keys a track replicate's
+  // steps by their own ids.
+  return _linkTracks(program, out);
+}
+
+// Steps of a replicated track link to their authored step, as itinerary()'s do.
+function _linkTracks(program, analysis) {
+  TimelineRender._linkTrackInstances(program, analysis.steps);
+  return analysis;
+}
+
+/**
+ * itinerary(program, opts?): the core engine's itinerary() after the same
+ * LabMCP estimates analyzeSchedule applies, so its entries agree with
+ * analyzeSchedule(program, opts).steps on every program.
+ */
+function itinerary(program, opts) {
+  return TimelineRender.itinerary(Labmcp.withEstimates(program), opts);
 }
 
 // Human-readable digest of an analysis, for the text half of a tool result.
@@ -1308,6 +1325,7 @@ module.exports = {
   alertDefaultMessage,
   expandReplicates,
   analyzeSchedule,
+  itinerary,
   withDurations,
   predictDurations: History.predictDurations,
   predictedSeconds: History.predictedSeconds,

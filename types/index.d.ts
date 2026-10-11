@@ -35,16 +35,16 @@ export interface ItineraryOptions extends TimingOptions {
 
 /** One step of the plan, as itinerary() lists it. */
 export interface ItineraryEntry {
-  /** The expanded step id (`<stepId>-r<n>` for a replicate instance). */
+  /** The expanded step id (`<stepId>-r<n>` for a replicate instance or a step of a replicated track). */
   stepId: string;
   /** The step's name, or its id when it has none. */
   name: string;
   trackId: string;
   /** The track's name, or its id when it has none. */
   trackName: string;
-  /** The authored stepId a replicate instance was expanded from; null otherwise. */
+  /** The authored stepId a replicate instance (of a step or of its track) was expanded from; null otherwise. */
   instanceOf: string | null;
-  /** 1-based replicate instance number; null otherwise. */
+  /** 1-based replicate instance number (of the step or of its track); null otherwise. */
   instanceIndex: number | null;
   startSeconds: number;
   endSeconds: number;
@@ -132,7 +132,11 @@ export function actualFromRun(record: unknown, program?: Program, opts?: { endsO
 export function timingsFromRun(program: Program, record: unknown, opts?: { endsOnly?: boolean; now?: number }): Timings;
 /** knownIds: an object keyed by the expanded step ids (a timings object works). */
 export function runtimeStepId(entry: { stepId: string; instance?: number }, knownIds?: Record<string, unknown>): string;
-/** Every expanded step in plan order (start, then name), with names, replicate links and optional wall-clock times. */
+/**
+ * Every expanded step in plan order (start, then name), with names, replicate links and optional wall-clock times.
+ * A LabMCP step with no duration is timed by instrumentEstimate here; `itinerary` from
+ * `@rhylthyme/timeline/schedule` applies the LabMCP catalogue estimates first, as analyzeSchedule does.
+ */
 export function itinerary(program: Program, opts?: ItineraryOptions): ItineraryEntry[];
 export function stepNeedsStart(step: Step): boolean;
 export function stepNeedsFinish(step: Step): boolean;

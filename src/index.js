@@ -741,16 +741,52 @@
   // is given, wall-clock ISO times. The anchoring is analyzeSchedule's
   // (src/schedule/schedule.js): finishAt wins and works backwards from the
   // makespan; else startAt. opts.actual / opts.now go to computeStepTimings.
+  // LabMCP steps with no duration are timed here by instrumentEstimate; the
+  // catalogue estimates analyzeSchedule uses live in ./schedule, whose
+  // itinerary() applies them first.
 
+  // An anchor: ISO string, Date or epoch ms (0 included). Absent or
+  // unparseable -> null.
   function _parseIsoDate(v) {
-    if (!v) return null;
+    if (v === undefined || v === null || v === '' || typeof v === 'boolean') return null;
     var d = new Date(v);
     return isNaN(d.getTime()) ? null : d;
   }
 
+  // expandReplicates stamps instanceOf / instanceIndex on the copies of a
+  // replicated step, but not on the steps of a replicated track (its
+  // player and run-record ids depend on that). The plan views link those
+  // too: expanded stepId -> [authored stepId, 1-based instance], for every
+  // step of a track with replicates.count (or legacy batch_size) > 1.
+  function _trackInstanceLinks(program) {
+    var links = {};
+    (program && Array.isArray(program.tracks) ? program.tracks : []).forEach(function (t) {
+      if (!t || typeof t !== 'object') return;
+      var n = t.replicates ? (t.replicates.count || 1) : (t.batch_size || 1);
+      if (!(n > 1)) return;
+      (Array.isArray(t.steps) ? t.steps : []).forEach(function (s) {
+        if (!s || typeof s !== 'object' || !s.stepId) return;
+        for (var i = 1; i <= n; i++) links[s.stepId + '-r' + i] = [s.stepId, i];
+      });
+    });
+    return links;
+  }
+
+  // Fill instanceOf / instanceIndex from _trackInstanceLinks(program) on
+  // plan entries ({ stepId, instanceOf, instanceIndex }) that have none.
+  function _linkTrackInstances(program, entries) {
+    var links = _trackInstanceLinks(program);
+    (entries || []).forEach(function (e) {
+      var l = links[e.stepId];
+      if (l && !e.instanceOf) { e.instanceOf = l[0]; e.instanceIndex = l[1]; }
+    });
+    return entries;
+  }
+
   function itinerary(program, opts) {
     opts = opts || {};
-    program = expandReplicates(program || {});
+    var authored = program || {};
+    program = expandReplicates(authored);
     var timingOpts = {};
     if (opts.actual) timingOpts.actual = opts.actual;
     if (typeof opts.now === 'number' && isFinite(opts.now)) timingOpts.now = opts.now;
@@ -799,6 +835,7 @@
       if (anchorStart) { entry.startAt = wall(tm.start); entry.endAt = wall(tm.end); }
       return entry;
     });
+    _linkTrackInstances(authored, out);
     return out.sort(function (a, b) {
       return a.startSeconds - b.startSeconds || a.name.localeCompare(b.name);
     });
@@ -1722,6 +1759,7 @@
     expandReplicates: expandReplicates,
     parseSeconds: parseSeconds,
     stepDurationSeconds: stepDurationSeconds,
-    instrumentEstimate: instrumentEstimate
+    instrumentEstimate: instrumentEstimate,
+    _linkTrackInstances: _linkTrackInstances
   };
 }));

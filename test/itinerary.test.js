@@ -1,7 +1,8 @@
 "use strict";
-// itinerary(program, opts): the plan as a list, from the core engine. The
-// last tests hold it to analyzeSchedule(...).steps (./schedule) on every
-// program we have, so the two cannot drift apart.
+// itinerary(program, opts): the plan as a list, from the core engine, and
+// ./schedule's itinerary, which applies the LabMCP estimates first. The
+// last tests hold both to analyzeSchedule(...).steps (./schedule) on every
+// program we have (the core one on programs with no LabMCP estimate).
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -9,7 +10,11 @@ const fs = require("fs");
 const path = require("path");
 
 const R = require("../src/index.js");
-const { analyzeSchedule } = require("../src/schedule");
+const S = require("../src/schedule");
+const { analyzeSchedule } = S;
+
+const FIELDS = ["stepId", "name", "trackId", "instanceOf", "instanceIndex", "startSeconds", "endSeconds", "durationSeconds", "task", "startAt", "endAt"];
+const pick = (e) => Object.fromEntries(FIELDS.map((k) => [k, e[k]]));
 
 const EXAMPLES = process.env.RHYLTHYME_EXAMPLES || path.join(__dirname, "..", "..", "rhylthyme-examples");
 
@@ -97,6 +102,64 @@ test("actual and now are passed to the timing engine", () => {
   assert.equal(boil.endAt, "2026-11-26T14:04:10.000Z");
 });
 
+test("steps of a replicated track link to their authored step", () => {
+  const p = { tracks: [
+    { trackId: "plate", name: "Plate", replicates: { count: 2 }, steps: [
+      { stepId: "a", name: "A", duration: { type: "fixed", seconds: 10 }, startTrigger: { type: "programStart" } },
+      { stepId: "b", name: "B", duration: { type: "fixed", seconds: 10 }, startTrigger: { type: "afterStep", stepId: "a" },
+        replicates: { count: 2 } },
+    ] },
+    { trackId: "legacy", name: "Legacy", batch_size: 3, steps: [
+      { stepId: "c", name: "C", duration: { type: "fixed", seconds: 5 }, startTrigger: { type: "programStart" } },
+    ] },
+  ] };
+  const by = Object.fromEntries(R.itinerary(p).map((e) => [e.stepId, [e.instanceOf, e.instanceIndex, e.trackId]]));
+  assert.deepEqual(by["a-r1"], ["a", 1, "plate-r1"]);
+  assert.deepEqual(by["a-r2"], ["a", 2, "plate-r2"]);
+  assert.deepEqual(by["c-r3"], ["c", 3, "legacy-r3"]);
+  // A replicated step inside a replicated track keeps its own (inner) link.
+  assert.deepEqual(by["b-r2-r1"].slice(0, 2), ["b-r2", 1]);
+  // analyzeSchedule reports the same links.
+  const an = Object.fromEntries(analyzeSchedule(p).steps.map((e) => [e.stepId, [e.instanceOf, e.instanceIndex, e.trackId]]));
+  assert.deepEqual(an, by);
+  // The expansion itself is unchanged (the player keys run records on it).
+  const ex = R.expandReplicates(p).tracks[0].steps[0];
+  assert.equal(ex.stepId, "a-r1");
+  assert.equal(ex.instanceOf, undefined);
+});
+
+test("an epoch-ms anchor works, 0 included", () => {
+  assert.equal(R.itinerary(program, { startAt: 0 })[0].startAt, "1970-01-01T00:00:00.000Z");
+  assert.equal(R.itinerary(program, { startAt: Date.UTC(2026, 10, 26, 14) }).find((e) => e.stepId === "steep").startAt, "2026-11-26T14:03:00.000Z");
+  assert.equal(R.itinerary(program, { startAt: new Date("2026-11-26T14:00:00Z") }).find((e) => e.stepId === "steep").startAt, "2026-11-26T14:03:00.000Z");
+  const last = R.itinerary(program, { finishAt: 0 }).reduce((m, e) => (e.endSeconds > m.endSeconds ? e : m));
+  assert.equal(last.endAt, "1970-01-01T00:00:00.000Z");
+  for (const v of [null, undefined, "", false, NaN]) {
+    assert.ok(R.itinerary(program, { startAt: v }).every((e) => !("startAt" in e)), String(v));
+  }
+});
+
+// The LabMCP steps from labmcp.test.js: "log" ends on a reply and has no
+// duration, so analyzeSchedule times it by its catalogue estimate (27 s).
+const labmcpProgram = {
+  programId: "t", name: "T", tracks: [{ trackId: "bench", name: "Bench", steps: [
+    { stepId: "heat", name: "Heat", duration: { type: "fixed", seconds: 120 }, startTrigger: { type: "programStart" } },
+    { stepId: "log", name: "Log pH", startTrigger: { type: "afterStep", stepId: "heat" },
+      instrument: { tool: "ph", toolType: "labmcp-atlas-ezo", until: { command: "log_series", params: { count: 10, interval_s: 3 } } } },
+    { stepId: "after", name: "After", duration: { type: "fixed", seconds: 60 }, startTrigger: { type: "afterStep", stepId: "log" } },
+  ] }],
+};
+
+test("./schedule's itinerary applies the LabMCP estimates, as analyzeSchedule does", () => {
+  const anchor = { finishAt: "2026-11-26T18:00:00Z" };
+  const expected = analyzeSchedule(labmcpProgram, anchor).steps.map(pick);
+  assert.equal(expected.find((e) => e.stepId === "log").durationSeconds, 27);
+  assert.deepEqual(S.itinerary(labmcpProgram, anchor).map(pick), expected);
+  assert.deepEqual(R.itinerary(S.labmcp.withEstimates(labmcpProgram), anchor).map(pick), expected);
+  // The core alone has no LabMCP catalogue: the generic instrument estimate.
+  assert.equal(R.itinerary(labmcpProgram).find((e) => e.stepId === "log").durationSeconds, 60);
+});
+
 test("an empty or missing program gives an empty itinerary", () => {
   assert.deepEqual(R.itinerary({ tracks: [] }), []);
   assert.deepEqual(R.itinerary(null), []);
@@ -124,23 +187,24 @@ function parityPrograms() {
   return out;
 }
 
-const FIELDS = ["stepId", "name", "trackId", "instanceOf", "instanceIndex", "startSeconds", "endSeconds", "durationSeconds", "task", "startAt", "endAt"];
-const pick = (e) => Object.fromEntries(FIELDS.map((k) => [k, e[k]]));
 
 for (const anchor of [{}, { startAt: "2026-11-26T14:00:00-05:00" }, { finishAt: "2026-11-26T18:00:00Z" }]) {
   const label = Object.keys(anchor)[0] || "no anchor";
   test(`itinerary agrees with analyzeSchedule(...).steps (${label})`, (t) => {
     const files = parityPrograms();
     if (!fs.existsSync(path.join(EXAMPLES, "programs"))) t.diagnostic(`rhylthyme-examples not found at ${EXAMPLES}; fixtures only`);
-    let compared = 0;
+    let compared = 0, withEstimates = 0;
     for (const [rel, file] of files) {
       const p = JSON.parse(fs.readFileSync(file, "utf8"));
       const expected = analyzeSchedule(p, anchor).steps.map(pick);
-      const actual = R.itinerary(p, anchor).map(pick);
-      assert.deepEqual(actual, expected, rel);
+      assert.deepEqual(S.itinerary(p, anchor).map(pick), expected, `${rel} (./schedule)`);
+      if (S.labmcp.withEstimates(p) === p) assert.deepEqual(R.itinerary(p, anchor).map(pick), expected, rel);
+      else withEstimates++;
       compared++;
     }
+    const lab = analyzeSchedule(labmcpProgram, anchor).steps.map(pick);
+    assert.deepEqual(S.itinerary(labmcpProgram, anchor).map(pick), lab, "labmcpProgram (./schedule)");
     assert.ok(compared > 0);
-    t.diagnostic(`${compared} programs compared`);
+    t.diagnostic(`${compared} programs compared (${withEstimates} with LabMCP estimates: ./schedule only)`);
   });
 }

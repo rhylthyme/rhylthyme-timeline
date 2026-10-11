@@ -12,6 +12,7 @@ export const {
   alertDefaultMessage,
   expandReplicates,
   analyzeSchedule,
+  itinerary,
   withDurations,
   predictDurations,
   predictedSeconds,
