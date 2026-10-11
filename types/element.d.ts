@@ -21,6 +21,53 @@ export interface RhylthymeTimelineEventMap {
   'rt-factors': CustomEvent<{ factors: Record<string, unknown>; skipped: string[]; source: 'prompt' | 'property' | 'attribute' }>;
 }
 
+/** A message: fixed text, or text with `{0}`, `{1}`... standing for the arguments. */
+type LabelText = string;
+/** A message with arguments: a template string (`'Démarrer : {0}'`) or a function. */
+type LabelFn<A extends unknown[]> = string | ((...args: A) => string);
+
+/**
+ * Every user-visible string of the player, keyed. Set a partial object as
+ * `el.labels` to translate; keys left out stay English. Glyphs (▶ ❚❚ ■ ✓) are
+ * not part of the text: they are drawn beside it with aria-hidden, and each
+ * button's aria-label is the text alone. Text is escaped, never parsed as HTML.
+ */
+export interface RhylthymeTimelineLabels {
+  start: LabelText;
+  pause: LabelText;
+  resume: LabelText;
+  stop: LabelText;
+  speed: LabelText;
+  /** One playback-speed option, e.g. `2` -> "2×". */
+  speedOption: LabelFn<[factor: number]>;
+  statusStopped: LabelText;
+  statusRunning: LabelText;
+  statusPaused: LabelText;
+  statusCompleted: LabelText;
+  /** The button on a step that waits for a person: "Start: <name>". */
+  startStep: LabelFn<[name: string]>;
+  /** The button on a step that runs until marked done: "Done: <name>". */
+  doneStep: LabelFn<[name: string]>;
+  /** A replicate instance's suffix: "[2 of 3]"; `count` may be "?". */
+  instance: LabelFn<[index: number, count: number | string]>;
+  /** A replicate group's heading: "Bake tray ×3 — 1 done". */
+  groupProgress: LabelFn<[name: string, count: number, done: number]>;
+  actionsHint: LabelText;
+  loading: LabelText;
+  /** The empty state; the arguments are drawn as `<code>program</code>` and `<code>src</code>`. */
+  noProgram: LabelFn<[property: string, attribute: string]>;
+  loadError: LabelFn<[url: string, message: string]>;
+  factorsTitle: LabelText;
+  factorsHint: LabelText;
+  /** The empty option of an enum factor's picker. */
+  factorSkip: LabelText;
+  factorsStart: LabelText;
+  factorNotNumber: LabelFn<[text: string]>;
+  factorNotInteger: LabelFn<[text: string]>;
+  /** `values` is the allowed values joined with ", ". */
+  factorNotOneOf: LabelFn<[text: string, values: string]>;
+}
+
 export interface RhylthymeTimelineElement extends HTMLElement {
   program: Program | null;
   readonly currentTime: number;
@@ -41,6 +88,12 @@ export interface RhylthymeTimelineElement extends HTMLElement {
   factors: Record<string, unknown>;
   /** History-based duration predictions, as analyze_schedule returns them. */
   predictions: Record<string, { seconds: number; low?: number; high?: number; basis?: string }>;
+  /**
+   * Translations: a partial table merged over the English defaults (null
+   * clears it). Reading it returns the whole table in effect.
+   */
+  get labels(): RhylthymeTimelineLabels;
+  set labels(value: Partial<RhylthymeTimelineLabels> | null);
   /** Reflect the attributes of the same names. */
   mode: 'player' | 'static';
   speed: number;

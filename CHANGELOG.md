@@ -3,6 +3,22 @@
 All notable changes to this package are documented here. The format follows
 Keep a Changelog; versions follow SemVer.
 
+## [Unreleased]
+
+### Added
+- `<rhylthyme-timeline>`: a `labels` property for translating the player
+  (#7). Every user-visible string now comes from one `MESSAGES` table in
+  `src/element.js`; `labels` merges a partial override over the English
+  defaults, as strings (with `{0}`, `{1}`… placeholders) or functions.
+  Unknown keys and non-string values are ignored, a throwing function
+  falls back to English, and the text is always escaped. Typed as
+  `RhylthymeTimelineLabels` in `types/element.d.ts`. English output is
+  unchanged.
+- Accessible buttons: the glyphs (▶ ❚❚ ■ ✓) are wrapped in
+  `aria-hidden` spans and every transport, step and factor-form button
+  carries an `aria-label` with its text. The status element gains a
+  `data-status` attribute holding the untranslated state.
+
 ## [2.0.0-beta.6] - unreleased
 
 ### Added

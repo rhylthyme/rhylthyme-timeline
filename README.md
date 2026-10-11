@@ -54,9 +54,37 @@ pickers, event log). `?at=9000&theme=dark` positions it for screenshots.
 
 Methods: `start()`, `pause()`, `stop()`, `toggle()`, `seek(seconds)` (while
 paused), `startStep(id)`, `completeStep(id)`, `tick()`, `setClock(fn)`.
-Read-only: `currentTime`, `status`, `timings`, `stepStates`. Events (all
+Read-only: `currentTime`, `status`, `timings`, `stepStates`. Read/write:
+`labels` (translations, below). Events (all
 bubble and cross the shadow boundary): `rt-load`, `rt-start`, `rt-pause`,
 `rt-stop`, `rt-tick`, `rt-step-start`, `rt-step-complete`, `rt-complete`.
+
+**Translating the player.** Every string it shows is a key of one
+table; set `labels` to a partial object and the keys you leave out stay
+English. Use a string, with `{0}`, `{1}`… for arguments, or a function:
+
+```js
+el.labels = {
+  start: 'Démarrer', pause: 'Pause', resume: 'Reprendre', stop: 'Arrêter',
+  speed: 'Vitesse', statusRunning: 'en cours',
+  startStep: (name) => `Démarrer : ${name}`,
+  doneStep: 'Terminé : {0}',
+};
+console.log(Object.keys(el.labels)); // the full key list, with the text in effect
+```
+
+The keys are typed as `RhylthymeTimelineLabels` in
+`@rhylthyme/timeline/element`: transport (`start`, `pause`, `resume`,
+`stop`, `speed`, `speedOption`), status (`statusStopped`, `statusRunning`,
+`statusPaused`, `statusCompleted`), step actions (`startStep`, `doneStep`,
+`instance`, `groupProgress`, `actionsHint`), the empty state (`loading`,
+`noProgram`, `loadError`) and the variance-factor form (`factorsTitle`,
+`factorsHint`, `factorSkip`, `factorsStart`, `factorNotNumber`,
+`factorNotInteger`, `factorNotOneOf`). Text is escaped, never parsed as
+HTML. The glyphs (▶ ❚❚ ■ ✓) are not part of the text: they are drawn
+beside it with `aria-hidden="true"`, and each button's `aria-label` is
+the text alone. The status element keeps the untranslated state in
+`data-status` for styling.
 
 How the player treats step kinds, matching the rhylthyme.com runner:
 

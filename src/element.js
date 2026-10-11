@@ -54,6 +54,12 @@
  *                         high, basis}} exactly as predict_durations / analyze_schedule
  *                         return them. They change nothing unless the program sets
  *                         metadata.offsetsUse to "predicted" — see below
+ *   labels                translations: a partial {key: string | function} merged over
+ *                         the English MESSAGES table below (null clears it). A string
+ *                         may use {0}, {1}... for the arguments; a function receives
+ *                         them, e.g. { startStep: function (name) { return 'Démarrer : ' + name; } }.
+ *                         Reading it returns the whole table in effect. Glyphs are kept
+ *                         out of the text (aria-hidden); buttons carry an aria-label
  *
  * Events (bubbling, composed; detail carries time and step ids)
  *   rt-start rt-pause rt-stop rt-tick rt-step-start rt-step-complete rt-complete rt-load
@@ -114,6 +120,71 @@
   if (!R || !R.computeStepTimings) {
     if (typeof customElements === 'undefined') return;
     throw new Error('rhylthyme-timeline element: load src/index.js (the engine) first');
+  }
+
+  // ---- user-visible text -------------------------------------------------
+  // Every string the player shows, in English. The `labels` property merges
+  // a partial override over this table: a string replaces the text (with
+  // {0}, {1}... standing for the arguments), a function receives the
+  // arguments and returns the text. Glyphs (▶ ❚❚ ■ ✓) are not part of the
+  // text: they are drawn beside it and hidden from screen readers.
+  // Keep in step with RhylthymeTimelineLabels in types/element.d.ts.
+  var MESSAGES = {
+    start: 'Start',
+    pause: 'Pause',
+    resume: 'Resume',
+    stop: 'Stop',
+    speed: 'Speed',
+    speedOption: function (factor) { return factor + '×'; },
+    statusStopped: 'stopped',
+    statusRunning: 'running',
+    statusPaused: 'paused',
+    statusCompleted: 'completed',
+    startStep: function (name) { return 'Start: ' + name; },
+    doneStep: function (name) { return 'Done: ' + name; },
+    instance: function (index, count) { return '[' + index + ' of ' + count + ']'; },
+    groupProgress: function (name, count, done) { return name + ' ×' + count + ' — ' + done + ' done'; },
+    actionsHint: 'Red-dashed bars wait for you to start them; hatched bars run until you mark them done.',
+    loading: 'Loading…',
+    // {0} and {1} are drawn as <code>program</code> and <code>src</code>.
+    noProgram: function (property, attribute) { return 'No program loaded. Set the ' + property + ' property or a ' + attribute + ' URL.'; },
+    loadError: function (url, message) { return 'Could not load ' + url + ': ' + message; },
+    factorsTitle: 'Before you start',
+    factorsHint: 'This program asks what is different about this run, so the times it records can be compared with others. Leave anything blank to skip it.',
+    factorSkip: '— skip —',
+    factorsStart: 'Start',
+    factorNotNumber: function (text) { return "'" + text + "' is not a number"; },
+    factorNotInteger: function (text) { return "'" + text + "' is not an integer"; },
+    factorNotOneOf: function (text, values) { return "'" + text + "' is not one of " + values; }
+  };
+  function message(labels, key, args) {
+    var own = labels && Object.prototype.hasOwnProperty.call(labels, key) ? labels[key] : undefined;
+    var fallback = MESSAGES[key];
+    var pick = function (v) {
+      if (typeof v === 'function') return v.apply(null, args);
+      if (typeof v === 'string') return v.replace(/\{(\d+)\}/g, function (m, i) { return i < args.length ? String(args[i]) : m; });
+      return undefined;
+    };
+    if (own !== undefined && own !== null) {
+      try {
+        var text = pick(own);
+        if (text !== undefined && text !== null) return String(text);
+      } catch (e) { /* a broken override falls back to English */ }
+    }
+    return String(pick(fallback));
+  }
+  var STATUS_KEYS = { stopped: 'statusStopped', running: 'statusRunning', paused: 'statusPaused', completed: 'statusCompleted' };
+  // A button whose glyph is decoration: screen readers read the aria-label,
+  // and textContent stays "<glyph> <text>".
+  function glyphButton(attrs, glyph, text) {
+    return '<button ' + attrs + ' aria-label="' + esc(text) + '"><span class="glyph" aria-hidden="true">' + glyph + '</span> ' + esc(text) + '</button>';
+  }
+  // noProgram's arguments are drawn as <code>; the text around them is escaped.
+  var CODE_SLOTS = ['\u0001code0\u0001', '\u0001code1\u0001'];
+  function withCode(text, names) {
+    var html = esc(text);
+    CODE_SLOTS.forEach(function (slot, i) { html = html.split(slot).join('<code>' + esc(names[i]) + '</code>'); });
+    return html;
   }
 
   // ---- canonical program hash --------------------------------------------
@@ -315,11 +386,11 @@
     if (text === '') return [false, null, 'empty'];
     if (kind === 'number') {
       var num = Number(text);
-      if (text === '' || !isFinite(num)) return [false, null, "'" + text + "' is not a number"];
+      if (text === '' || !isFinite(num)) return [false, null, "'" + text + "' is not a number", 'factorNotNumber', [text]];
       return [true, num, ''];
     }
     if (kind === 'integer') {
-      if (!/^[+-]?\d+$/.test(text)) return [false, null, "'" + text + "' is not an integer"];
+      if (!/^[+-]?\d+$/.test(text)) return [false, null, "'" + text + "' is not an integer", 'factorNotInteger', [text]];
       return [true, parseInt(text, 10), ''];
     }
     if (kind === 'enum') {
@@ -327,7 +398,7 @@
       for (var i = 0; i < values.length; i++) {
         if (text.toLowerCase() === String(values[i]).toLowerCase()) return [true, values[i], ''];
       }
-      return [false, null, "'" + text + "' is not one of " + values.join(', ')];
+      return [false, null, "'" + text + "' is not one of " + values.join(', '), 'factorNotOneOf', [text, values.join(', ')]];
     }
     return [true, text, ''];
   }
@@ -408,15 +479,15 @@
     var m = step && step.instanceOf ? INSTANCE_NAME.exec(n) : null;
     return m ? m[1] : n;
   }
-  function instanceLabel(step, count) {
+  function instanceLabel(step, count, labels) {
     if (!step || !step.instanceOf) return '';
     var i = step.instanceIndex;
     if (!i) { var m = INSTANCE_NAME.exec(step.name || ''); if (m) i = +m[2]; }
     if (!i) return '';
-    return '[' + i + ' of ' + (count || '?') + ']';
+    return message(labels, 'instance', [i, count || '?']);
   }
-  function instanceName(step, count) {
-    var label = instanceLabel(step, count);
+  function instanceName(step, count, labels) {
+    var label = instanceLabel(step, count, labels);
     return label ? baseName(step) + ' ' + label : (step && (step.name || step.stepId)) || '';
   }
 
@@ -559,7 +630,7 @@
       if (typeof fetch !== 'function') return;
       fetch(url).then(function (r) { if (!r.ok) throw new Error(r.status + ' ' + r.statusText); return r.json(); })
         .then(function (json) { self.program = json; })
-        .catch(function (err) { self._wrap.innerHTML = '<div class="empty">Could not load ' + esc(url) + ': ' + esc(err.message) + '</div>'; });
+        .catch(function (err) { self._wrap.innerHTML = '<div class="empty">' + esc(self._msg('loadError', [url, err.message])) + '</div>'; });
     };
 
     // ---- attribute-backed settings ---------------------------------------
@@ -579,6 +650,27 @@
       get: function () { var v = this.getAttribute('start-at'); if (!v) return null; var d = new Date(v); return isNaN(d.getTime()) ? null : d; },
       set: function (v) { if (v) this.setAttribute('start-at', v instanceof Date ? v.toISOString() : String(v)); else this.removeAttribute('start-at'); }
     });
+    // Translatable text: a partial {key: string | function} merged over MESSAGES.
+    // Reading it returns the full table in effect (overrides and defaults).
+    Object.defineProperty(proto, 'labels', {
+      get: function () {
+        var out = {}, own = this._labels || {};
+        Object.keys(MESSAGES).forEach(function (k) { out[k] = own[k] !== undefined && own[k] !== null ? own[k] : MESSAGES[k]; });
+        return out;
+      },
+      set: function (v) {
+        var own = {};
+        if (v && typeof v === 'object') {
+          Object.keys(v).forEach(function (k) {
+            if (Object.prototype.hasOwnProperty.call(MESSAGES, k) && (typeof v[k] === 'string' || typeof v[k] === 'function')) own[k] = v[k];
+          });
+        }
+        this._labels = own;
+        this._renderFactorForm();
+        this.render();
+      }
+    });
+    proto._msg = function (key, args) { return message(this._labels, key, args || []); };
     Object.defineProperty(proto, 'currentTime', { get: function () { return this._time; } });
     Object.defineProperty(proto, 'status', { get: function () { return this._status; } });
     Object.defineProperty(proto, 'timings', { get: function () { return this._timings(); } });
@@ -678,14 +770,15 @@
       var factors = this.declaredFactors;
       if (!this._factorsOpen || !factors.length) { host.hidden = true; host.innerHTML = ''; return; }
       var answers = this._factorAnswers, raw = this._factorRaw, html = [];
-      html.push('<h3>Before you start</h3>');
-      html.push('<p class="factors-hint">This program asks what is different about this run, so the times it records can be compared with others. Leave anything blank to skip it.</p>');
+      html.push('<h3>' + esc(this._msg('factorsTitle')) + '</h3>');
+      html.push('<p class="factors-hint">' + esc(this._msg('factorsHint')) + '</p>');
+      var skipText = esc(this._msg('factorSkip'));
       factors.forEach(function (f) {
         var value = answers[f.key] !== undefined ? answers[f.key] : (raw[f.key] !== undefined ? raw[f.key] : '');
         html.push('<label class="factor" data-factor-row="' + esc(f.key) + '">');
         html.push('<span class="label">' + esc(f.label || f.key) + '</span>');
         if (f.type === 'enum') {
-          html.push('<select data-factor="' + esc(f.key) + '"><option value="">— skip —</option>');
+          html.push('<select data-factor="' + esc(f.key) + '"><option value="">' + skipText + '</option>');
           (f.values || []).forEach(function (v) {
             html.push('<option value="' + esc(v) + '"' + (String(value) === String(v) ? ' selected' : '') + '>' + esc(v) + '</option>');
           });
@@ -704,7 +797,7 @@
         html.push('<span class="factor-error" data-factor-error="' + esc(f.key) + '" hidden></span>');
         html.push('</label>');
       });
-      html.push('<button data-act="factors-start">▶ Start</button>');
+      html.push(glyphButton('data-act="factors-start"', '▶', this._msg('factorsStart')));
       host.innerHTML = html.join('');
       host.hidden = false;
     };
@@ -723,7 +816,7 @@
       Array.prototype.forEach.call(host.querySelectorAll('[data-factor-error]'), function (slot) {
         slot.textContent = ''; slot.hidden = true;
       });
-      var answers = {}, bad = 0;
+      var answers = {}, bad = 0, self = this;
       Object.keys(supplied).forEach(function (key) {
         var res = coerceFactor(byKey[key], supplied[key]);
         var slot = host.querySelector('[data-factor-error="' + key + '"]');
@@ -732,7 +825,7 @@
           if (slot) { slot.textContent = ''; slot.hidden = true; }
         } else {
           bad++;
-          if (slot) { slot.textContent = res[2]; slot.hidden = false; }
+          if (slot) { slot.textContent = res[3] ? self._msg(res[3], res[4]) : res[2]; slot.hidden = false; }
         }
       });
       if (bad) return false;   // stay open; the executor fixes or clears the field
@@ -1198,7 +1291,7 @@
     proto.render = function () {
       if (!this._wrap) return;
       if (!this._expanded) {
-        this._wrap.innerHTML = '<div class="empty">' + (this.hasAttribute('src') ? 'Loading…' : 'No program loaded. Set the <code>program</code> property or a <code>src</code> URL.') + '</div>';
+        this._wrap.innerHTML = '<div class="empty">' + (this.hasAttribute('src') ? esc(this._msg('loading')) : withCode(this._msg('noProgram', CODE_SLOTS), ['program', 'src'])) + '</div>';
         return;
       }
       var player = this.mode === 'player';
@@ -1212,12 +1305,13 @@
       if (player) {
         var st = this._status, running = st === 'running';
         html.push('<div class="controls" part="controls">');
-        html.push('<button class="' + (running ? '' : 'primary') + '" data-act="' + (running ? 'pause' : 'start') + '">' + (running ? '❚❚ Pause' : (st === 'paused' ? '▶ Resume' : '▶ Start')) + '</button>');
-        html.push('<button class="stop" data-act="stop"' + (st === 'stopped' ? ' disabled' : '') + '>■ Stop</button>');
-        html.push('<label>Speed <select data-set="speed">' + [0.5, 1, 2, 5, 10, 30, 60].map(function (v) {
-          return '<option value="' + v + '"' + (v === this.speed ? ' selected' : '') + '>' + v + '×</option>';
+        html.push(glyphButton('class="' + (running ? '' : 'primary') + '" data-act="' + (running ? 'pause' : 'start') + '"',
+          running ? '❚❚' : '▶', this._msg(running ? 'pause' : (st === 'paused' ? 'resume' : 'start'))));
+        html.push(glyphButton('class="stop" data-act="stop"' + (st === 'stopped' ? ' disabled' : ''), '■', this._msg('stop')));
+        html.push('<label>' + esc(this._msg('speed')) + ' <select data-set="speed">' + [0.5, 1, 2, 5, 10, 30, 60].map(function (v) {
+          return '<option value="' + v + '"' + (v === this.speed ? ' selected' : '') + '>' + esc(this._msg('speedOption', [v])) + '</option>';
         }, this).join('') + '</select></label>');
-        html.push('<div class="clock"><span class="time" part="time">' + esc(this.formatTime(this._time)) + '</span><span class="status" part="status">' + esc(st) + '</span></div>');
+        html.push('<div class="clock"><span class="time" part="time">' + esc(this.formatTime(this._time)) + '</span><span class="status" part="status" data-status="' + esc(st) + '">' + esc(this._msg(STATUS_KEYS[st] || 'statusStopped')) + '</span></div>');
         html.push('</div>');
       }
       html.push('<div class="chart" part="chart">' + svg + '</div>');
@@ -1230,11 +1324,11 @@
         var flush = function () { if (open) { actions.push('</div>'); open = null; } };
         this._order.forEach(function (id) {
           var step = self._steps[id], g = self._groupOf[id];
-          var name = g ? instanceName(step, byId[g].count) : (step.name || id);
+          var name = g ? instanceName(step, byId[g].count, self._labels) : (step.name || id);
           var button = null;
-          if (states[id] === 'waiting') button = '<button class="start" data-step-start="' + esc(id) + '">▶ Start: ' + esc(name) + '</button>';
+          if (states[id] === 'waiting') button = glyphButton('class="start" data-step-start="' + esc(id) + '"', '▶', self._msg('startStep', [name]));
           else if (states[id] === 'active' && R.stepNeedsFinish(step) && !(self._actual[id] && self._actual[id].end !== undefined)) {
-            button = '<button class="done" data-step-done="' + esc(id) + '">✓ Done: ' + esc(name) + '</button>';
+            button = glyphButton('class="done" data-step-done="' + esc(id) + '"', '✓', self._msg('doneStep', [name]));
           }
           if (!button) return;
           if (g !== open) {
@@ -1242,14 +1336,14 @@
             if (g) {
               var grp = byId[g];
               open = g;
-              actions.push('<div class="rt-group" data-group="' + esc(g) + '"><span class="rt-group-label">' + esc(grp.name) + ' ×' + grp.count + ' — ' + grp.done + ' done</span>');
+              actions.push('<div class="rt-group" data-group="' + esc(g) + '"><span class="rt-group-label">' + esc(self._msg('groupProgress', [grp.name, grp.count, grp.done])) + '</span>');
             }
           }
           actions.push(button);
           count++;
         });
         flush();
-        html.push('<div class="actions" part="actions">' + actions.join('') + (count ? '<span class="hint">Red-dashed bars wait for you to start them; hatched bars run until you mark them done.</span>' : '') + '</div>');
+        html.push('<div class="actions" part="actions">' + actions.join('') + (count ? '<span class="hint">' + esc(this._msg('actionsHint')) + '</span>' : '') + '</div>');
       }
       this._wrap.innerHTML = html.join('');
     };

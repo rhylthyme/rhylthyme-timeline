@@ -380,3 +380,52 @@ test('the player hashes programs exactly like tools/hash-program.js',
     // ...and the record carries the hash of the program that was run.
     assert.strictEqual(out.records.mainFirst.programVersion, out.hashed[0].hash);
   });
+
+// ---------------------------------------------------------------------
+// Translatable labels and accessible buttons (issue #7)
+// ---------------------------------------------------------------------
+
+test('the player translates its text through the labels property',
+  { skip: chrome ? false : 'no Chrome binary found (set CHROME_BIN)' }, async () => {
+    const out = await harnessOutput();
+    assert.deepStrictEqual(out.errors, []);
+    const l = out.labels;
+
+    // English stays exactly as before; the glyph is aria-hidden and the
+    // button's aria-label is the text alone.
+    assert.deepStrictEqual(l.defaultStart, ['▶ Start', 'Start', '▶']);
+    assert.deepStrictEqual(l.defaultStop, ['■ Stop', 'Stop', '■']);
+    assert.deepStrictEqual(l.defaultPause, ['❚❚ Pause', 'Pause', '❚❚']);
+    assert.deepStrictEqual(l.defaultResume, ['▶ Resume', 'Resume', '▶']);
+    assert.strictEqual(l.defaultStatus, 'stopped');
+    assert.match(l.defaultStepStart[0], /^▶ Start: \S/);
+    assert.strictEqual(l.defaultStepStart[1], l.defaultStepStart[0].slice(2));
+    assert.strictEqual(l.defaultStepStart[2], '▶');
+    assert.match(l.defaultStepDone[0], /^✓ Done: \S/);
+    assert.strictEqual(l.defaultStepDone[2], '✓');
+    assert.deepStrictEqual(l.defaultFormStart, ['▶ Start', 'Start', '▶']);
+    assert.strictEqual(l.emptyDefault,
+      'No program loaded. Set the <code>program</code> property or a <code>src</code> URL.');
+    assert.ok(l.defaultKeys >= 20, 'labels getter returns the whole table');
+
+    // Overrides: plain strings, {0} placeholders and functions.
+    assert.deepStrictEqual(l.frResume, ['▶ Reprendre', 'Reprendre', '▶']);
+    assert.deepStrictEqual(l.frStop, ['■ Arrêter', 'Arrêter', '■']);
+    assert.match(l.frStepStart[0], /^▶ Démarrer : \S/);
+    assert.strictEqual(l.frStepStart[1], l.frStepStart[0].slice(2));
+    assert.match(l.frStepDone[0], /^✓ Terminé : \S/);
+    assert.strictEqual(l.frSpeed, 'Vitesse ');
+    assert.deepStrictEqual(l.frStatus, ['en pause', 'paused']);
+    assert.strictEqual(l.frHintEscaped, '<b>not markup</b>', 'label text is escaped, never parsed as HTML');
+    assert.deepStrictEqual(l.ignoredKeys, [true, true], 'unknown keys and non-string values are ignored');
+    assert.deepStrictEqual(l.untranslatedPause, ['❚❚ Pause', 'Pause', '❚❚'], 'keys left out stay English');
+    assert.strictEqual(l.throwingFallsBack, true);
+    assert.deepStrictEqual(l.cleared, ['❚❚ Pause', 'Pause', '❚❚']);
+
+    // The variance-factor form.
+    assert.strictEqual(l.formTitle, 'Avant de commencer');
+    assert.deepStrictEqual(l.formStart, ['▶ Commencer', 'Commencer', '▶']);
+    assert.strictEqual(l.formSkip, '— passer —');
+    assert.strictEqual(l.formError, "« lourd » n'est pas un nombre");
+    assert.strictEqual(l.emptyFr, 'Aucun programme : propriété <code>program</code> ou URL <code>src</code>.');
+  });
