@@ -319,7 +319,7 @@ const svg = Rhylthyme.renderTimelineSvg(program);
 | `renderTimeline(container, program, opts?)` | Injects the SVG into a DOM element and returns the markup. |
 | `actualFromRun(record, program?, opts?)` | `{ [stepId]: { start, end } }` from a run record, keyed by expanded step id, ready to pass as `computeStepTimings`' `actual`. `opts.endsOnly` keeps only the ends, which is what a replay check feeds back so that every start has to come out of the trigger graph. Arguments may be given in either order. |
 | `timingsFromRun(program, record, opts?)` | `computeStepTimings(program, { actual: actualFromRun(record, program, opts) })`. |
-| `runtimeStepId(entry, knownIds?)` | The expanded step id a record entry refers to: `<stepId>-r<instance>` for a replicated step, `<stepId>` otherwise, confirmed against `knownIds` when given. Python twin: `rhylthyme_cli_runner.history.replay.record_step_id`. |
+| `runtimeStepId(entry, knownIds?)` | The expanded step id a record entry refers to: `<stepId>-r<instance>` for a replicated step, `<stepId>` otherwise, confirmed against `knownIds` when given. Python twin: `rhylthyme.history.replay.record_step_id`. |
 | `buildPlayerHtml(program, environment?)` (from `@rhylthyme/timeline/player`) | The interactive visualizer page as an HTML string, identical to the server's. Needs Node (reads `player/template.html`). |
 | `stepNeedsStart(step)` / `stepNeedsFinish(step)` | Whether the executor must start the step (manual gate, negative offset) / must end it (indefinite, variable with `triggerName`). |
 | `expandReplicates(program)` | A deep copy with track/step `replicates` (and legacy `batch_size`/`stagger`) expanded into flat tracks and steps, exactly as the Python `expand_replicates` does. The functions above apply it automatically. |
@@ -331,7 +331,7 @@ const svg = Rhylthyme.renderTimelineSvg(program);
 ### Trigger semantics
 
 Timings follow the Python reference validator in
-[`rhylthyme`](https://github.com/rhylthyme/rhylthyme-cli-runner):
+[`rhylthyme`](https://github.com/rhylthyme/rhylthyme):
 
 | Trigger | Start |
 |---|---|

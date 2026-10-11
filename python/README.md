@@ -10,7 +10,7 @@ you need on your PATH.
 
 ```bash
 pip install rhylthyme-timeline
-rhylthyme render dinner.json -o dinner.svg                    # with pip install rhylthyme
+rhylthyme render dinner.json -o dinner.svg                    # with pip install 'rhylthyme[timeline]'
 rhylthyme render dinner.json -o dinner.png --style web --palette vivid --start-at 2026-10-03T12:50:00
 rhylthyme render dinner.json -o figure.pdf --style publication --legend right
 rhylthyme-render --help                                       # this package's own command, same options
@@ -27,5 +27,6 @@ svg = render(program, style="web", colorBy="task")
 renderer_path()   # the index.js to require() from your own Node code
 ```
 
-`pip install rhylthyme` brings this package in together with the `rhylthyme`
-command-line tool and the importers.
+`pip install 'rhylthyme[timeline]'` brings this package in together with the
+`rhylthyme` command-line tool; `pip install 'rhylthyme[all]'` adds the
+importers too.

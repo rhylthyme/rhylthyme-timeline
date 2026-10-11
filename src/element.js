@@ -49,7 +49,7 @@
  *   factors               the answers to the declared factors, {key: value}. Setting it
  *                         coerces each value against its declared type and silently drops
  *                         the ones that do not fit (and keys the program does not declare),
- *                         exactly as rhylthyme_cli_runner.history.factors.preset_answers does
+ *                         exactly as rhylthyme.history.factors.preset_answers does
  *   predictions           history-based duration predictions, {stepId: {seconds, low,
  *                         high, basis}} exactly as predict_durations / analyze_schedule
  *                         return them. They change nothing unless the program sets
@@ -82,7 +82,7 @@
  * spent suspended (the wall clock advanced more than the monotonic clock by > 1 s,
  * typically a phone asleep) while the step was running. programVersion is the
  * canonical SHA-256 of the program as set (before replicate expansion), the same
- * hash as tools/hash-program.js and rhylthyme_cli_runner.history.hash.
+ * hash as tools/hash-program.js and rhylthyme.history.hash.
  *
  * Predicted offsets (metadata.offsetsUse: "predicted", program schema 0.3.0-alpha):
  * a NEGATIVE offset ("peel the potatoes 45 min before the roast is done") has to be
@@ -112,7 +112,7 @@
   }
 
   // ---- canonical program hash --------------------------------------------
-  // Twin of tools/hash-program.js and rhylthyme_cli_runner/history/hash.py:
+  // Twin of tools/hash-program.js and rhylthyme/history/hash.py:
   // keys sorted by code point, no whitespace, UTF-8, integral numbers without
   // a fractional part; "sha256:" + hex digest. Attached to the engine object
   // even where customElements is missing (Node) so parity can be tested.
@@ -274,7 +274,7 @@
   }
 
   // ---- declared variance factors -----------------------------------------
-  // Twin of rhylthyme_cli_runner/history/factors.py: the program's
+  // Twin of rhylthyme/history/factors.py: the program's
   // metadata.varianceFactors, normalised and deduplicated, and the same
   // type coercion, so the CLI runner and the player record the same values
   // for the same answers.
@@ -327,7 +327,7 @@
     return [true, text, ''];
   }
   // ---- predicted offsets (metadata.offsetsUse) ---------------------------
-  // Twin of rhylthyme_cli_runner.program_runner.ProgramRunner's
+  // Twin of rhylthyme.program_runner.ProgramRunner's
   // _eligible_prediction: a NEGATIVE offset ("peel the potatoes 45 min before
   // the roast is done") has to be resolved against the anchor's PROJECTED end,
   // because nothing can see a future end. The projection is the author's

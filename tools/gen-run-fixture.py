@@ -47,7 +47,6 @@ OUT_DIR = os.path.join(FIXTURES, "runs")
 OUT_FILE = os.path.join(OUT_DIR, "thanksgiving_one_oven.run.json")
 
 # Prefer the source trees so this works without an editable install.
-sys.path.insert(0, os.path.join(MONOREPO_ROOT, "src"))
 sys.path.insert(0, os.path.join(MONOREPO_ROOT, "rhylthyme-cli-runner", "src"))
 
 START_EPOCH = 1_700_000_000.0
@@ -75,9 +74,9 @@ class FakeClock:
 
 
 def simulate(program, clock):
-    import rhylthyme_cli_runner.program_runner as program_runner_module
-    from rhylthyme_cli_runner.history import RunRecorder
-    from rhylthyme_cli_runner.program_runner import ProgramRunner, StepStatus
+    import rhylthyme.program_runner as program_runner_module
+    from rhylthyme.history import RunRecorder
+    from rhylthyme.program_runner import ProgramRunner, StepStatus
 
     runner = ProgramRunner(program, time_scale=1.0)
     recorder = RunRecorder(runner, source_program=program).attach()
@@ -140,7 +139,7 @@ def main(argv):
     finally:
         time.time = real_time
 
-    from rhylthyme_cli_runner.history import validate_run
+    from rhylthyme.history import validate_run
 
     errors = validate_run(record)
     if errors:
