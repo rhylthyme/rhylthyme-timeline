@@ -6,22 +6,6 @@ Keep a Changelog; versions follow SemVer.
 ## [Unreleased]
 
 ### Added
-- `itinerary(program, { startAt?, finishAt?, actual?, now? })` in the core
-  engine: every expanded step in plan order with `name`, `trackName`,
-  `instanceOf` / `instanceIndex`, seconds, `needsStart` / `needsFinish`,
-  `task`, and ISO `startAt` / `endAt` when anchored (the same anchoring as
-  `analyzeSchedule`). Lets an app list the plan without loading
-  `./schedule` (#4). Types `ItineraryOptions` and `ItineraryEntry`;
-  `test/itinerary.test.js` checks it against `analyzeSchedule(...).steps`
-  on every rhylthyme-examples and gold program. The core has no LabMCP
-  catalogue, so a LabMCP step with no duration gets the generic instrument
-  estimate there.
-- `itinerary` in `@rhylthyme/timeline/schedule`: the core `itinerary` after
-  the LabMCP catalogue estimates, so it agrees with `analyzeSchedule` on
-  every program.
-- `labmcp.registerCatalog(catalog)` and `labmcp.hasCatalog()`;
-  `labmcp.CATALOG` is now the registered catalogue or `null`.
-
 ### Changed
 - `@rhylthyme/timeline/schedule` no longer bundles the 350 KB LabMCP
   instrument catalogue for browsers (#5). The Node entry (`require` and

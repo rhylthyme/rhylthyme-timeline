@@ -380,3 +380,144 @@ test('the player hashes programs exactly like tools/hash-program.js',
     // ...and the record carries the hash of the program that was run.
     assert.strictEqual(out.records.mainFirst.programVersion, out.hashed[0].hash);
   });
+
+// ---------------------------------------------------------------------
+// rt-step-began / rt-step-ended (issue #6): every step, once per run
+// ---------------------------------------------------------------------
+
+test('rt-step-began and rt-step-ended fire once per step per run, in time order',
+  { skip: chrome ? false : 'no Chrome binary found (set CHROME_BIN)' }, async () => {
+    const out = await harnessOutput();
+    assert.deepStrictEqual(out.errors, []);
+    const T = out.transitions;
+    const steps = (log) => log.filter((e) => e[0] === 'rt-step-began' || e[0] === 'rt-step-ended');
+    const nonDecreasing = (log) => log.every((e, i) => i === 0 || e[2] >= log[i - 1][2]);
+
+    // Thanksgiving played to the end: exactly one began and one ended per
+    // step, a step's began before its ended, everything in time order and
+    // before rt-complete.
+    assert.strictEqual(T.status, 'completed');
+    assert.strictEqual(T.stepIds.length, 13);
+    assert.deepStrictEqual(T.firstAfterStart, [['rt-step-began', 'turkey-prep', 0, 'plan']], 'start() fires the steps that begin at 0');
+    const full = steps(T.full);
+    assert.strictEqual(full.length, 26);
+    for (const id of T.stepIds) {
+      const began = full.filter((e) => e[0] === 'rt-step-began' && e[1] === id);
+      const ended = full.filter((e) => e[0] === 'rt-step-ended' && e[1] === id);
+      assert.strictEqual(began.length, 1, 'one rt-step-began for ' + id);
+      assert.strictEqual(ended.length, 1, 'one rt-step-ended for ' + id);
+      assert.ok(full.indexOf(began[0]) < full.indexOf(ended[0]), id + ' began before it ended');
+      assert.ok(began[0][2] <= ended[0][2], id + ' times');
+    }
+    assert.ok(nonDecreasing(full), 'transitions fire in time order');
+    const completeAt = T.full.findIndex((e) => e[0] === 'rt-complete');
+    assert.ok(completeAt > T.full.lastIndexOf(full[full.length - 1]), 'every ended precedes rt-complete');
+    // Times are the transitions' own seconds, not the 120 s ticks that found them.
+    assert.deepStrictEqual(full.find((e) => e[1] === 'stuffing-prep' && e[0] === 'rt-step-began'), ['rt-step-began', 'stuffing-prep', 5400, 'plan']);
+    assert.deepStrictEqual(full.find((e) => e[1] === 'potatoes-mash' && e[0] === 'rt-step-ended'), ['rt-step-ended', 'potatoes-mash', 11100, 'timer']);
+    // by: the gates a person started, the roast capped by the peel hand-off.
+    const beganBy = Object.fromEntries(full.filter((e) => e[0] === 'rt-step-began').map((e) => [e[1], e[3]]));
+    const endedBy = Object.fromEntries(full.filter((e) => e[0] === 'rt-step-ended').map((e) => [e[1], e[3]]));
+    assert.strictEqual(beganBy['potatoes-peel'], 'person');
+    assert.strictEqual(beganBy['guests-seated'], 'person');
+    assert.strictEqual(beganBy['turkey-prep'], 'plan');
+    assert.strictEqual(endedBy['turkey-roast'], 'trigger');
+    assert.strictEqual(endedBy['turkey-prep'], 'timer');
+    // The old events are unchanged: rt-step-start only for startStep().
+    assert.deepStrictEqual(T.full.filter((e) => e[0] === 'rt-step-start').map((e) => e[1]), ['potatoes-peel', 'guests-seated']);
+    assert.deepStrictEqual(T.full.filter((e) => e[0] === 'rt-step-complete').map((e) => e[1]), ['turkey-roast']);
+    // The same step's rt-step-start comes before its rt-step-began.
+    assert.ok(T.full.findIndex((e) => e[0] === 'rt-step-start' && e[1] === 'potatoes-peel') <
+      T.full.findIndex((e) => e[0] === 'rt-step-began' && e[1] === 'potatoes-peel'));
+
+    // stop() after completion ends nothing again; a new start() is a fresh
+    // run that fires from the top, and stop() mid-run ends the running step "abort".
+    assert.strictEqual(T.afterCompletedStop, 0);
+    assert.deepStrictEqual(steps(T.replay), [
+      ['rt-step-began', 'turkey-prep', 0, 'plan'],
+      ['rt-step-ended', 'turkey-prep', 1200, 'timer'],
+      ['rt-step-began', 'turkey-roast', 1200, 'plan'],
+      ['rt-step-ended', 'turkey-roast', 1300, 'abort'],
+    ]);
+    assert.strictEqual(T.replay[T.replay.length - 1][0], 'rt-stop', 'the abort ends fire before rt-stop');
+
+    // Replicate instances each fire, and one tick that runs the whole program
+    // fires them in time order, an end before the begins it makes way for.
+    assert.deepStrictEqual(T.cookies, [
+      ['rt-step-began', 'mix', 0, 'plan'],
+      ['rt-step-ended', 'mix', 900, 'timer'],
+      ['rt-step-began', 'bake-r1', 900, 'plan'],
+      ['rt-step-ended', 'bake-r1', 1620, 'timer'],
+      ['rt-step-began', 'bake-r2', 1620, 'plan'],
+      ['rt-step-began', 'cool-r1', 1620, 'plan'],
+      ['rt-step-ended', 'bake-r2', 2340, 'timer'],
+      ['rt-step-began', 'cool-r2', 2340, 'plan'],
+      ['rt-step-ended', 'cool-r1', 2520, 'timer'],
+      ['rt-step-began', 'bake-r3', 2520, 'plan'],
+      ['rt-step-ended', 'bake-r3', 3240, 'timer'],
+      ['rt-step-ended', 'cool-r2', 3240, 'timer'],
+      ['rt-step-began', 'cool-r3', 3240, 'plan'],
+      ['rt-step-ended', 'cool-r3', 4140, 'timer'],
+      ['rt-step-began', 'box', 4140, 'plan'],
+      ['rt-step-ended', 'box', 4440, 'timer'],
+    ]);
+
+    // completeStep() is a person (the run record's endedBy "executor").
+    assert.deepStrictEqual(T.person, [
+      ['rt-step-began', 'prep', 0, 'plan'],
+      ['rt-step-ended', 'prep', 60, 'timer'],
+      ['rt-step-began', 'simmer', 60, 'plan'],
+      ['rt-step-ended', 'simmer', 100, 'person'],
+    ]);
+
+    // A zero-length step ends right after its own begin and before the
+    // begins that wait on it, whatever the track order.
+    assert.deepStrictEqual(T.zeroLength, [
+      ['rt-step-began', 'A', 0, 'plan'],
+      ['rt-step-ended', 'A', 10, 'timer'],
+      ['rt-step-began', 'Z1', 10, 'plan'],
+      ['rt-step-ended', 'Z1', 10, 'timer'],
+      ['rt-step-began', 'Z2', 10, 'plan'],
+      ['rt-step-ended', 'Z2', 10, 'timer'],
+      ['rt-step-began', 'B', 10, 'plan'],
+      ['rt-step-ended', 'B', 20, 'timer'],
+    ]);
+
+    // stop() from a handler: the rest of the batch first, then the abort,
+    // then rt-stop, and nothing after it.
+    assert.deepStrictEqual(T.stopInHandler, [
+      ['rt-start', null, 0, null],
+      ['rt-step-began', 'A', 0, 'plan'],
+      ['rt-step-ended', 'A', 10, 'timer'],
+      ['rt-step-began', 'B', 10, 'plan'],
+      ['rt-step-ended', 'B', 20, 'timer'],
+      ['rt-step-began', 'C', 20, 'plan'],
+      ['rt-step-ended', 'C', 25, 'abort'],
+      ['rt-stop', null, null, null],
+    ]);
+    assert.strictEqual(T.stopInHandlerStatus, 'stopped');
+    // completeStep() from a handler: its end is queued behind the batch, so
+    // every step still begins before it ends and nothing repeats.
+    const k = T.completeInHandler;
+    assert.strictEqual(k.length, 8);
+    for (const id of ['A', 'V', 'P', 'Q']) {
+      const b = k.findIndex((e) => e[0] === 'rt-step-began' && e[1] === id);
+      const en = k.findIndex((e) => e[0] === 'rt-step-ended' && e[1] === id);
+      assert.ok(b >= 0 && en > b, id + ' began before it ended');
+    }
+    assert.deepStrictEqual(k.find((e) => e[0] === 'rt-step-ended' && e[1] === 'V'), ['rt-step-ended', 'V', 40, 'person']);
+
+    // seek(): forward fires what it passes over, backward fires nothing, and
+    // seeking forward again fires only what is new.
+    assert.deepStrictEqual(T.seekForward, [
+      ['rt-step-began', 'mix', 0, 'plan'],
+      ['rt-step-ended', 'mix', 900, 'timer'],
+      ['rt-step-began', 'bake-r1', 900, 'plan'],
+    ]);
+    assert.deepStrictEqual(T.seekBack, []);
+    assert.deepStrictEqual(T.seekOn, [
+      ['rt-step-ended', 'bake-r1', 1620, 'timer'],
+      ['rt-step-began', 'bake-r2', 1620, 'plan'],
+      ['rt-step-began', 'cool-r1', 1620, 'plan'],
+    ]);
+  });
