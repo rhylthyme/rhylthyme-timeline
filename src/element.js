@@ -70,7 +70,9 @@
  *                         out of the text (aria-hidden); buttons carry an aria-label.
  *                         As with factors / data-factors, the property and the labels
  *                         attribute each replace the whole table: whichever was set
- *                         last wins, and the getter reports that one
+ *                         last wins (re-writing the attribute's current value counts),
+ *                         and the getter reports that one. Set before the element is
+ *                         defined, the property wins over an attribute present then
  *
  * Events (bubbling, composed; detail carries time and step ids)
  *   rt-start rt-pause rt-stop rt-tick rt-step-start rt-step-complete rt-complete rt-load
@@ -618,10 +620,37 @@
       this._wrap = this._root.querySelector('.wrap');
       this._root.addEventListener('click', this._onClick.bind(this));
       this._root.addEventListener('change', this._onChange.bind(this));
+      this._adoptPreUpgradeProperties();
     }
   }
 
     var proto = RhylthymeTimeline.prototype;
+
+    // A page may set properties on <rhylthyme-timeline> before this script
+    // defines it (a deferred or lazily loaded element.js). Those land as own
+    // properties of the plain element and would hide the accessors below, so
+    // the getter would report the raw value while the player showed something
+    // else. Take them off and pass them through the real setters, program
+    // first so factors and predictions are read against it. Which of a
+    // property and an attribute present at upgrade came last cannot be known;
+    // the property wins (it is the one script set deliberately, and only it
+    // can carry functions), and the attribute's upgrade report is skipped.
+    var PRE_UPGRADE = [
+      ['program', 'src'], ['labels', 'labels'], ['factors', 'data-factors'], ['predictions', 'data-predictions'],
+      ['mode'], ['speed'], ['timeFormat'], ['locale'], ['startAt']
+    ];
+    proto._adoptPreUpgradeProperties = function () {
+      var self = this, found = [];
+      this._upgradeOverrides = {};
+      PRE_UPGRADE.forEach(function (p) {
+        if (!Object.prototype.hasOwnProperty.call(self, p[0])) return;
+        var v = self[p[0]];
+        delete self[p[0]];
+        if (p[1] && self.hasAttribute(p[1])) self._upgradeOverrides[p[1]] = true;
+        found.push([p[0], v]);
+      });
+      found.forEach(function (p) { self[p[0]] = p[1]; });
+    };
 
     proto.connectedCallback = function () {
       if (typeof document !== 'undefined') document.addEventListener('visibilitychange', this._onVisibility);
@@ -646,11 +675,21 @@
     // (visible / pageshow) reconciles the wall clock against the monotonic one.
     proto._onVisibility = function () { this.reconcileClock(); };
     proto.attributeChangedCallback = function (name, oldV, newV) {
+      // The attribute's first report after an upgrade, when a property set
+      // before the upgrade already supplied the same thing: the property
+      // stays (see _adoptPreUpgradeProperties).
+      if (oldV === null && this._upgradeOverrides && this._upgradeOverrides[name]) {
+        delete this._upgradeOverrides[name];
+        return;
+      }
+      // Attribute and property supply one table and the last one set wins,
+      // so writing the attribute again with its current value still takes
+      // the table back from the property: these two skip the same-value guard.
+      if (name === 'data-factors') { this._applyFactors(parseFactorAttribute(newV), 'attribute'); return; }
+      if (name === 'labels') { this._applyLabelsAttribute(newV); return; }
       if (oldV === newV) return;
       if (name === 'src' && newV) this._fetch(newV);
-      else if (name === 'data-factors') { this._applyFactors(parseFactorAttribute(newV), 'attribute'); return; }
       else if (name === 'data-predictions') { this.predictions = parsePredictionsAttribute(newV); return; }
-      else if (name === 'labels') { this._applyLabelsAttribute(newV); return; }
       else if (name === 'speed' && this._status === 'running') { this._reanchor(); }
       else if (name === 'view' && newV && newV !== 'timeline') {
         console.warn('rhylthyme-timeline: view="' + newV + '" is not available yet; showing the timeline');

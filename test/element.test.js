@@ -640,4 +640,25 @@ test('the labels attribute translates declaratively, last setter wins',
     assert.deepStrictEqual(a.invalidDecl, ['Stop', 3]);
     assert.strictEqual(a.warnings.length, 3);
     assert.ok(a.warnings.every((w) => /^rhylthyme-timeline: the labels attribute is not a JSON object/.test(w)));
+    // Re-setting the attribute to its current value after the property took
+    // over is still the last set: the attribute's labels come back.
+    assert.deepStrictEqual(a.sameValueAfterProperty, ['AttrStop', ['■ AttrStop', 'AttrStop', '■']]);
+    assert.strictEqual(a.sameValueThenRemoved, 'Stop');
+  });
+
+test('properties set before the element is defined go through its setters',
+  { skip: chrome ? false : 'no Chrome binary found (set CHROME_BIN)' }, async () => {
+    const out = await harnessOutput();
+    assert.deepStrictEqual(out.errors, []);
+    const p = out.labels.preUpgrade;
+    assert.deepStrictEqual(p.attachedOwn, [false, false], 'no own property hides the accessors after upgrade');
+    assert.deepStrictEqual(p.attachedMode, ['static', 'static'], 'an attribute-backed property set before upgrade is applied');
+    assert.deepStrictEqual(p.attachedLabels, ['PropStop', 'Start', ['■ PropStop', 'PropStop', '■']],
+      'the property set before upgrade wins over the attribute present at upgrade, and the getter reports the whole table');
+    assert.strictEqual(p.attachedAttrKept, '{"stop":"AttrStop"}', 'the attribute is not rewritten');
+    assert.deepStrictEqual(p.attachedAttrAfter, ['AttrStop', ['■ AttrStop', 'AttrStop', '■']]);
+    assert.strictEqual(p.detachedBefore, true);
+    assert.strictEqual(p.detachedOwn, false);
+    assert.deepStrictEqual(p.detachedLabels, ['PropStop', 'PropStop'], 'getter and rendered table agree');
+    assert.deepStrictEqual(p.propOnly, [false, 'Los', 'Stop']);
   });

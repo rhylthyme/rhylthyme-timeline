@@ -138,7 +138,10 @@ export interface RhylthymeTimelineElement extends HTMLElement {
    * was set last supplies the whole table and the getter reports it; setting
    * the property does not rewrite the attribute. An attribute that is not a
    * JSON object is ignored with a console warning (the labels in effect
-   * stay); removing the attribute clears the labels it supplied.
+   * stay); removing the attribute clears the labels it supplied. Writing the
+   * attribute again with its current value counts as setting it. A property
+   * set before the element was defined wins over an attribute that was also
+   * present when it upgraded.
    */
   get labels(): RhylthymeTimelineLabels;
   set labels(value: Partial<RhylthymeTimelineLabels> | null);

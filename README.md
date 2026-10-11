@@ -126,7 +126,10 @@ table in effect, whichever supplied it. Setting the property does not
 rewrite the attribute. An attribute value that is not a JSON object is
 ignored with one `console.warn` and the labels in effect stay; an empty
 value means no labels. Removing the attribute clears the labels it
-supplied, but leaves a table set through the property after it.
+supplied, but leaves a table set through the property after it. Writing
+the attribute again with the value it already has counts as setting it.
+If script set `labels` before `element.js` defined the element and the
+attribute was also there, the order cannot be known: the property wins.
 
 The keys are typed as `RhylthymeTimelineLabels` in
 `@rhylthyme/timeline/element`: transport (`start`, `pause`, `resume`,
