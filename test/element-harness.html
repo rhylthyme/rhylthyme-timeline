@@ -161,7 +161,11 @@ window.PRE_UPGRADE = (function () {
 };</script>
 <script>
 // Drives the element with a fake clock and records what a test can assert on.
-(function () {
+// Async only to let microtasks run (a removed element drops its run one
+// microtask after disconnect); every await is on an already-settled promise,
+// so the results are written before the load event and the DOM dump.
+(async function () {
+  const microtask = () => new Promise((resolve) => queueMicrotask(resolve));
   const out = { checks: {}, events: [], errors: [] };
   try {
     const el = document.getElementById('el');
@@ -311,6 +315,7 @@ window.PRE_UPGRADE = (function () {
     out.checks.runRecordGetterMatches = !!(rec2[0] && el2.runRecord && el2.runRecord.runId === rec2[0].record.runId);
     el2.stop();    // the run is already recorded: no second record
     el2.remove();  // nor on disconnect
+    await microtask();
     out.checks.recordsAfterStopAndRemove = rec2.length;
 
     // (b) stop() mid-run at speed 10 -> aborted
@@ -334,6 +339,8 @@ window.PRE_UPGRADE = (function () {
     el4.start();
     m4 += 30000; w4 += 30000; el4.tick();
     el4.remove();
+    out.records.abandonedSync = rec4.length; // decided a microtask later
+    await microtask();
     out.records.abandoned = rec4[0] ? rec4[0].record : null;
 
     // ---- declared variance factors (Phase 4) ---------------------------
@@ -648,6 +655,142 @@ window.PRE_UPGRADE = (function () {
     mK += 40000; k1.tick();
     out.transitions.completeInHandler = onlySteps(logK);
     k1.remove();
+
+    // (vii) delivery policies: dropped runs, rt-seek, stop() from a handler.
+    const P3 = out.policies = {};
+    const watchAll = (e) => {
+      const log = [];
+      for (const ev of ['rt-step-began', 'rt-step-ended', 'rt-start', 'rt-stop', 'rt-complete', 'rt-load', 'rt-run-record', 'rt-seek', 'rt-tick']) {
+        e.addEventListener(ev, (x) => {
+          const d = x.detail;
+          if (ev === 'rt-run-record') log.push([ev, d.outcome]);
+          else if (ev === 'rt-seek') log.push([ev, d.from, d.to]);
+          else if (ev === 'rt-load' || ev === 'rt-stop') log.push([ev]);
+          else if (ev === 'rt-tick' || ev === 'rt-start' || ev === 'rt-complete') log.push([ev, d.time]);
+          else log.push([ev, d.stepId, d.time, d.by]);
+        });
+      }
+      return log;
+    };
+    const noTicks = (log) => log.filter((x) => x[0] !== 'rt-tick');
+    // A runs 0-100 on its own track; B 0-50 then C 50-150 on another.
+    const DROP = tprog([[fx('A', 100)], [fx('B', 50), fx('C', 100, { type: 'afterStep', stepId: 'B' })]]);
+    const OTHER = tprog([[fx('X', 10)]]);
+    const recordSteps = (r) => r.steps.map((x) => [x.stepId, x.actual || null, x.endedBy || null]);
+
+    // (a) the program is replaced mid-run
+    let mD = 0;
+    const d1 = makeEl(DROP);
+    d1.setClock(() => mD);
+    const logD1 = watchAll(d1);
+    let recD1 = null;
+    d1.addEventListener('rt-run-record', (x) => { recD1 = x.detail.record; });
+    d1.start();
+    mD += 60000; d1.tick();
+    logD1.length = 0;
+    d1.program = JSON.parse(JSON.stringify(OTHER));
+    P3.replaced = logD1.slice();
+    P3.replacedRecord = recD1 ? [recD1.outcome, recordSteps(recD1)] : null;
+    mD += 500000; d1.tick();
+    P3.afterReplaced = logD1.slice(P3.replaced.length);
+    d1.remove();
+
+    // (b) the program is replaced from a handler in the middle of a batch:
+    //     the rest of the batch first, then the dropped ends, no rt-tick.
+    let mD2 = 0;
+    const d2 = makeEl(tprog([[fx('A', 10), fx('B', 10, { type: 'afterStep', stepId: 'A' }), fx('C', 10, { type: 'afterStep', stepId: 'B' })]]));
+    d2.setClock(() => mD2);
+    const logD2 = watchAll(d2);
+    let swapped = false;
+    d2.addEventListener('rt-step-ended', (x) => { if (!swapped && x.detail.stepId === 'A') { swapped = true; d2.program = JSON.parse(JSON.stringify(OTHER)); } });
+    d2.start();
+    mD2 += 25000; d2.tick();
+    P3.replacedInHandler = logD2.slice();
+    d2.remove();
+
+    // (c) removed from the document mid-run: nothing during remove(), the
+    //     dropped ends and the record a microtask later; put back, it stays still.
+    let mD3 = 0;
+    const d3 = makeEl(DROP);
+    d3.setClock(() => mD3);
+    const logD3 = watchAll(d3);
+    d3.start();
+    mD3 += 60000; d3.tick();
+    logD3.length = 0;
+    d3.remove();
+    P3.removedSync = logD3.slice();
+    await microtask();
+    P3.removed = logD3.slice();
+    document.body.appendChild(d3);
+    mD3 += 500000; d3.tick();
+    document.dispatchEvent(new Event('visibilitychange'));
+    P3.afterRemoved = logD3.slice(P3.removed.length);
+    P3.afterRemovedStatus = d3.status;
+    d3.stop();
+    P3.afterRemovedStop = logD3.slice(P3.removed.length + P3.afterRemoved.length);
+    d3.remove();
+
+    // (d) moved: appendChild to another parent, and remove() + re-insert in
+    //     one script. The run goes on, nothing is dropped, the clock resumes.
+    let mD4 = 0;
+    const d4 = makeEl(DROP);
+    d4.setClock(() => mD4);
+    const logD4 = watchAll(d4);
+    d4.start();
+    mD4 += 60000; d4.tick();
+    logD4.length = 0;
+    const host2 = document.createElement('div');
+    document.body.appendChild(host2);
+    host2.appendChild(d4);
+    await microtask();
+    d4.remove();
+    document.body.appendChild(d4);
+    await microtask();
+    P3.moved = logD4.slice();
+    P3.movedStatus = d4.status;
+    P3.movedTimer = d4._timer !== null;
+    mD4 += 100000; d4.tick();
+    mD4 += 5000; d4.tick();  // completion is confirmed three seconds later
+    P3.movedRunOn = noTicks(logD4);
+    P3.movedRecord = d4.runRecord ? d4.runRecord.outcome : null;
+    d4.stop();
+    host2.remove();
+    d4.remove();
+
+    // (f) stop() from a handler, with every event logged: the rest of the
+    //     batch, the abort end, rt-stop, then nothing (no rt-tick either).
+    let mD5 = 0;
+    const d5 = makeEl(tprog([[fx('A', 10), fx('B', 10, { type: 'afterStep', stepId: 'A' }), fx('C', 10, { type: 'afterStep', stepId: 'B' })]]));
+    d5.setClock(() => mD5);
+    const logD5 = watchAll(d5);
+    let stopped5 = false;
+    d5.addEventListener('rt-step-ended', (x) => { if (!stopped5 && x.detail.stepId === 'A') { stopped5 = true; d5.stop(); } });
+    d5.start();
+    mD5 += 25000; d5.tick();
+    P3.stopInHandler = logD5.slice();
+    d5.remove();
+
+    // (e) seek: rt-seek after the step events it causes; backward and no-op.
+    const s2 = makeEl(window.RHYLTHYME_COOKIES);
+    const logS2 = watchAll(s2);
+    s2.seek(0);
+    P3.seekNoopAtZero = logS2.slice();
+    s2.seek(1000);
+    P3.seekForward = logS2.slice();
+    logS2.length = 0;
+    s2.seek(100);
+    P3.seekBack = logS2.slice();
+    logS2.length = 0;
+    s2.seek(100);
+    P3.seekSame = logS2.slice();
+    s2.seek(2000);
+    P3.seekOn = logS2.slice();
+    logS2.length = 0;
+    s2.start();
+    s2.seek(3000);
+    P3.seekWhileRunning = noTicks(logS2).filter((x) => x[0] === 'rt-seek');
+    s2.stop();
+    s2.remove();
 
     // ---- translatable labels and accessible buttons (issue #7) ---------
     out.labels = {};

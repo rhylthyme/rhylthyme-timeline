@@ -11,13 +11,29 @@ export type StepBeganBy = 'person' | 'plan';
  * Who ended a step, from the run record's `endedBy`: `person` (completeStep(),
  * endedBy "executor"), `timer` (a fixed duration or a variable step's maxSeconds),
  * `trigger` (capped by a negative-offset hand-off), `abort` (stop() while it ran).
+ *
+ * `dropped`: the run was dropped while the step ran — the program was replaced
+ * (`program` property or `src`) or the element was removed from the document for
+ * good (re-inserted within the same microtask, it was moved and keeps its run).
+ * Each step still running ends `dropped` at `currentTime`, in program order, then
+ * the `abandoned` run record follows and nothing else fires for that run, so
+ * every began has its ended. It is not `abort`: nobody stopped the work, and the
+ * run record still leaves the step open (no end, no endedBy). A framework
+ * re-render that swaps the program produces these; filter `by !== 'dropped'` to
+ * see only real ends.
  */
-export type StepEndedBy = 'person' | 'timer' | 'trigger' | 'abort';
+export type StepEndedBy = 'person' | 'timer' | 'trigger' | 'abort' | 'dropped';
 /** detail of rt-step-began / rt-step-ended: `time` is the transition's own second on the program clock. */
 export interface StepTransitionDetail<By extends string> {
   stepId: string;
   time: number;
   by: By;
+}
+
+/** detail of rt-seek: the program-clock seconds before and after the seek. */
+export interface SeekDetail {
+  from: number;
+  to: number;
 }
 
 export interface RhylthymeTimelineEventMap {
@@ -32,8 +48,19 @@ export interface RhylthymeTimelineEventMap {
   'rt-step-complete': CustomEvent<{ stepId: string; time: number; automatic: boolean }>;
   /** Every step (replicate instances included) began, once per run, in time order. */
   'rt-step-began': CustomEvent<StepTransitionDetail<StepBeganBy>>;
-  /** Every step ended, once per run, in time order (stop() ends running steps with `abort`). */
+  /**
+   * Every step ended, once per run, in time order (stop() ends running steps with
+   * `abort`, a dropped run with `dropped`). A handler that calls stop() takes effect
+   * after the current batch: the rest of the batch, then the `abort` ends, then rt-stop.
+   */
   'rt-step-ended': CustomEvent<StepTransitionDetail<StepEndedBy>>;
+  /**
+   * seek() changed the time; fired once per such seek, after the step transitions a
+   * forward seek fires. A backward seek fires no step events (each step fires at most
+   * once per run), so a host that mirrors the playhead resyncs from `stepStates` here;
+   * a record-keeping host can ignore it.
+   */
+  'rt-seek': CustomEvent<SeekDetail>;
   'rt-complete': CustomEvent<{ time: number }>;
   'rt-run-record': CustomEvent<{ record: unknown; outcome: 'completed' | 'aborted' | 'abandoned' }>;
   /** The variance-factor answers; `skipped` lists the declared keys left unanswered. */
@@ -162,7 +189,7 @@ export interface RhylthymeTimelineElement extends HTMLElement {
   pause(): void;
   stop(): void;
   toggle(): void;
-  /** While paused. */
+  /** While paused (ignored while running). Fires rt-seek when the time changes. */
   seek(seconds: number): void;
   startStep(stepId: string): boolean;
   completeStep(stepId: string): boolean;

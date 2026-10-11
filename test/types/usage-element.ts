@@ -11,10 +11,23 @@ el?.addEventListener('rt-step-began', (e) => {
   void by; void at; void e.detail.stepId;
 });
 el?.addEventListener('rt-step-ended', (e) => {
-  const by: 'person' | 'timer' | 'trigger' | 'abort' = e.detail.by;
+  const by: 'person' | 'timer' | 'trigger' | 'abort' | 'dropped' = e.detail.by;
+  // @ts-expect-error by may also be 'dropped' (a dropped run)
+  const old: 'person' | 'timer' | 'trigger' | 'abort' = e.detail.by;
+  void old;
+  if (e.detail.by === 'dropped') return; // the run was dropped, not stopped
+  const real: 'person' | 'timer' | 'trigger' | 'abort' = e.detail.by;
+  void real;
   // @ts-expect-error a step never ends by "plan"
   const wrong: 'plan' = e.detail.by;
   void by; void wrong;
+});
+el?.addEventListener('rt-seek', (e) => {
+  const from: number = e.detail.from;
+  const to: number = e.detail.to;
+  // @ts-expect-error rt-seek carries no stepId
+  void e.detail.stepId;
+  void from; void to;
 });
 if (el) {
   el.program = { tracks: [] };

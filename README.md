@@ -66,7 +66,8 @@ boundary):
 | `rt-stop` | `{}` | `stop()`: the run is over and the player rewinds |
 | `rt-tick` | `{time}` | every clock tick while running |
 | `rt-step-began` | `{stepId, time, by}` | **every** step began, once per run; `by` is `person` (`startStep()`) or `plan` (its own trigger) |
-| `rt-step-ended` | `{stepId, time, by}` | **every** step ended, once per run; `by` is `person`, `timer`, `trigger` or `abort` (below) |
+| `rt-step-ended` | `{stepId, time, by}` | **every** step ended, once per run; `by` is `person`, `timer`, `trigger`, `abort` or `dropped` (below) |
+| `rt-seek` | `{from, to}` | `seek()` changed the time (program-clock seconds), after the step events it fired |
 | `rt-step-start` | `{stepId, time}` | `startStep()` only: a manual gate or negative-offset hand-off |
 | `rt-step-complete` | `{stepId, time, automatic}` | only the steps the player finishes: `completeStep()`, a variable step's `maxSeconds`, a hand-off cap |
 | `rt-complete` | `{time}` | every step is done |
@@ -88,12 +89,92 @@ run record's `endedBy`, with `executor` called `person`:
 | `timer` | `timer` | a fixed duration, or a variable step's `maxSeconds`, ran out |
 | `trigger` | `trigger` | a negative-offset hand-off capped the step |
 | `abort` | `abort` | `stop()` while the step was running |
+| `dropped` | *(none: the step stays open)* | the run was dropped while the step was running: program replaced, element removed |
 
 A forward `seek()` fires what it passes over; seeking back fires nothing,
 and nothing fires twice in a run. `stop()` ends the run, so the next
-`start()` fires every step again. A run that is dropped (program replaced,
-element removed) fires no `rt-step-ended` for the steps still running,
-matching the run record, which leaves them open.
+`start()` fires every step again.
+
+#### Delivery guarantees and policies
+
+Three situations could break the simple "every step begins once and ends
+once" picture. Each has a fixed rule.
+
+**1. Dropped runs end their running steps with `by: 'dropped'`.**
+
+- *Rule.* A run is dropped when the program is replaced (setting
+  `program`, or a new `src` once it has loaded) or when the element is
+  removed from the document for good. If steps are running at that
+  moment, each gets one `rt-step-ended` with `by: 'dropped'` and `time`
+  equal to `currentTime` (the program-clock second the run was dropped
+  at), in program order, the same order `stop()` uses for its `abort`
+  ends. Any transitions already queued are delivered first. Then comes
+  the run's `rt-run-record` with outcome `abandoned`, and nothing else
+  fires for that run. The run record itself is unchanged: the dropped
+  steps keep an open interval (an `actual.start`, no end, no `endedBy`).
+- *Moves are not drops.* The element decides one microtask after it is
+  disconnected. If it is back in a document by then (`appendChild` to
+  another parent, `insertBefore`, or `remove()` and re-insert in the
+  same script), it was moved: the run goes on with its clock and no
+  events fire. An element removed for good keeps its `status` but fires
+  no more step events for that run; set a program or call `stop()` to
+  start over. Because of this, the `abandoned` run record of a removed
+  element arrives a microtask after `remove()`, not during it. A program
+  replacement drops the run at once, inside the setter.
+- *Why.* Without it, a host that counts begins minus ends would be left
+  with steps "in progress" forever. With it, begins and ends always
+  pair, so in-progress counters and "what is running now" lists stay
+  exact.
+- *Consequences for host pages.*
+  - `dropped` is not `abort`. Nobody pressed Stop: the person may still
+    be stirring the pot, the page just stopped watching. Don't record
+    `dropped` as "cancelled" or as a finish time.
+  - A framework re-render that swaps the program (React passing a new
+    `program` object, for example) produces `dropped` ends for the old
+    run. If you only want real stops, filter: `if (e.detail.by ===
+    'dropped') return;`. Passing the same object again is still a new
+    program; keep the reference stable to keep the run.
+  - For the authoritative history keep using the run record: it says
+    `abandoned`, with those steps open.
+
+**2. `seek()` never fires a step twice; it fires `rt-seek` instead.**
+
+- *Rule.* Each step fires `rt-step-began` and `rt-step-ended` at most
+  once per run. A forward seek fires the transitions it passes over; a
+  backward seek fires no step events, and seeking forward again fires
+  only what has not fired yet. Every seek that changes the time fires
+  one `rt-seek` with `{from, to}` in program-clock seconds, after the
+  step events it caused (even when `seek()` is called from a handler).
+  A seek to the current time, or while running (ignored), fires nothing.
+- *Why.* The step events describe what happened in the run, and a seek
+  does not undo what happened. Re-firing would turn every scrub of the
+  playhead into duplicate entries.
+- *Consequences for host pages.* Record-keeping hosts (an ELN, a
+  notifier, an audit log) never see duplicates and can ignore
+  `rt-seek`. Hosts that mirror the playhead (a demo, a training view, a
+  "now" highlight) should resync on `rt-seek` by reading `stepStates`
+  (and `currentTime`), because after a backward seek steps that ended
+  are pending or active again on screen without any step event saying
+  so.
+
+**3. A `stop()` from a handler takes effect after the current batch.**
+
+- *Rule.* The transitions found together (one tick, one seek, one
+  `start()`) are delivered as one ordered batch. If a handler calls
+  `stop()` in the middle of it, the rest of the batch is delivered first,
+  then the `abort` ends of the steps still running, then `rt-stop`.
+  Nothing fires after `rt-stop`. Other calls from handlers
+  (`completeStep()`, `pause()`…) queue their events behind the batch in
+  the same way.
+- *Why.* The batch describes things that already happened before the
+  stop, and the run record holds them. Cutting the batch short would make
+  the events disagree with the record.
+- *Consequences for host pages.* Events always agree with the run
+  record. A handler that stops the run (for example on the first
+  `rt-step-ended` it sees) will still receive the later transitions of
+  that batch before the `abort` ends (`el.status` still reads `running`
+  while they are delivered), so set your own flag if a handler should
+  ignore them.
 
 **Translating the player.** Every piece of text the player writes itself (not the program's own names) is a key of one
 table; set `labels` to a partial object and the keys you leave out stay

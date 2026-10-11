@@ -228,6 +228,7 @@ test('the player emits one run record per run: completed, aborted, abandoned',
     // Removed from the DOM mid-run: the step that was running keeps an open
     // interval (no end, no endedBy) and the run is abandoned.
     const b = R.abandoned;
+    assert.strictEqual(R.abandonedSync, 0, 'removal is decided a microtask after remove()');
     assert.strictEqual(b.outcome, 'abandoned');
     assert.deepStrictEqual(b.steps.map((s) => [s.stepId, s.actual || null, s.endedBy || null]), [
       ['prep', { start: 0 }, null],
@@ -520,6 +521,114 @@ test('rt-step-began and rt-step-ended fire once per step per run, in time order'
       ['rt-step-began', 'bake-r2', 1620, 'plan'],
       ['rt-step-began', 'cool-r1', 1620, 'plan'],
     ]);
+  });
+
+// ---------------------------------------------------------------------
+// Delivery guarantees and policies (README): dropped runs, rt-seek,
+// stop() from a handler
+// ---------------------------------------------------------------------
+
+test('a dropped run ends its running steps "dropped", then nothing else',
+  { skip: chrome ? false : 'no Chrome binary found (set CHROME_BIN)' }, async () => {
+    const out = await harnessOutput();
+    assert.deepStrictEqual(out.errors, []);
+    const P = out.policies;
+
+    // Program replaced at t = 60 with A (0-100) and C (50-150) running: their
+    // ends in program order at the drop second, then the abandoned record,
+    // then the new program's rt-load. The record still leaves them open.
+    assert.deepStrictEqual(P.replaced, [
+      ['rt-step-ended', 'A', 60, 'dropped'],
+      ['rt-step-ended', 'C', 60, 'dropped'],
+      ['rt-run-record', 'abandoned'],
+      ['rt-load'],
+    ]);
+    assert.deepStrictEqual(P.replacedRecord, ['abandoned', [
+      ['A', { start: 0 }, null],
+      ['B', { start: 0, end: 50 }, 'timer'],
+      ['C', { start: 50 }, null],
+    ]]);
+    assert.deepStrictEqual(P.afterReplaced, [], 'nothing fires for the dropped run afterwards');
+
+    // Replaced from a handler mid-batch: the rest of the batch, then the
+    // dropped end at the tick's second, then the record; no trailing rt-tick.
+    assert.deepStrictEqual(P.replacedInHandler, [
+      ['rt-start', 0],
+      ['rt-step-began', 'A', 0, 'plan'],
+      ['rt-step-ended', 'A', 10, 'timer'],
+      ['rt-step-began', 'B', 10, 'plan'],
+      ['rt-step-ended', 'B', 20, 'timer'],
+      ['rt-step-began', 'C', 20, 'plan'],
+      ['rt-step-ended', 'C', 25, 'dropped'],
+      ['rt-run-record', 'abandoned'],
+      ['rt-load'],
+    ]);
+
+    // Removed for good: nothing during remove(), the dropped ends and the
+    // record one microtask later. Put back afterwards it stays still (no
+    // tick, no step events, even on visibilitychange); stop() starts over.
+    assert.deepStrictEqual(P.removedSync, []);
+    assert.deepStrictEqual(P.removed, [
+      ['rt-step-ended', 'A', 60, 'dropped'],
+      ['rt-step-ended', 'C', 60, 'dropped'],
+      ['rt-run-record', 'abandoned'],
+    ]);
+    assert.deepStrictEqual(P.afterRemoved, []);
+    assert.strictEqual(P.afterRemovedStatus, 'running');
+    assert.deepStrictEqual(P.afterRemovedStop, [['rt-stop']]);
+
+    // Moved (appendChild to another parent; remove() and re-insert in one
+    // script): not dropped, the clock resumes and the run completes normally.
+    assert.deepStrictEqual(P.moved, []);
+    assert.strictEqual(P.movedStatus, 'running');
+    assert.strictEqual(P.movedTimer, true, 'the clock restarts on reconnect');
+    assert.deepStrictEqual(P.movedRunOn, [
+      ['rt-step-ended', 'A', 100, 'timer'],
+      ['rt-step-ended', 'C', 150, 'timer'],
+      ['rt-complete', 160],
+      ['rt-run-record', 'completed'],
+    ]);
+    assert.strictEqual(P.movedRecord, 'completed');
+  });
+
+test('stop() from a handler: the rest of the batch, the abort ends, rt-stop, then nothing',
+  { skip: chrome ? false : 'no Chrome binary found (set CHROME_BIN)' }, async () => {
+    const out = await harnessOutput();
+    assert.deepStrictEqual(out.errors, []);
+    assert.deepStrictEqual(out.policies.stopInHandler, [
+      ['rt-start', 0],
+      ['rt-step-began', 'A', 0, 'plan'],
+      ['rt-step-ended', 'A', 10, 'timer'],
+      ['rt-step-began', 'B', 10, 'plan'],
+      ['rt-step-ended', 'B', 20, 'timer'],
+      ['rt-step-began', 'C', 20, 'plan'],
+      ['rt-step-ended', 'C', 25, 'abort'],
+      ['rt-run-record', 'aborted'],
+      ['rt-stop'],
+    ]);
+  });
+
+test('seek() fires rt-seek {from, to} after the step events it causes, never a step twice',
+  { skip: chrome ? false : 'no Chrome binary found (set CHROME_BIN)' }, async () => {
+    const out = await harnessOutput();
+    assert.deepStrictEqual(out.errors, []);
+    const P = out.policies;
+    assert.deepStrictEqual(P.seekNoopAtZero, [], 'a seek to the current time fires nothing');
+    assert.deepStrictEqual(P.seekForward, [
+      ['rt-step-began', 'mix', 0, 'plan'],
+      ['rt-step-ended', 'mix', 900, 'timer'],
+      ['rt-step-began', 'bake-r1', 900, 'plan'],
+      ['rt-seek', 0, 1000],
+    ]);
+    assert.deepStrictEqual(P.seekBack, [['rt-seek', 1000, 100]], 'backward: rt-seek only');
+    assert.deepStrictEqual(P.seekSame, []);
+    assert.deepStrictEqual(P.seekOn, [
+      ['rt-step-ended', 'bake-r1', 1620, 'timer'],
+      ['rt-step-began', 'bake-r2', 1620, 'plan'],
+      ['rt-step-began', 'cool-r1', 1620, 'plan'],
+      ['rt-seek', 100, 2000],
+    ], 'forward again: only what has not fired, then rt-seek');
+    assert.deepStrictEqual(P.seekWhileRunning, [], 'seek() is ignored while running');
   });
 
 // ---------------------------------------------------------------------

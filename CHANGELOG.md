@@ -32,6 +32,30 @@ Keep a Changelog; versions follow SemVer.
   `start()` after `stop()` is a fresh run. `rt-step-start` and
   `rt-step-complete` are unchanged. Typed in `RhylthymeTimelineEventMap`
   (`StepBeganBy`, `StepEndedBy`, `StepTransitionDetail`). (#6)
+- `<rhylthyme-timeline>`: `by: 'dropped'` on `rt-step-ended`. When a run is
+  dropped while steps are running (the program replaced through `program`
+  or `src`, or the element removed from the document for good), each of
+  them ends `dropped` at `currentTime`, in program order, before the
+  `abandoned` run record; nothing else fires for that run. Begins and ends
+  therefore always pair. The run record is unchanged (those steps stay
+  open). `dropped` is not `abort`: filter it out to see only real ends; a
+  framework re-render that swaps the program produces it. Added to
+  `StepEndedBy`. (#6)
+- `<rhylthyme-timeline>`: an `rt-seek` event, `detail {from, to}` in
+  program-clock seconds, once per `seek()` that changes the time, after the
+  step events a forward seek fires. A backward seek still fires no step
+  events (each step fires at most once per run); a host that mirrors the
+  playhead resyncs from `stepStates` on `rt-seek`, a record-keeping host can
+  ignore it. Typed as `SeekDetail` in `RhylthymeTimelineEventMap`. (#6)
+- README: "Delivery guarantees and policies" under the element's events
+  states the rule, reason and consequences for host pages of the three
+  policies: dropped runs end with `dropped`; seeks never fire a step twice
+  and announce themselves with `rt-seek`; a `stop()` called from a handler
+  takes effect after the current batch (the rest of the batch, then the
+  `abort` ends, then `rt-stop`), so the events always agree with the run
+  record. The last is the existing behaviour, now documented; the one
+  change is that the tick whose handler called `stop()` (or replaced the
+  program) no longer fires a trailing `rt-tick` after `rt-stop`.
 - `<rhylthyme-timeline>`: a `labels` property for translating the player
   (#7). Every user-visible string now comes from one `MESSAGES` table in
   `src/element.js`; `labels` merges a partial override over the English
@@ -79,6 +103,15 @@ Keep a Changelog; versions follow SemVer.
   (the same now holds for `data-factors`).
 
 ### Changed
+- `<rhylthyme-timeline>`: removing the element no longer drops its run at
+  once. The decision waits one microtask: an element re-inserted before
+  then (`appendChild` to another parent, `remove()` and re-insert in the
+  same script) has been moved, keeps its run, and its clock resumes;
+  previously any disconnect abandoned the run and left the moved element
+  showing "running" with no clock. As a result, the `abandoned` run record
+  of an element removed mid-run arrives a microtask after `remove()`
+  rather than during it. Replacing the program still drops the run
+  synchronously.
 - `@rhylthyme/timeline/schedule` no longer bundles the 350 KB LabMCP
   instrument catalogue for browsers (#5). The Node entry (`require` and
   `import`) still registers it, so Node results are unchanged. A new

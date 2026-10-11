@@ -86,20 +86,43 @@
  *                         rt-step-ended, from the run record's endedBy: "person"
  *                         (completeStep(); endedBy "executor"), "timer" (a fixed duration
  *                         or a variable step's maxSeconds ran out), "trigger" (a negative-
- *                         offset hand-off capped it), "abort" (stop() while it ran). A
- *                         forward seek() fires what it passes over; a backward seek fires
- *                         nothing and nothing fires twice. stop() ends the run, so the next
- *                         start() fires every step again. A run that is dropped (program
- *                         replaced, element removed) fires no ended for steps still running.
+ *                         offset hand-off capped it), "abort" (stop() while it ran),
+ *                         "dropped" (the run was dropped while it ran; see the policies
+ *                         below). A forward seek() fires what it passes over; a backward
+ *                         seek fires nothing and nothing fires twice. stop() ends the run,
+ *                         so the next start() fires every step again.
  *                         rt-step-start / rt-step-complete are unchanged: they still fire
  *                         only for startStep() and for steps the player itself finishes
+ *   rt-seek               detail {from, to} (program-clock seconds): once per seek() that
+ *                         changes the time, after the step transitions a forward seek fires
  *   rt-factors            detail {factors, skipped, source}: the variance-factor answers,
  *                         once the form is submitted ("prompt") or set programmatically
  *                         ("property" / "attribute"); `skipped` lists the declared keys left
  *                         unanswered
  *   rt-run-record         detail {record, outcome}: a run record (runs schema 0.1.0-alpha)
  *                         emitted once per run, on rt-complete ("completed"), on stop()
- *                         ("aborted") and when the element is removed mid-run ("abandoned")
+ *                         ("aborted") and when the run is dropped ("abandoned": the program
+ *                         replaced, or the element removed for good, a microtask later)
+ *
+ * Delivery guarantees and policies (README: "Delivery guarantees and policies")
+ *   Dropped runs: a run is dropped when the program is replaced (program property or
+ *     src) or the element is removed from the document for good. Each step still
+ *     running gets rt-step-ended {by: "dropped"} at currentTime, in program order (as
+ *     stop()'s "abort" ends), then the "abandoned" rt-run-record, then nothing else for
+ *     that run, so begins and ends always pair. The run record is unchanged: those
+ *     steps stay open (no end, no endedBy). "dropped" is not "abort": nobody stopped
+ *     the work, the page just stopped watching it. Removal is decided one microtask
+ *     after disconnect: an element re-inserted before then (appendChild to another
+ *     parent, remove() and insert in one script) has been moved and keeps its run and
+ *     clock. An element removed for good keeps its status but fires no more step
+ *     events for that run; set a program or call stop() to start over.
+ *   Seeks: each step fires at most once per run, so a backward seek fires no step
+ *     events and a forward seek never repeats one. rt-seek tells a host that mirrors
+ *     the playhead to resync from stepStates; record-keeping hosts can ignore it.
+ *   Re-entrancy: transitions found together are delivered as one ordered batch. A
+ *     handler that calls stop() mid-batch takes effect after it: the rest of the
+ *     batch, then the "abort" ends, then rt-stop. Events always agree with the run
+ *     record.
  *
  * Variance factors: when the program declares metadata.varianceFactors (program schema
  * 0.3.0-alpha), the first start() of a run opens a small form in the shadow DOM instead of
@@ -408,7 +431,13 @@
   // What rt-step-began / rt-step-ended have fired this run: began[id] is the
   // second it began, ended[id] true once it ended; beganBy / endedBy remember
   // who caused the transitions the player made itself.
-  function newTransitions() { return { began: {}, ended: {}, beganBy: {}, endedBy: {} }; }
+  // dropped: the run was dropped (see _dropRun) and fires nothing more.
+  function newTransitions() { return { began: {}, ended: {}, beganBy: {}, endedBy: {}, dropped: false }; }
+  // Runs f once the current script's synchronous work is done (a microtask).
+  function defer(f) {
+    if (typeof queueMicrotask === 'function') queueMicrotask(f);
+    else Promise.resolve().then(f);
+  }
   // The run record's endedBy, as rt-step-ended's `by`: "executor" is a person;
   // a step nobody finished ended on its timer.
   function transitionBy(endedBy) {
@@ -653,6 +682,8 @@
     };
 
     proto.connectedCallback = function () {
+      // Re-inserted before the pending drop ran (a move): the run goes on.
+      if (this._status === 'running' && !this._timer && !this._transitions.dropped) this._startTimer();
       if (typeof document !== 'undefined') document.addEventListener('visibilitychange', this._onVisibility);
       if (typeof window !== 'undefined') {
         window.addEventListener('pageshow', this._onVisibility);
@@ -668,7 +699,17 @@
         window.removeEventListener('pageshow', this._onVisibility);
         window.removeEventListener('pagehide', this._onVisibility);
       }
-      if (this._runActive()) this._emitRunRecord('abandoned');
+      // Dropping the run waits for a microtask: a move (appendChild to another
+      // parent, or remove() then insert in the same script) reconnects first
+      // and keeps its run. Removed for good, the run is dropped: rt-step-ended
+      // "dropped" for what is still running, then the "abandoned" run record.
+      if (this._dropPending) return;
+      this._dropPending = true;
+      var self = this;
+      defer(function () {
+        self._dropPending = false;
+        if (!self.isConnected) self._dropRun();
+      });
     };
     // Going away (hidden / pagehide) takes a last tick so the sleep gap is
     // measured from the moment the page stopped being awake; coming back
@@ -702,7 +743,7 @@
       get: function () { return this._program; },
       set: function (p) {
         this._stopTimer();
-        if (this._runActive()) this._emitRunRecord('abandoned');
+        this._dropRun();
         this._program = p || null;
         this._programVersion = p ? programVersion(p) : null;
         this._sourceIds = {};
@@ -1069,10 +1110,17 @@
     proto.toggle = function () { if (this._status === 'running') this.pause(); else this.start(); };
     proto.seek = function (seconds) {
       if (this._status === 'running') return;
-      this._time = Math.max(0, +seconds || 0);
+      var from = this._time, to = Math.max(0, +seconds || 0);
+      this._time = to;
       if (this._status === 'stopped' && this._time > 0) this._status = 'paused';
       this._settle();
       this.render();
+      // Queued behind the transitions the seek fired, so a handler always
+      // sees rt-seek after them, even when seek() was called from a handler.
+      if (to !== from) {
+        this._transitionQueue.push({ name: 'rt-seek', detail: { from: from, to: to } });
+        this._drainTransitions();
+      }
     };
 
     proto._reset = function () {
@@ -1093,7 +1141,8 @@
 
     /** Advance program time from the clock, apply automatic transitions, re-render. */
     proto.tick = function () {
-      if (this._status !== 'running') return;
+      // A dropped run (element removed for good, then put back) stays still.
+      if (this._status !== 'running' || this._transitions.dropped) return;
       var c = this._clock(), w = this._wall();
       this._time = this._anchorTime + Math.max(0, (c - this._anchorWall) / 1000) * this.speed;
       // Wall vs monotonic reconciliation: while a phone sleeps the monotonic
@@ -1107,6 +1156,9 @@
       if (this._run && this._run.speeds.indexOf(this.speed) < 0) this._run.speeds.push(this.speed);
       this._settle();
       this.render();
+      // A handler stopped the run or replaced the program during this tick:
+      // that run is over, so no rt-tick for it.
+      if (this._status === 'stopped') return;
       this._emit('rt-tick', { time: this._time });
     };
     /** Compare the wall and monotonic clocks now (visibilitychange / pageshow); a tick while running. */
@@ -1218,7 +1270,7 @@
     // element (completeStep(), pause(), stop()...) appends to it instead of
     // dispatching in the middle of the batch, so the events stay in time order.
     proto._emitTransitions = function () {
-      if (this._status === 'stopped' || !this._expanded) return;
+      if (this._status === 'stopped' || !this._expanded || this._transitions.dropped) return;
       var tr = this._transitions, T = this._timings(), states = this._states(T), self = this, out = [];
       this._order.forEach(function (id, i) {
         var st = states[id], a = self._actual[id] || {}, t = T[id];
@@ -1282,13 +1334,13 @@
       try {
         while (this._transitionQueue.length) {
           var e = this._transitionQueue.shift();
-          this._emit(e.name, { stepId: e.id, time: e.time, by: e.by });
+          this._emit(e.name, e.detail || { stepId: e.id, time: e.time, by: e.by });
         }
       } finally { this._draining = was; }
     };
     // stop() mid-run: every step that began and has not ended ends now, "abort".
     proto._abortTransitions = function () {
-      if (this._status === 'stopped' || this._status === 'completed') return;
+      if (this._status === 'stopped' || this._status === 'completed' || this._transitions.dropped) return;
       this._emitTransitions();
       this._drainTransitions(true);
       if (this._status === 'stopped') return; // a handler stopped the run already
@@ -1298,6 +1350,32 @@
         tr.ended[id] = true;
         self._emit('rt-step-ended', { stepId: id, time: Math.max(tr.began[id], now), by: 'abort' });
       });
+    };
+
+    // The run is dropped (program replaced, element removed for good): the
+    // rest of a batch in flight is delivered (as for stop()), then every step
+    // that began and has not ended ends "dropped" at the current second, in
+    // the abort order, then the "abandoned" run record. Nothing else fires
+    // for the run; the record is unchanged and leaves those steps open.
+    proto._dropRun = function () {
+      var tr = this._transitions;
+      if (tr.dropped) return;
+      this._emitTransitions();
+      this._drainTransitions(true);
+      if (this._transitions !== tr || tr.dropped) return; // a handler stopped or replaced the run
+      tr.dropped = true;
+      this._transitionQueue = [];
+      var now = this._time, open = [];
+      this._order.forEach(function (id) {
+        if (tr.began[id] === undefined || tr.ended[id]) return;
+        tr.ended[id] = true;
+        open.push(id);
+      });
+      var self = this;
+      open.forEach(function (id) {
+        self._emit('rt-step-ended', { stepId: id, time: Math.max(tr.began[id], now), by: 'dropped' });
+      });
+      if (this._runActive()) this._emitRunRecord('abandoned');
     };
 
     // ---- run records --------------------------------------------------------
