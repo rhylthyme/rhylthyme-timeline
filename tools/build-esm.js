@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 'use strict';
-// Writes esm/index.mjs and esm/schedule.mjs: ES module entries that import
-// the CommonJS implementation and re-export each public member by name, so
-// `import { computeStepTimings } from '@rhylthyme/timeline'` works in Node
-// and in bundlers. Run by `npm run build`; test/exports.test.js fails when
+// Writes esm/index.mjs, esm/schedule.mjs and esm/schedule.browser.mjs: ES
+// module entries that import the CommonJS implementation and re-export each
+// public member by name, so `import { computeStepTimings } from
+// '@rhylthyme/timeline'` works in Node and in bundlers. schedule.browser.mjs
+// is the "browser" condition of ./schedule, without the LabMCP catalogue. Run by `npm run build`; test/exports.test.js fails when
 // they fall behind the CommonJS exports.
 
 const fs = require('fs');
@@ -13,6 +14,7 @@ const ROOT = path.join(__dirname, '..');
 const ENTRIES = [
   ['esm/index.mjs', '../src/index.js', '@rhylthyme/timeline'],
   ['esm/schedule.mjs', '../src/schedule/index.js', '@rhylthyme/timeline/schedule'],
+  ['esm/schedule.browser.mjs', '../src/schedule/browser.js', '@rhylthyme/timeline/schedule (browser)'],
 ];
 
 for (const [out, src, name] of ENTRIES) {

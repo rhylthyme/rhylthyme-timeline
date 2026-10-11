@@ -5,6 +5,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const G = require("../src/schedule/galago.js");
+require("../src/schedule/labmcp-catalog.js"); // as the Node entry does
 const S = require("../src/schedule/schedule.js");
 const CASES = require("./fixtures/schedule/galago-command-cases.json");
 

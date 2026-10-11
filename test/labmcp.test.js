@@ -5,6 +5,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const L = require("../src/schedule/labmcp.js");
+require("../src/schedule/labmcp-catalog.js"); // as the Node entry does
 const S = require("../src/schedule/schedule.js");
 const CASES = require("./fixtures/schedule/labmcp-check-cases.json");
 
@@ -92,4 +93,60 @@ test("analyze_schedule times LabMCP steps by their estimate, flagged", () => {
   assert.deepEqual(filled.tracks[0].steps[1].duration, { type: "fixed", seconds: 27 });
   assert.deepEqual(filled.tracks[0].steps[1].metadata.durationEstimate, { source: "params", seconds: 27 });
   assert.equal(log.duration, undefined, "the input is not modified");
+});
+
+// --- Loading the catalogue on demand (browser builds) ---------------------
+
+const fs = require("fs");
+const path = require("path");
+const vm = require("vm");
+const BROWSER = path.join(__dirname, "..", "browser");
+
+function browserPage(...scripts) {
+  const sandbox = {};
+  sandbox.self = sandbox;
+  for (const s of scripts) vm.runInNewContext(fs.readFileSync(path.join(BROWSER, s), "utf8"), sandbox);
+  return sandbox;
+}
+const same = (a, b) => assert.equal(JSON.stringify(a), JSON.stringify(b));
+const bad = JSON.parse(JSON.stringify(heat));
+bad.instrument.start[0].params.temperature_c = 200;
+const noInstruments = require("./fixtures/schedule/cookies_three_trays.json");
+
+test("browser/schedule.js leaves the catalogue out; LabMCP steps then get a warning, not an error", () => {
+  assert.ok(!fs.readFileSync(path.join(BROWSER, "schedule.js"), "utf8").includes("K-Dense"), "the catalogue is not bundled");
+  const R = browserPage("schedule.js").RhylthymeSchedule;
+  assert.equal(R.labmcp.hasCatalog(), false);
+  assert.equal(R.labmcp.CATALOG, null);
+  same(R.validateProgram(noInstruments), S.validateProgram(noInstruments));
+  same(R.analyzeSchedule(noInstruments), S.analyzeSchedule(noInstruments));
+  const v = R.validateProgram(program(bad, log));
+  assert.equal(v.valid, true, JSON.stringify(v.errors));
+  const missing = v.warnings.filter((w) => w.code === "instrument_catalog_not_loaded");
+  same(missing.map((w) => w.where), ["step:heat", "step:log"]); // one per LabMCP step
+  assert.equal(missing[0].message, "Step 'heat': the LabMCP catalogue is not loaded; stirrer (labmcp-ika) calls not checked");
+  assert.match(missing[0].fix, /@rhylthyme\/timeline\/schedule\/labmcp-catalog/);
+  assert.match(missing[0].fix, /browser\/labmcp-catalog\.js/);
+  same(R.labmcp.callProblems("labmcp-ika", "stop", {}).map(([code]) => code), ["instrument_catalog_not_loaded"]);
+  // Without the catalogue an estimate still comes from the params
+  assert.equal(R.analyzeSchedule(program(heat, log)).makespanSeconds, 120 + 27);
+});
+
+test("browser/labmcp-catalog.js, before or after schedule.js, gives the Node findings", () => {
+  for (const order of [["schedule.js", "labmcp-catalog.js"], ["labmcp-catalog.js", "schedule.js"]]) {
+    const R = browserPage(...order).RhylthymeSchedule;
+    assert.equal(R.labmcp.hasCatalog(), true, order.join(" then "));
+    assert.equal(R.labmcp.CATALOG.source.labmcp, L.CATALOG.source.labmcp);
+    for (const p of [program(heat, log), program(bad, log), noInstruments]) {
+      same(R.validateProgram(p), S.validateProgram(p));
+      same(R.analyzeSchedule(p), S.analyzeSchedule(p));
+    }
+  }
+});
+
+test("registerCatalog takes only a catalogue", () => {
+  assert.throws(() => L.registerCatalog(null), TypeError);
+  assert.throws(() => L.registerCatalog({ packages: {} }), TypeError);
+  assert.equal(L.registerCatalog(L.CATALOG), L.CATALOG);
+  assert.equal(L.hasCatalog(), true);
 });

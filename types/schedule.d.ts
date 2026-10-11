@@ -176,13 +176,39 @@ export const galago: {
   [member: string]: unknown;
 };
 
+/** The LabMCP instrument catalogue (src/schedule/labmcp-catalog.json). */
+export interface LabmcpCatalog {
+  source: { labmcp?: string; license?: string; attribution?: string; [key: string]: unknown };
+  packages: Record<string, unknown>;
+  compat?: Record<string, unknown>;
+  limitTargets?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
 /** LabMCP instrument servers. */
 export const labmcp: {
   instrumentFindings(program: Program): SeverityFinding[];
   /** A copy of the program with planned durations for LabMCP steps that have none. */
   withEstimates<P extends Program>(program: P): P;
   stepEstimate(step: Step): { seconds: number; source: string } | null;
-  CATALOG: unknown;
+  /** true when the step's instrument.toolType names a LabMCP server (labmcp-…). */
+  isLabmcpStep(step: unknown): boolean;
+  /**
+   * [code, problem] pairs for one call on a LabMCP server, checked against the
+   * server's tool schema and default limits; one instrument_catalog_not_loaded
+   * pair while no catalogue is registered.
+   */
+  callProblems(pkg: string, command: string, params: unknown): Array<[string, string]>;
+  /**
+   * Use this catalogue for LabMCP checks. The Node entry registers it; in a
+   * browser build, import '@rhylthyme/timeline/schedule/labmcp-catalog'.
+   * Throws a TypeError for anything that is not a catalogue.
+   */
+  registerCatalog(catalog: LabmcpCatalog): LabmcpCatalog;
+  /** false until a catalogue is registered: LabMCP steps then get instrument_catalog_not_loaded. */
+  hasCatalog(): boolean;
+  /** The registered catalogue, or null. */
+  readonly CATALOG: LabmcpCatalog | null;
   [member: string]: unknown;
 };
 

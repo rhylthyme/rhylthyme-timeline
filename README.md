@@ -365,16 +365,51 @@ const a = analyzeSchedule(program, { finishAt: '2026-11-26T18:00:00-05:00' });
 // { makespanSeconds, criticalPath, resourceConflicts, steps: [{ stepId, startAt, ... }], ... }
 ```
 
+Both functions are synchronous. The LabMCP instrument catalogue (about
+350 KB) that checks LabMCP instrument steps (`instrument.toolType`
+starting with `labmcp-`) is loaded separately in the browser:
+
+- In Node (`require` or `import` of `@rhylthyme/timeline/schedule`) it is
+  registered for you; nothing changes.
+- In a bundler, the `browser` export condition gives the module without it.
+  Programs without LabMCP steps never need it. For those with them, import
+  `@rhylthyme/timeline/schedule/labmcp-catalog` once, eagerly or lazily
+  (a separate chunk), before validating:
+
+  ```js
+  import { validateProgram, labmcp } from '@rhylthyme/timeline/schedule';
+  if (program.tracks.some((t) => t.steps.some(labmcp.isLabmcpStep)) && !labmcp.hasCatalog()) {
+    await import('@rhylthyme/timeline/schedule/labmcp-catalog');
+  }
+  const v = validateProgram(program);
+  ```
+
+  Until it is loaded, each LabMCP step gets an
+  `instrument_catalog_not_loaded` warning (not an error) instead of its
+  call checks; once it is loaded the findings are the same as in Node.
+  `labmcp.registerCatalog(json)` registers a catalogue you load yourself.
+
 In a page without a build step, `browser/schedule.js` is the same module
-as one script (about 470 KB, most of it the LabMCP instrument catalogue)
-that sets `window.RhylthymeSchedule`:
+as one script that sets `window.RhylthymeSchedule`, and
+`browser/labmcp-catalog.js` adds the catalogue (before or after it):
 
 ```html
 <script src="https://cdn.jsdelivr.net/npm/@rhylthyme/timeline@2.0.0-beta.6/browser/schedule.js"></script>
+<!-- only for programs with LabMCP instrument steps: -->
+<script src="https://cdn.jsdelivr.net/npm/@rhylthyme/timeline@2.0.0-beta.6/browser/labmcp-catalog.js"></script>
 <script>
   const { valid, errors } = RhylthymeSchedule.validateProgram(program);
 </script>
 ```
+
+Sizes, before and after the catalogue was split out (2.0.0-beta.6 →
+unreleased):
+
+| | before | after |
+|---|---|---|
+| `browser/schedule.js` | 465 KB | 223 KB (+ 244 KB `browser/labmcp-catalog.js` when needed) |
+| esbuild bundle of `./schedule` (`--platform=browser`) | 658 KB | 209 KB |
+| same, minified | 338 KB | 112 KB (+ 226 KB lazy catalogue chunk when needed) |
 
 It agrees with the Python validator in the `rhylthyme` package:
 `test/parity.test.js` gives every program in rhylthyme-examples to both
