@@ -160,13 +160,21 @@ function _regex(pattern) {
 
 // Shapes a failed oneOf/anyOf could have meant. The closest branch is the
 // one with the fewest errors, the deepest first error breaking ties; its
-// first error explains the failure (like jsonschema's best_match).
-function _closest(branchErrors) {
+// first error explains the failure (like jsonschema's best_match). A
+// branch whose discriminator (a key directly under the value, such as a
+// duration's "type", that must be one fixed value) does not match comes
+// after every branch whose discriminator does.
+function _mismatch(errs, depth) {
+  return errs.some((e) => e.allowed && e.path.length === depth + 1) ? 1 : 0;
+}
+function _closest(branchErrors, depth) {
   let best = null;
   for (const errs of branchErrors) {
     if (!errs.length) continue;
-    const depth = errs[0].path.length;
-    if (!best || errs.length < best.length || (errs.length === best.length && depth > best[0].path.length)) best = errs;
+    if (!best) { best = errs; continue; }
+    const a = _mismatch(errs, depth), b = _mismatch(best, depth);
+    if (a !== b) { if (a < b) best = errs; continue; }
+    if (errs.length < best.length || (errs.length === best.length && errs[0].path.length > best[0].path.length)) best = errs;
   }
   return best;
 }
@@ -186,9 +194,11 @@ function _check(v, schema, root, path, out) {
     return;
   }
 
+  let wrongType = false;
   if ("type" in schema) {
     const types = Array.isArray(schema.type) ? schema.type : [schema.type];
     if (!types.some((t) => _typeOk(v, t))) {
+      wrongType = true;
       const want = types.join(" or ");
       out.push({
         keyword: "type", path,
@@ -206,17 +216,18 @@ function _check(v, schema, root, path, out) {
       keyword: "enum", path,
       message: `${where} is ${_show(v)}, not one of ${schema.enum.map(_show).join(", ")}.`,
       fix: `Use one of: ${schema.enum.map(_show).join(", ")}.`,
+      allowed: schema.enum, value: v,
     });
   }
   if ("const" in schema && !_equal(schema.const, v)) {
-    out.push({ keyword: "const", path, message: `${where} is ${_show(v)}, not ${_show(schema.const)}.`, fix: `Set ${where} to ${_show(schema.const)}.` });
+    out.push({ keyword: "const", path, message: `${where} is ${_show(v)}, not ${_show(schema.const)}.`, fix: `Set ${where} to ${_show(schema.const)}.`, allowed: [schema.const], value: v });
   }
 
   if (_isObj(v)) {
     if (Array.isArray(schema.required)) {
       for (const k of schema.required) {
         if (!Object.prototype.hasOwnProperty.call(v, k)) {
-          out.push({ keyword: "required", path, message: `${where} is missing the required property "${k}".`, fix: `Add "${k}" to ${where}.` });
+          out.push({ keyword: "required", path, missing: k, message: `${where} is missing the required property "${k}".`, fix: `Add "${k}" to ${where}.` });
         }
       }
     }
@@ -285,6 +296,9 @@ function _check(v, schema, root, path, out) {
   }
 
   const sub = (s) => { const e = []; _check(v, s, root, path, e); return e; };
+  // A value of the wrong type fails every shape of a oneOf/anyOf beside it
+  // for that same reason: the type finding says it once.
+  if (wrongType) return;
 
   if (Array.isArray(schema.allOf)) schema.allOf.forEach((s) => _check(v, s, root, path, out));
   if (Array.isArray(schema.anyOf)) {
@@ -295,13 +309,13 @@ function _check(v, schema, root, path, out) {
       if (!e.length) { ok = true; break; }
       branchErrors.push(e);
     }
-    if (!ok) out.push(_combinatorError("anyOf", where, path, schema.anyOf.length, branchErrors));
+    if (!ok) out.push(..._combinatorErrors("anyOf", where, path, schema.anyOf.length, branchErrors));
   }
   if (Array.isArray(schema.oneOf)) {
     const branchErrors = schema.oneOf.map(sub);
     const matched = branchErrors.filter((e) => !e.length).length;
     if (matched === 0) {
-      out.push(_combinatorError("oneOf", where, path, schema.oneOf.length, branchErrors));
+      out.push(..._combinatorErrors("oneOf", where, path, schema.oneOf.length, branchErrors));
     } else if (matched > 1) {
       out.push({
         keyword: "oneOf", path,
@@ -324,24 +338,63 @@ function _check(v, schema, root, path, out) {
   }
 }
 
-function _combinatorError(keyword, where, path, n, branchErrors) {
-  // Every shape only lacks a key (the program-level "resourceConstraints,
-  // environment or environmentType" choice): name the alternatives.
-  const missing = branchErrors.map((errs) => (errs.length === 1 && errs[0].keyword === "required" && errs[0].path.length === path.length
-    ? /"([^"]+)"/.exec(errs[0].message)[1] : null));
-  if (branchErrors.length > 1 && missing.every(Boolean)) {
-    const keys = [...new Set(missing)].map((k) => `"${k}"`);
-    const list = keys.length > 1 ? `${keys.slice(0, -1).join(", ")} or ${keys[keys.length - 1]}` : keys[0];
-    return { keyword, path, message: `${where} needs one of ${list}.`, fix: `Add ${list} to ${where}.` };
+const _orList = (items) => (items.length > 1 ? `${items.slice(0, -1).join(", ")} or ${items[items.length - 1]}` : items[0]);
+
+// The findings for a oneOf/anyOf that no shape matches.
+function _combinatorErrors(keyword, where, path, n, branchErrors) {
+  // Every shape only lacks keys (the program-level choice of
+  // "resourceConstraints", "environment" or "environmentType"): a key every
+  // shape needs is plainly missing (schema_required); the rest are the
+  // alternatives, of which one is needed.
+  const missingSets = branchErrors.map((errs) => (errs.length && errs.every((e) => e.keyword === "required" && e.path.length === path.length)
+    ? errs.map((e) => e.missing) : null));
+  if (branchErrors.length > 1 && missingSets.every(Boolean)) {
+    const common = missingSets[0].filter((k) => missingSets.every((m) => m.includes(k)));
+    const out = common.map((k) => ({
+      keyword: "required", path, missing: k,
+      message: `${where} is missing the required property "${k}".`, fix: `Add "${k}" to ${where}.`,
+    }));
+    const rest = missingSets.map((m) => m.filter((k) => !common.includes(k)));
+    if (rest.every((m) => m.length)) {
+      const list = _orList([...new Set(rest.map((m) => m.map((k) => `"${k}"`).join(" and ")))]);
+      out.push({ keyword, path, message: `${where} needs one of ${list}.`, fix: `Add ${list} to ${where}.` });
+    }
+    return out;
   }
-  const best = _closest(branchErrors);
+  // Every shape is told apart by the same key (a duration's or a trigger's
+  // "type") and the value fits none of them: say which values it may take.
+  const keyOf = (errs) => {
+    const e = errs.find((x) => x.allowed && x.path.length === path.length + 1);
+    return e ? e.path[path.length] : undefined;
+  };
+  const key = keyOf(branchErrors[0] || []);
+  if (key !== undefined && branchErrors.length > 1 && branchErrors.every((errs) => keyOf(errs) === key)) {
+    const allowed = [];
+    branchErrors.forEach((errs) => errs.forEach((e) => {
+      if (e.allowed && e.path.length === path.length + 1 && e.path[path.length] === key) {
+        e.allowed.forEach((a) => { if (!allowed.some((x) => _equal(x, a))) allowed.push(a); });
+      }
+    }));
+    const at = _fmtPath(path.concat(key));
+    const first = branchErrors[0].find((x) => x.allowed && x.path[path.length] === key);
+    return [{
+      keyword, path,
+      message: `${at} is ${_show(first.value)}, not one of ${allowed.map(_show).join(", ")}.`,
+      fix: `Set ${at} to one of ${allowed.map(_show).join(", ")}.`,
+    }];
+  }
+  const best = _closest(branchErrors, path.length);
   const first = best && best[0];
-  return {
+  // The closest shape lacks several keys: name them all in the fix.
+  const lacking = best ? best.filter((e) => e.keyword === "required" && e.path.length === first.path.length && _equal(e.path, first.path)).map((e) => e.missing) : [];
+  return [{
     keyword, path,
     message: `${where} does not match any of the ${n} allowed shapes` +
       (first ? `; closest: ${first.message}` : "."),
-    fix: first && first.fix ? first.fix : `Change ${where} to one of the shapes the schema allows.`,
-  };
+    fix: first && first.keyword === "required" && lacking.length > 1
+      ? `Add ${lacking.map((k) => `"${k}"`).join(", ")} to ${_fmtPath(first.path)}.`
+      : first && first.fix ? first.fix : `Change ${where} to one of the shapes the schema allows.`,
+  }];
 }
 
 // Validate `value` against `schema` (a Draft 7 schema using the keywords
@@ -350,7 +403,7 @@ function _combinatorError(keyword, where, path, n, branchErrors) {
 function checkJsonSchema(value, schema) {
   const out = [];
   _check(value, schema, schema, [], out);
-  return out;
+  return out.map(({ keyword, path, message, fix }) => ({ keyword, path, message, fix }));
 }
 
 // Keywords in `schema` this checker does not implement (empty for the
@@ -410,6 +463,73 @@ function normalizeTimeFields(data) {
   return out;
 }
 
+// Fix hints that know what a program is: a missing programId, track name
+// or startTrigger gets the advice the validator gave before it checked the
+// schema, and a step's first missing trigger points at the step before it.
+const _js = (v) => JSON.stringify(v);
+function _programFix(e, program) {
+  const where = _fmtPath(e.path);
+  const depth = e.path.length;
+  const inTracks = e.path[0] === "tracks" && typeof e.path[1] === "number";
+  const isStep = inTracks && e.path[2] === "steps" && typeof e.path[3] === "number";
+  if (e.keyword === "required" && depth === 0) {
+    if (e.missing === "programId") return 'Add a kebab-case programId, e.g. "thanksgiving-dinner".';
+    if (e.missing === "name") return "Add a name: a human-readable title for the program.";
+    if (e.missing === "tracks") return "Add tracks: one per parallel line of work (dish, station, instrument, performer), each with its steps.";
+  }
+  if (where === "tracks" && (e.keyword === "minItems" || e.keyword === "type")) {
+    return "Give tracks as a list with at least one track: one per parallel line of work (dish, station, instrument, performer), each with its steps.";
+  }
+  if (e.keyword === "required" && inTracks && depth === 2) {
+    if (e.missing === "trackId") return `Add a trackId to ${where}, unique among the tracks.`;
+    if (e.missing === "name") return `Add a short display name to ${where}; without one the viewer shows a generic label.`;
+    if (e.missing === "steps") return `Add steps to ${where}, or remove the track.`;
+  }
+  if (inTracks && depth === 3 && e.path[2] === "steps" && e.keyword === "minItems") return `Add steps to ${_fmtPath(e.path.slice(0, 2))}, or remove the track.`;
+  if (e.keyword === "required" && isStep && depth === 4) {
+    if (e.missing === "stepId") return `Add a stepId to ${where}; stepIds must be unique across ALL tracks, not just within one track.`;
+    if (e.missing === "name") return `Add a short imperative name to ${where}, e.g. "Sear the chicken".`;
+    if (e.missing === "startTrigger") return startTriggerFix(program, e.path[1], e.path[3]);
+  }
+  if (isStep && depth === 5 && e.path[4] === "duration" && e.keyword === "type") {
+    return `Write ${where} as an object such as {"type": "fixed", "seconds": 300}; seconds may also be a time string like "5m".`;
+  }
+  if (isStep && depth === 5 && e.path[4] === "duration" && /^Add "(seconds|minSeconds|maxSeconds|defaultSeconds)"/.test(e.fix || "")) {
+    return `${e.fix} Seconds are a number or a time string such as "5m" or "1h30m".`;
+  }
+  return e.fix;
+}
+
+// The fix for a step with no startTrigger: tracks[ti].steps[si] of
+// `program`, chained after the step before it in its track.
+function startTriggerFix(program, ti, si) {
+  const where = `tracks[${ti}].steps[${si}]`;
+  const t = _isObj(program) && Array.isArray(program.tracks) ? program.tracks[ti] : undefined;
+  const steps = _isObj(t) && Array.isArray(t.steps) ? t.steps : [];
+  const prev = si > 0 && _isObj(steps[si - 1]) ? steps[si - 1].stepId : undefined;
+  return si === 0
+    ? `Add a startTrigger to ${where}; the first step of a track usually uses {"type": "programStart"}.`
+    : `Add a startTrigger to ${where}, e.g. {"type": "afterStep", "stepId": ${typeof prev === "string" ? _js(prev) : '"<previous step in this track>"'}} to chain it after the step before it.`;
+}
+
+// Name the track or step a path is in: 'tracks[0].steps[2].duration
+// (step "bake") is ...'.
+function _label(e, program, message) {
+  if (e.path[0] !== "tracks" || typeof e.path[1] !== "number") return message;
+  const t = program.tracks[e.path[1]];
+  let label = null;
+  if (e.path[2] === "steps" && typeof e.path[3] === "number") {
+    const st = _isObj(t) && Array.isArray(t.steps) ? t.steps[e.path[3]] : undefined;
+    if (_isObj(st) && typeof st.stepId === "string") label = `step ${_js(st.stepId)}`;
+  } else if (_isObj(t) && typeof t.trackId === "string") {
+    label = `track ${_js(t.trackId)}`;
+  }
+  const sp = message.indexOf(" ");
+  return label && sp > 0 && message.slice(0, sp).startsWith(_fmtPath(e.path.slice(0, 2)))
+    ? `${message.slice(0, sp)} (${label})${message.slice(sp)}`
+    : message;
+}
+
 // Validator findings for `program` against the schema its schemaVersion
 // selects: [{ code: "schema_<keyword>", message, where, fix }]. Time
 // strings are converted to seconds first, as the Python validator does.
@@ -427,11 +547,14 @@ function schemaFindings(program) {
     }];
   }
   const schema = programSchema(_isObj(program) ? program.schemaVersion : undefined);
-  return checkJsonSchema(normalizeTimeFields(program), schema).map((e) => ({
+  const doc = normalizeTimeFields(program);
+  const out = [];
+  _check(doc, schema, schema, [], out);
+  return out.map((e) => ({
     code: `schema_${e.keyword}`,
-    message: e.message,
+    message: _label(e, doc, e.message),
     where: _fmtPath(e.path),
-    fix: e.fix,
+    fix: _programFix(e, doc),
   }));
 }
 
@@ -439,6 +562,7 @@ module.exports = {
   checkJsonSchema,
   programSchema,
   schemaFindings,
+  startTriggerFix,
   unsupportedKeywords,
   normalizeTimeFields,
   SCHEMA_VERSIONS: Object.keys(SCHEMAS),

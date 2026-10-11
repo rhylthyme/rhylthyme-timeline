@@ -26,6 +26,47 @@ Keep a Changelog; versions follow SemVer.
   fractional `maxConcurrent` (`schema_type`).
 - `browser/schedule.js` grows by about 77 KB (14 KB gzipped) for the two
   schemas and the checker.
+- `validateProgram` checks the JSON Schema on the expanded program only, as
+  the Python validator does, instead of on the authored program and then
+  the expanded one. Programs whose authored form breaks the schema but
+  whose expansion does not are now accepted on both sides (a number as a
+  replicated step's or track's name, a replicate `count` of 0, a track
+  without steps, which expansion leaves out with an `empty_track`
+  warning; a `replicates` of `null`, `[]` or `{}`, which Python's expander
+  treats as absent). A program the expander cannot run on (a track with no
+  `trackId`; a replicated track or step with no `name` or `stepId`; a
+  replicate `count` or legacy `batch_size` that is not a whole number; a
+  replicated step whose `mode` is not parallel, serial or stagger), where
+  Python's expander raises or drops the step, is checked as written; an expansion that fails reports
+  `expansion_failed` together with the schema findings on the program as
+  written, as Python does. Schema paths are moved back to the authored
+  program: a finding on a replicate copy is reported once, at the step or
+  track it is copied from, and its message names the copy.
+- Each problem the schema reports is reported once, by its `schema_*`
+  finding. These logic-check codes are gone: `missing_program_id`,
+  `missing_name`, `no_tracks`, `bad_track`, `bad_step`,
+  `missing_track_id`, `missing_track_name`, `missing_step_id`,
+  `missing_step_name`, `missing_start_trigger`, `bad_duration_type`,
+  `fixed_without_seconds`, `variable_without_bounds`,
+  `indefinite_without_default`, `choice_too_few_options` and `bad_alert`.
+  `compound_without_triggers`, `bad_trigger_logic`, `bad_trigger`,
+  `unknown_trigger_type`, `trigger_without_step_id`,
+  `buffer_without_seconds`, `bad_trigger_event`, `offset_without_seconds`,
+  `bad_resource_constraint`, `bad_max_concurrent` and `unparseable_duration`
+  remain only for what the schema accepts (`{"type": "programStart",
+  "logic": "xor"}`, an empty task name, `seconds: "abc"`), and an overlap
+  is no longer reported for a step whose `startTrigger` the schema rejects.
+  An empty `programId`, `name` or `stepId` string is no longer an error
+  (the schema and Python accept it).
+- The `schema_*` findings say more: the fix for a missing `programId`,
+  track or step `name`, `stepId` or `startTrigger` carries the advice the
+  old codes gave (the startTrigger fix names the step before it), a
+  message on a track or step names its id (`tracks[0].steps[2].duration
+  (step "bake") ...`), an unknown duration or trigger `type` lists every
+  allowed value, a missing top-level key is `schema_required` rather than
+  part of `schema_anyOf`, the fix names every key the closest shape lacks,
+  and a value of the wrong type is one `schema_type` finding, not also a
+  `schema_oneOf` one.
 
 ### Fixed
 - `analyzeSchedule(...).steps` (and `itinerary`) link the steps of a

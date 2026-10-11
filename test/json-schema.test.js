@@ -97,7 +97,10 @@ test('a failed oneOf explains itself with the closest shape', () => {
   assert.equal(f.code, 'schema_oneOf');
   assert.equal(f.where, 'tracks[0].steps[0].duration');
   assert.match(f.message, /closest: .*"maxSeconds"/);
-  assert.equal(f.fix, 'Add "maxSeconds" to tracks[0].steps[0].duration.');
+  assert.equal(f.fix, 'Add "maxSeconds" to tracks[0].steps[0].duration. Seconds are a number or a time string such as "5m" or "1h30m".');
+  // Several missing keys of the closest shape are all named.
+  p.tracks[0].steps[0].duration = { type: 'variable' };
+  assert.equal(S.validateProgram(p).errors[0].fix, 'Add "minSeconds", "maxSeconds" to tracks[0].steps[0].duration. Seconds are a number or a time string such as "5m" or "1h30m".');
 });
 
 test('additionalProperties: false rejects unknown keys and lists the allowed ones', () => {
@@ -119,11 +122,14 @@ test('required, enum, minimum, minItems, minLength and pattern', () => {
   const p = program();
   delete p.tracks[0].name;
   const f = S.validateProgram(p).errors[0];
-  assert.deepEqual([f.code, f.where, f.fix], ['schema_required', 'tracks[0]', 'Add "name" to tracks[0].']);
+  assert.deepEqual([f.code, f.where, f.fix], ['schema_required', 'tracks[0]', 'Add a short display name to tracks[0]; without one the viewer shows a generic label.']);
+  assert.equal(f.message, 'tracks[0] (track "t") is missing the required property "name".');
 
+  // A value no shape's discriminator allows names every allowed value.
   const q = program();
   q.tracks[0].steps[0].duration.type = 'fixd';
-  assert.deepEqual(codes(q), ['schema_oneOf', 'bad_duration_type']);
+  assert.deepEqual(codes(q), ['schema_oneOf']);
+  assert.equal(S.validateProgram(q).errors[0].message, 'tracks[0].steps[0].duration.type (step "a") is "fixd", not one of "fixed", "variable", "indefinite".');
   assert.deepEqual(J.checkJsonSchema('x', { enum: ['a', 'b'] })[0].fix, 'Use one of: "a", "b".');
   assert.deepEqual(J.checkJsonSchema(1, { enum: [true] }).length, 1);
   assert.deepEqual(J.checkJsonSchema({ a: [1] }, { const: { a: [1] } }), []);
@@ -183,12 +189,156 @@ test('time strings are read as seconds first, the way the Python validator reads
   assert.deepEqual(J.normalizeTimeFields({ a: undefined, b: [undefined] }), { b: [null] });
 });
 
-test('the authored program is checked, so expansion cannot hide a missing name', () => {
+test('a replicated step with no name cannot be expanded, so it is checked as written', () => {
+  // Python's expander raises on it; JS's would invent "undefined (1 of 2)".
   const p = program();
   delete p.tracks[0].steps[0].name;
   p.tracks[0].steps[0].replicates = { count: 2, mode: 'serial' };
-  const [f] = S.validateProgram(p).errors;
-  assert.deepEqual([f.code, f.where], ['schema_required', 'tracks[0].steps[0]']);
+  assert.deepEqual(S.validateProgram(p).errors.map((e) => [e.code, e.where]), [['schema_required', 'tracks[0].steps[0]']]);
+  // Likewise a replicated step with no stepId, and a track with no trackId.
+  const q = program();
+  delete q.tracks[0].steps[0].stepId;
+  q.tracks[0].steps[0].replicates = { count: 2 };
+  assert.deepEqual(S.validateProgram(q).errors.map((e) => [e.code, e.where]), [['schema_required', 'tracks[0].steps[0]']]);
+  const r = program();
+  delete r.tracks[0].trackId;
+  assert.deepEqual(S.validateProgram(r).errors.map((e) => [e.code, e.where]), [['schema_required', 'tracks[0]']]);
+});
+
+test('a replicate count or batch_size that is not a whole number, or an unknown replicated step mode, is checked as written', () => {
+  // Python's expander raises on these (range(2.5), "2" <= 1) or, for an
+  // unknown mode on a replicated step, silently drops the step; the
+  // expanded program no longer has the key, so it is checked as written.
+  const two = () => {
+    const p = program();
+    p.tracks[0].steps.push({ stepId: 'b', name: 'B', task: 'prep', duration: { type: 'fixed', seconds: 60 }, startTrigger: { type: 'afterStep', stepId: 'a' } });
+    return p;
+  };
+  const at = (p) => S.validateProgram(p).errors.map((e) => [e.code, e.where]);
+  const cases = [
+    [(p) => { p.tracks[0].steps[0].replicates = { count: 2.5 }; }, ['schema_type', 'tracks[0].steps[0].replicates.count']],
+    [(p) => { p.tracks[0].steps[0].replicates = { count: 1.5 }; }, ['schema_type', 'tracks[0].steps[0].replicates.count']],
+    [(p) => { p.tracks[0].replicates = { count: 2.5 }; }, ['schema_type', 'tracks[0].replicates.count']],
+    [(p) => { p.tracks[0].replicates = { count: 1.5, mode: 'serial' }; }, ['schema_type', 'tracks[0].replicates.count']],
+    [(p) => { p.tracks[0].batch_size = '2'; }, ['schema_type', 'tracks[0].batch_size']],
+    [(p) => { p.tracks[0].batch_size = 2.5; }, ['schema_type', 'tracks[0].batch_size']],
+    [(p) => { p.tracks[0].steps[0].replicates = { count: 2, mode: 'foo' }; }, ['schema_enum', 'tracks[0].steps[0].replicates.mode']],
+  ];
+  for (const [edit, want] of cases) {
+    const p = two();
+    edit(p);
+    assert.deepEqual(at(p), [want], JSON.stringify(p.tracks[0]));
+  }
+  // Controls: a count Python treats as 1 or less, and whole numbers.
+  for (const edit of [
+    (p) => { p.tracks[0].steps[0].replicates = { count: 0.5 }; },
+    (p) => { p.tracks[0].steps[0].replicates = { count: 2.0 }; },
+    (p) => { p.tracks[0].steps[0].replicates = { count: 1, mode: 'foo' }; },
+    (p) => { p.tracks[0].batch_size = 2; },
+  ]) {
+    const p = two();
+    edit(p);
+    assert.deepEqual(at(p), [], JSON.stringify(p.tracks[0]));
+  }
+});
+
+test('a replicates Python treats as absent (null, [], {}) is accepted', () => {
+  for (const rep of [null, [], {}, false, 0]) {
+    const p = program();
+    p.tracks[0].replicates = rep;
+    assert.deepEqual(codes(p), [], `track replicates ${JSON.stringify(rep)}`);
+    const q = program();
+    q.tracks[0].steps[0].replicates = rep;
+    assert.deepEqual(codes(q), [], `step replicates ${JSON.stringify(rep)}`);
+  }
+  // A non-empty array or a string is not a replicates object.
+  const r = program();
+  r.tracks[0].replicates = [2];
+  assert.deepEqual(codes(r), ['schema_type']);
+});
+
+test('the fix for a missing startTrigger on a replicated step names the authored step before it', () => {
+  const two = () => program({ tracks: [{ trackId: 't', name: 'T', steps: [
+    { stepId: 'a', name: 'A', task: 'prep', duration: { type: 'fixed', seconds: 60 }, startTrigger: { type: 'programStart' } },
+    { stepId: 'b', name: 'B', task: 'prep', duration: { type: 'fixed', seconds: 60 } },
+  ] }] });
+  const want = 'Add a startTrigger to tracks[0].steps[1], e.g. {"type": "afterStep", "stepId": "a"} to chain it after the step before it. The path is the authored step that replicates copies.';
+  // In a replicated track the expanded step before b is "a-r1"; for a
+  // replicated b, its copy heads a sub-track. Either way the authored
+  // predecessor is "a".
+  const track = two();
+  track.tracks[0].replicates = { count: 2 };
+  const step = two();
+  step.tracks[0].steps[1].replicates = { count: 2 };
+  for (const p of [track, step]) {
+    const v = S.validateProgram(p);
+    assert.deepEqual(v.errors.map((e) => [e.code, e.where, e.fix]), [['schema_required', 'tracks[0].steps[1]', want]]);
+    // Following the advice gives a valid program whose copies chain
+    // within each copy (b-r2 after a-r2, not after a-r1).
+    p.tracks[0].steps[1].startTrigger = { type: 'afterStep', stepId: 'a' };
+    assert.deepEqual(codes(p), []);
+  }
+  const ex = S.expandReplicates(track);
+  const b2 = ex.tracks.flatMap((t) => t.steps).find((s) => s.stepId === 'b-r2');
+  assert.deepEqual(b2.startTrigger, { type: 'afterStep', stepId: 'a-r2' });
+});
+
+test('the expanded program is checked, as in Python: an authored shape expansion resolves is accepted', () => {
+  // A number as a replicated step's name becomes "42 (1 of 2)"; a count of
+  // 0 is no replicate at all; a track without steps is left out (with a
+  // warning).
+  const p = program();
+  p.tracks[0].steps[0].name = 42;
+  p.tracks[0].steps[0].replicates = { count: 2 };
+  assert.ok(J.schemaFindings(p).length, 'the authored program breaks the schema');
+  assert.deepEqual(codes(p), []);
+  const q = program();
+  q.tracks[0].steps[0].replicates = { count: 0 };
+  assert.deepEqual(codes(q), []);
+  const r = program();
+  r.tracks.push({ trackId: 'idle', name: 'Idle', steps: [] });
+  const v = S.validateProgram(r);
+  assert.deepEqual([v.valid, v.warnings.map((w) => [w.code, w.where])], [true, [['empty_track', 'tracks[1]']]]);
+});
+
+test('schema paths on the expanded program point back at the authored program', () => {
+  const p = program();
+  p.tracks[0].steps.push({ stepId: 'b', name: 'B', task: 'prep', duration: { type: 'fixed', seconds: 60 }, startTrigger: { type: 'afterStep', stepId: 'a' } });
+  p.tracks[0].steps[0].replicates = { count: 3 };
+  p.tracks[0].steps[0].priority = 1.5;
+  p.tracks.push({ trackId: 'u', name: 'U', steps: [
+    { stepId: 'c', name: 'C', task: 'prep', duration: { type: 'fixed', seconds: 60 }, startTrigger: { type: 'programStart' }, priority: 2.5 },
+  ] });
+  const errors = S.validateProgram(p).errors;
+  // Three copies of "a" (in sub-tracks after tracks[0]), one finding, at the
+  // authored step; "u" is tracks[4] once expanded, tracks[1] as written.
+  assert.deepEqual(errors.map((e) => [e.code, e.where]), [
+    ['schema_type', 'tracks[0].steps[0].priority'],
+    ['schema_type', 'tracks[1].steps[0].priority'],
+  ]);
+  assert.match(errors[0].message, /^tracks\[0\]\.steps\[0\]\.priority \(step "a", in its copy "a-r1"\) is 1\.5/);
+  assert.match(errors[0].fix, /The path is the authored step that replicates copies\.$/);
+  assert.equal(errors[1].message, 'tracks[1].steps[0].priority (step "c") is 2.5 (number), not of type integer.');
+});
+
+test('a problem the schema reports is reported once, with the old fix advice', () => {
+  const p = program({ tracks: [{ trackId: 't', name: 'T', steps: [
+    { stepId: 'a', name: 'A', task: 'prep', duration: { type: 'fixed', seconds: 60 }, startTrigger: { type: 'programStart' } },
+    { stepId: 'b', task: 'prep', duration: { type: 'fixed', seconds: 60 } },
+  ] }] });
+  delete p.programId;
+  delete p.name;
+  const v = S.validateProgram(p);
+  assert.deepEqual(v.errors.map((e) => [e.code, e.where, e.fix]), [
+    ['schema_required', 'tracks[0].steps[1]', 'Add a short imperative name to tracks[0].steps[1], e.g. "Sear the chicken".'],
+    ['schema_required', 'tracks[0].steps[1]', 'Add a startTrigger to tracks[0].steps[1], e.g. {"type": "afterStep", "stepId": "a"} to chain it after the step before it.'],
+    ['schema_required', 'program', 'Add a kebab-case programId, e.g. "thanksgiving-dinner".'],
+    ['schema_required', 'program', 'Add a name: a human-readable title for the program.'],
+  ]);
+  assert.deepEqual(v.warnings, []);
+  // An empty track list, a constraint with no task: once each.
+  assert.deepEqual(codes(program({ tracks: [] })), ['schema_minItems']);
+  assert.deepEqual(codes(program({ resourceConstraints: [{ maxConcurrent: 1 }] })).filter((c) => c !== 'task_not_constrained'), ['schema_required']);
 });
 
 test('formatValidation lists schema findings with their fixes', () => {

@@ -13,7 +13,8 @@ export interface Finding {
   /**
    * e.g. "step:bake", "track:oven", "resourceConstraints"; for schema_*
    * findings a path such as "tracks[0].steps[1].duration" ("program" for
-   * the root); null when program-wide.
+   * the root) into the program as written, also when the finding is on a
+   * replicate copy; null when program-wide.
    */
   where: string | null;
   fix: string | null;
@@ -144,6 +145,12 @@ export interface AnalyzeOptions {
   useDurations?: 'planned' | 'predicted';
 }
 
+/**
+ * Expands replicates, checks the JSON Schema on the expanded program (as
+ * the Python validator does; paths point back at the authored program),
+ * then the logic checks. A problem the schema reports is not reported
+ * again by a logic check.
+ */
 export function validateProgram(program: Program): ValidationResult;
 export function analyzeSchedule(program: Program, opts?: AnalyzeOptions): Analysis;
 /** The core itinerary() after the LabMCP estimates analyzeSchedule applies: its entries agree with analyzeSchedule(...).steps. */
@@ -168,7 +175,8 @@ export interface SchemaError {
  * time strings read as seconds first, as the Python validator does. Each
  * failure is a finding with code `schema_<keyword>`; a value that cannot
  * be written as JSON (a cycle, a BigInt) is one finding, `not_json`.
- * validateProgram includes these in `errors`.
+ * Paths are into `program` as given; validateProgram calls this on the
+ * expanded program and includes the findings in `errors`.
  */
 export function schemaFindings(program: Program): Finding[];
 /** The bundled program schema (Draft 7 JSON) that a schemaVersion selects. */

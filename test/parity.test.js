@@ -5,8 +5,10 @@
 // code. They must also agree on schema-invalid programs: the three from
 // issue #8 and mutations of every example (a required key dropped, a wrong
 // type, an unknown key, a float where an integer goes, an ambiguous oneOf),
-// plus controls the schema accepts (an unparseable date-time, since neither
-// side checks `format`). The Python side runs in a subprocess; the test skips when Python
+// on plain and on replicated tracks and steps, plus controls the schema
+// accepts (an unparseable date-time, since neither side checks `format`),
+// and programs whose authored form breaks the schema but whose expanded
+// form, which both sides check, does not. The Python side runs in a subprocess; the test skips when Python
 // with `rhylthyme` or the rhylthyme-examples checkout is missing (CI has
 // both). Its twin, rhylthyme's tests/test_js_parity.py, runs the same check
 // from the Python repository against the published package.
@@ -108,30 +110,98 @@ function issue8Programs() {
   };
 }
 
+// Programs whose authored form breaks the schema and whose expanded form
+// (what both validators check) does not: both accept them.
+function expandedPassesPrograms() {
+  const base = issue8Programs()['issue-8/control'];
+  const out = {};
+  const add = (name, edit) => { const p = JSON.parse(JSON.stringify(base)); edit(p); out[`expanded-passes/${name}`] = p; };
+  add('replicated step named by a number', (p) => { Object.assign(p.tracks[0].steps[0], { name: 42, replicates: { count: 2 } }); });
+  add('replicated track named by a number', (p) => { Object.assign(p.tracks[0], { name: 7, replicates: { count: 2 } }); });
+  add('replicate count 0', (p) => { p.tracks[0].steps[0].replicates = { count: 0 }; });
+  // Python's expander treats a falsy `replicates` as absent.
+  add('track replicates null', (p) => { p.tracks[0].replicates = null; });
+  add('track replicates []', (p) => { p.tracks[0].replicates = []; });
+  add('step replicates null', (p) => { p.tracks[0].steps[0].replicates = null; });
+  add('step replicates {}', (p) => { p.tracks[0].steps[0].replicates = {}; });
+  add('track without steps', (p) => { p.tracks.push({ trackId: 'idle', name: 'Idle', steps: [] }); });
+  return out;
+}
+
 // Schema mutations of one example program, keyed "<rel> :: <mutation>".
 // Each targets a part every example has (or skips), so the set grows with
-// rhylthyme-examples.
+// rhylthyme-examples. Both validators check the expanded program, so a
+// mutation of a replicated track or step (`replicates`, an `instances`
+// trigger) is compared like any other: the expander may resolve it (a
+// number as a replicated step's name becomes "42 (1 of 2)") or be unable
+// to run (a replicated step with no name), and both sides must agree.
 function mutations(rel, program) {
   const out = {};
   const add = (name, edit) => {
     const p = JSON.parse(JSON.stringify(program));
     if (edit(p) !== false) out[`${rel} :: ${name}`] = p;
   };
-  // Mutate a track and a step that expansion leaves alone (no `replicates`,
-  // no `instances` trigger). Python checks the schema after expansion only,
-  // and its expander turns a nameless replicated step into named copies (or
-  // raises); JS checks the authored program first, so it rejects those,
-  // which test/schedule.test.js covers.
-  const plain = (x) => x && !x.replicates && !/"instances"/.test(JSON.stringify(x.startTrigger || {}));
-  const track = (p) => (Array.isArray(p.tracks) && p.tracks.find((t) => plain(t) && Array.isArray(t.steps) && t.steps.some(plain))) || null;
-  const step = (p) => { const t = track(p); return (t && t.steps.find(plain)) || null; };
+  const replicated = (x) => !!x && (!!x.replicates || /"instances"/.test(JSON.stringify(x.startTrigger || {})));
+  const trackReplicated = (t) => replicated(t) || t.batch_size > 1 || (Array.isArray(t.steps) && t.steps.some(replicated));
+  const kinds = [
+    ['', (t) => !trackReplicated(t), (s) => !replicated(s)],
+    ['replicated ', trackReplicated, replicated],
+  ];
   const rc = (p) => (Array.isArray(p.resourceConstraints) && p.resourceConstraints[0]) || null;
   add('unknown top-level key', (p) => { p.colour = 'red'; });
-  add('track without name', (p) => { if (!track(p) || !('name' in track(p))) return false; delete track(p).name; });
-  add('step without name', (p) => { if (!step(p)) return false; delete step(p).name; });
-  add('step name is a number', (p) => { if (!step(p)) return false; step(p).name = 42; });
-  add('unknown key in a startTrigger (allowed)', (p) => { if (!step(p) || !step(p).startTrigger) return false; step(p).startTrigger.delay = 5; });
-  add('unknown duration type', (p) => { if (!step(p) || !step(p).duration) return false; step(p).duration.type = 'fixd'; });
+  for (const [kind, isTrack, isStep] of kinds) {
+    const track = (p) => (Array.isArray(p.tracks) && p.tracks.find((t) => t && isTrack(t) && Array.isArray(t.steps) && t.steps.length)) || null;
+    const step = (p) => {
+      for (const t of (Array.isArray(p.tracks) ? p.tracks : [])) {
+        const s = t && Array.isArray(t.steps) && t.steps.find((x) => x && isStep(x));
+        if (s) return s;
+      }
+      return null;
+    };
+    add(`${kind}track without name`, (p) => { if (!track(p) || !('name' in track(p))) return false; delete track(p).name; });
+    add(`${kind}track name is a number`, (p) => { if (!track(p)) return false; track(p).name = 7; });
+    add(`${kind}step without name`, (p) => { if (!step(p)) return false; delete step(p).name; });
+    add(`${kind}step name is a number`, (p) => { if (!step(p)) return false; step(p).name = 42; });
+    add(`${kind}step without startTrigger`, (p) => { if (!step(p)) return false; delete step(p).startTrigger; });
+    add(`${kind}unknown key in a startTrigger (allowed)`, (p) => { if (!step(p) || !step(p).startTrigger) return false; step(p).startTrigger.delay = 5; });
+    add(`${kind}unknown duration type`, (p) => { if (!step(p) || !step(p).duration) return false; step(p).duration.type = 'fixd'; });
+    add(`${kind}step priority is a fraction`, (p) => { if (!step(p)) return false; step(p).priority = 1.5; });
+  }
+  // The replicates object itself (and legacy batch_size): on the first
+  // replicated track/step if there is one, else made on the first track
+  // and on a step another step waits for (Python's expander drops a
+  // replicated step with an unknown mode, so only a reference to it shows).
+  // A track made replicated is one no other track waits for: its copies
+  // rename its steps, and Python does not check the step ids inside a
+  // compound trigger, so a dangling reference there is a JS-only finding.
+  const refsInto = (p, t) => {
+    const ids = new Set(t.steps.map((x) => x && x.stepId));
+    return p.tracks.some((o) => o !== t && o && Array.isArray(o.steps) && o.steps.some((x) => x && [...JSON.stringify(x.startTrigger || {}).matchAll(/"stepId":"([^"]*)"/g)].some((m) => ids.has(m[1]))));
+  };
+  const firstTrack = (p) => (Array.isArray(p.tracks) && (p.tracks.find((t) => t && t.replicates) || p.tracks.find((t) => t && Array.isArray(t.steps) && t.steps.length && !refsInto(p, t)))) || null;
+  const referenced = (p) => {
+    const all = (Array.isArray(p.tracks) ? p.tracks : []).flatMap((t) => (t && Array.isArray(t.steps) ? t.steps : []));
+    const refs = new Set(all.map((x) => x && x.startTrigger && x.startTrigger.type === 'afterStep' && x.startTrigger.stepId).filter(Boolean));
+    return all.find((x) => x && x.replicates && refs.has(x.stepId)) || all.find((x) => x && !x.replicates && refs.has(x.stepId) && typeof x.name === 'string') || null;
+  };
+  const trackRep = (p) => { const t = firstTrack(p); if (!t) return null; if (!t.replicates || typeof t.replicates !== 'object') t.replicates = { count: 2 }; return t.replicates; };
+  const stepRep = (p) => { const s = referenced(p); if (!s) return null; if (!s.replicates || typeof s.replicates !== 'object') s.replicates = { count: 2 }; return s.replicates; };
+  add('replicated step count is a fraction above 1', (p) => { const r = stepRep(p); if (!r) return false; r.count = 2.5; });
+  add('replicated step count is a fraction below 2', (p) => { const r = stepRep(p); if (!r) return false; r.count = 1.5; });
+  add('replicated step count is a fraction below 1 (control)', (p) => { const r = stepRep(p); if (!r) return false; r.count = 0.5; });
+  add('replicated step count is a string', (p) => { const r = stepRep(p); if (!r) return false; r.count = '2'; });
+  add('replicated step mode is unknown', (p) => { const r = stepRep(p); if (!r) return false; r.count = Math.max(2, r.count | 0); r.mode = 'foo'; });
+  add('replicated track count is a fraction', (p) => { const r = trackRep(p); if (!r) return false; r.count = 2.5; });
+  add('replicated track count is a fraction below 2, serial', (p) => { const r = trackRep(p); if (!r) return false; r.count = 1.5; r.mode = 'serial'; });
+  add('replicated track count is a string', (p) => { const r = trackRep(p); if (!r) return false; r.count = '2'; });
+  add('replicated track mode is unknown', (p) => { const r = trackRep(p); if (!r) return false; r.mode = 'foo'; });
+  add('track replicates null', (p) => { const t = firstTrack(p); if (!t) return false; t.replicates = null; });
+  add('track replicates []', (p) => { const t = firstTrack(p); if (!t) return false; t.replicates = []; });
+  add('step replicates null', (p) => { const s = referenced(p); if (!s) return false; s.replicates = null; });
+  add('track batch_size is a string', (p) => { const t = firstTrack(p); if (!t) return false; delete t.replicates; t.batch_size = '2'; });
+  add('track batch_size is a fraction', (p) => { const t = firstTrack(p); if (!t) return false; delete t.replicates; t.batch_size = 2.5; });
+  add('track batch_size 2 (control)', (p) => { const t = firstTrack(p); if (!t) return false; delete t.replicates; t.batch_size = 2; });
+  add('replicate count is 0', (p) => { const s = (p.tracks || []).flatMap((t) => t.steps || []).find((x) => x && x.replicates); if (!s) return false; s.replicates.count = 0; });
   add('maxConcurrent is a string', (p) => { if (!rc(p)) return false; rc(p).maxConcurrent = String(rc(p).maxConcurrent); });
   add('maxConcurrent is a fraction', (p) => { if (!rc(p)) return false; rc(p).maxConcurrent = 1.5; });
   add('resource constraint without task', (p) => { if (!rc(p)) return false; delete rc(p).task; });
@@ -151,7 +221,7 @@ function pythonVerdicts(files, inline) {
 }
 
 const files = programFiles();
-const inline = issue8Programs();
+const inline = Object.assign(issue8Programs(), expandedPassesPrograms());
 for (const rel of files) {
   if (rel.startsWith('invalid/') || KNOWN_DIFFERENCES[rel]) continue;
   Object.assign(inline, mutations(rel, JSON.parse(fs.readFileSync(path.join(EXAMPLES, rel), 'utf8'))));
@@ -208,7 +278,7 @@ test('both validators give the issue #8 programs the same verdict', { skip }, ()
 });
 
 test('the JS and Python validators agree on schema mutations of every example', { skip }, (t) => {
-  const keys = Object.keys(inline).filter((k) => !k.startsWith('issue-8/'));
+  const keys = Object.keys(inline).filter((k) => k.includes(' :: '));
   assert.ok(keys.length > 500, `only ${keys.length} mutations`);
   const disagreements = [];
   let invalid = 0;
@@ -220,8 +290,20 @@ test('the JS and Python validators agree on schema mutations of every example', 
     disagreements.push(`${key}: JS ${js.valid ? 'valid' : 'invalid ' + js.errors.map((e) => e.code).join(',')}, ` +
       `Python ${p.valid ? 'valid' : 'invalid ' + p.codes.concat(p.schemaErrors, p.crashed || []).join(',')}`);
   }
-  t.diagnostic(`${keys.length} mutations, ${invalid} invalid, ${keys.filter((k) => py.verdicts[k].crashed).length} raised in Python`);
+  const rep = keys.filter((k) => / :: replicated /.test(k)).length;
+  t.diagnostic(`${keys.length} mutations (${rep} of replicated parts), ${invalid} invalid, ${keys.filter((k) => py.verdicts[k].crashed).length} raised in Python`);
+  assert.ok(rep > 50, `only ${rep} mutations of replicated parts`);
   assert.deepEqual(disagreements, []);
   // The mutations exercise the schema: most of them are rejected.
   assert.ok(invalid > keys.length / 2, `only ${invalid} of ${keys.length} mutations are invalid`);
+});
+
+test('a program whose authored form breaks the schema but whose expanded form passes is accepted by both', { skip }, () => {
+  const { schemaFindings } = require('../src/schedule');
+  for (const [key, program] of Object.entries(expandedPassesPrograms())) {
+    if (key !== 'expanded-passes/track without steps') assert.ok(schemaFindings(program).length, `${key}: the authored form should break the schema`);
+    const js = validateProgram(program);
+    assert.equal(js.valid, true, `${key}: JS ${JSON.stringify(js.errors)}`);
+    assert.equal(py.verdicts[key].valid, true, `${key}: Python ${JSON.stringify(py.verdicts[key])}`);
+  }
 });
