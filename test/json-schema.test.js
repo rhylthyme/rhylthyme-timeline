@@ -205,6 +205,84 @@ test('a replicated step with no name cannot be expanded, so it is checked as wri
   assert.deepEqual(S.validateProgram(r).errors.map((e) => [e.code, e.where]), [['schema_required', 'tracks[0]']]);
 });
 
+test('a replicate count or batch_size that is not a whole number, or an unknown replicated step mode, is checked as written', () => {
+  // Python's expander raises on these (range(2.5), "2" <= 1) or, for an
+  // unknown mode on a replicated step, silently drops the step; the
+  // expanded program no longer has the key, so it is checked as written.
+  const two = () => {
+    const p = program();
+    p.tracks[0].steps.push({ stepId: 'b', name: 'B', task: 'prep', duration: { type: 'fixed', seconds: 60 }, startTrigger: { type: 'afterStep', stepId: 'a' } });
+    return p;
+  };
+  const at = (p) => S.validateProgram(p).errors.map((e) => [e.code, e.where]);
+  const cases = [
+    [(p) => { p.tracks[0].steps[0].replicates = { count: 2.5 }; }, ['schema_type', 'tracks[0].steps[0].replicates.count']],
+    [(p) => { p.tracks[0].steps[0].replicates = { count: 1.5 }; }, ['schema_type', 'tracks[0].steps[0].replicates.count']],
+    [(p) => { p.tracks[0].replicates = { count: 2.5 }; }, ['schema_type', 'tracks[0].replicates.count']],
+    [(p) => { p.tracks[0].replicates = { count: 1.5, mode: 'serial' }; }, ['schema_type', 'tracks[0].replicates.count']],
+    [(p) => { p.tracks[0].batch_size = '2'; }, ['schema_type', 'tracks[0].batch_size']],
+    [(p) => { p.tracks[0].batch_size = 2.5; }, ['schema_type', 'tracks[0].batch_size']],
+    [(p) => { p.tracks[0].steps[0].replicates = { count: 2, mode: 'foo' }; }, ['schema_enum', 'tracks[0].steps[0].replicates.mode']],
+  ];
+  for (const [edit, want] of cases) {
+    const p = two();
+    edit(p);
+    assert.deepEqual(at(p), [want], JSON.stringify(p.tracks[0]));
+  }
+  // Controls: a count Python treats as 1 or less, and whole numbers.
+  for (const edit of [
+    (p) => { p.tracks[0].steps[0].replicates = { count: 0.5 }; },
+    (p) => { p.tracks[0].steps[0].replicates = { count: 2.0 }; },
+    (p) => { p.tracks[0].steps[0].replicates = { count: 1, mode: 'foo' }; },
+    (p) => { p.tracks[0].batch_size = 2; },
+  ]) {
+    const p = two();
+    edit(p);
+    assert.deepEqual(at(p), [], JSON.stringify(p.tracks[0]));
+  }
+});
+
+test('a replicates Python treats as absent (null, [], {}) is accepted', () => {
+  for (const rep of [null, [], {}, false, 0]) {
+    const p = program();
+    p.tracks[0].replicates = rep;
+    assert.deepEqual(codes(p), [], `track replicates ${JSON.stringify(rep)}`);
+    const q = program();
+    q.tracks[0].steps[0].replicates = rep;
+    assert.deepEqual(codes(q), [], `step replicates ${JSON.stringify(rep)}`);
+  }
+  // A non-empty array or a string is not a replicates object.
+  const r = program();
+  r.tracks[0].replicates = [2];
+  assert.deepEqual(codes(r), ['schema_type']);
+});
+
+test('the fix for a missing startTrigger on a replicated step names the authored step before it', () => {
+  const two = () => program({ tracks: [{ trackId: 't', name: 'T', steps: [
+    { stepId: 'a', name: 'A', task: 'prep', duration: { type: 'fixed', seconds: 60 }, startTrigger: { type: 'programStart' } },
+    { stepId: 'b', name: 'B', task: 'prep', duration: { type: 'fixed', seconds: 60 } },
+  ] }] });
+  const want = 'Add a startTrigger to tracks[0].steps[1], e.g. {"type": "afterStep", "stepId": "a"} to chain it after the step before it. The path is the authored step that replicates copies.';
+  // In a replicated track the expanded step before b is "a-r1"; for a
+  // replicated b, its copy heads a sub-track. Either way the authored
+  // predecessor is "a".
+  const track = two();
+  track.tracks[0].replicates = { count: 2 };
+  const step = two();
+  step.tracks[0].steps[1].replicates = { count: 2 };
+  for (const p of [track, step]) {
+    const v = S.validateProgram(p);
+    assert.deepEqual(v.errors.map((e) => [e.code, e.where, e.fix]), [['schema_required', 'tracks[0].steps[1]', want]]);
+    // Following the advice gives a valid program whose copies chain
+    // within each copy (b-r2 after a-r2, not after a-r1).
+    p.tracks[0].steps[1].startTrigger = { type: 'afterStep', stepId: 'a' };
+    assert.deepEqual(codes(p), []);
+  }
+  const ex = S.expandReplicates(track);
+  const b2 = ex.tracks.flatMap((t) => t.steps).find((s) => s.stepId === 'b-r2');
+  assert.deepEqual(b2.startTrigger, { type: 'afterStep', stepId: 'a-r2' });
+});
+
 test('the expanded program is checked, as in Python: an authored shape expansion resolves is accepted', () => {
   // A number as a replicated step's name becomes "42 (1 of 2)"; a count of
   // 0 is no replicate at all; a track without steps is left out (with a

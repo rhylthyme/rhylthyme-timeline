@@ -32,10 +32,12 @@ Keep a Changelog; versions follow SemVer.
   whose expansion does not are now accepted on both sides (a number as a
   replicated step's or track's name, a replicate `count` of 0, a track
   without steps, which expansion leaves out with an `empty_track`
-  warning). A program the expander cannot run on (a track with no
+  warning; a `replicates` of `null`, `[]` or `{}`, which Python's expander
+  treats as absent). A program the expander cannot run on (a track with no
   `trackId`; a replicated track or step with no `name` or `stepId`; a
-  replicate `count` that is not a number), where Python's expander raises,
-  is checked as written; an expansion that fails reports
+  replicate `count` or legacy `batch_size` that is not a whole number; a
+  replicated step whose `mode` is not parallel, serial or stagger), where
+  Python's expander raises or drops the step, is checked as written; an expansion that fails reports
   `expansion_failed` together with the schema findings on the program as
   written, as Python does. Schema paths are moved back to the authored
   program: a finding on a replicate copy is reported once, at the step or

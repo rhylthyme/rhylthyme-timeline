@@ -376,17 +376,29 @@ function projectedAlerts(step, timing) {
 // Expansion for validation
 // ---------------------------------------------------------------------
 
+// A `replicates` value Python's expander treats as absent (`not
+// replicates`): null, false, 0, "", [] or {}. It is dropped before the
+// schema check, so it is accepted on both sides.
+function _noReplicates(rep) {
+  return rep === undefined || rep === null || rep === false || rep === 0 || rep === "" ||
+    (Array.isArray(rep) && !rep.length) || (_isObj(rep) && !Object.keys(rep).length);
+}
+
 // True when the expander would have to make up values from missing ones:
 // a track with no trackId, a replicated track or step with no name or ids,
-// a replicate count that is not a number. Python's expander raises on
-// these (so the Python validator rejects the program); JS's would invent
-// "undefined-r1". Such a program is schema-checked as written, which
-// names the missing key.
+// a replicate count or batch_size that is not a whole number, a replicated
+// step whose mode is not parallel, serial or stagger. Python's expander
+// raises on these (or, for an unknown step mode, silently drops the step),
+// so the Python validator rejects the program; JS's would invent
+// "undefined-r1" or round the count. Such a program is schema-checked as
+// written, which names the bad key.
 function _unexpandable(program) {
   const tracks = program.tracks;
   if (tracks === undefined) return false;
   if (!Array.isArray(tracks)) return true;
-  const badRep = (rep) => rep && (!_isObj(rep) || (rep.count !== undefined && typeof rep.count !== "number" && typeof rep.count !== "boolean"));
+  const num = (v) => typeof v === "number" || typeof v === "boolean";
+  const whole = (v) => typeof v !== "number" || v <= 1 || Number.isInteger(v);
+  const badRep = (rep) => !_noReplicates(rep) && (!_isObj(rep) || (rep.count !== undefined && (!num(rep.count) || !whole(rep.count))));
   const count = (rep) => (_isObj(rep) && typeof rep.count === "number" ? rep.count : 1);
   return tracks.some((t) => {
     if (!_isObj(t) || t.trackId === undefined) return true;
@@ -394,7 +406,9 @@ function _unexpandable(program) {
     const steps = t.steps || [];
     if (steps.some((s) => !_isObj(s))) return true;
     if (badRep(t.replicates)) return true;
-    const n = t.replicates ? count(t.replicates) : (typeof t.batch_size === "number" ? t.batch_size : 1);
+    // Python converts batch_size only on a track with no `replicates` key.
+    if (!("replicates" in t) && t.batch_size !== undefined && (!num(t.batch_size) || !whole(t.batch_size))) return true;
+    const n = !_noReplicates(t.replicates) ? count(t.replicates) : (!("replicates" in t) && typeof t.batch_size === "number" ? t.batch_size : 1);
     if (n > 1) {
       if (t.name === undefined || steps.some((s) => s.stepId === undefined)) return true;
       const rep = t.replicates || {};
@@ -404,6 +418,7 @@ function _unexpandable(program) {
     return steps.some((s) => {
       if (badRep(s.replicates)) return true;
       if (count(s.replicates) > 1 && (s.stepId === undefined || s.name === undefined)) return true;
+      if (count(s.replicates) > 1 && s.replicates.mode !== undefined && !["parallel", "serial", "stagger"].includes(s.replicates.mode)) return true;
       return s.stepId === undefined && _atoms(s.startTrigger).some((a) => Object.prototype.hasOwnProperty.call(a, "instances"));
     });
   });
@@ -412,6 +427,23 @@ function _unexpandable(program) {
 // The program the validator checks: replicates expanded and, as Python's
 // expander does for every program, tracks without steps left out.
 function _expandForValidation(program) {
+  // Drop the `replicates` Python's expander treats as absent (null, [],
+  // ...); JS's would keep some of them for the schema to reject.
+  const tracks = Array.isArray(program.tracks) ? program.tracks : null;
+  const falsy = (o) => _isObj(o) && "replicates" in o && _noReplicates(o.replicates);
+  if (tracks && tracks.some((t) => falsy(t) || (_isObj(t) && Array.isArray(t.steps) && t.steps.some(falsy)))) {
+    const drop = (o) => { if (!falsy(o)) return o; const c = Object.assign({}, o); delete c.replicates; return c; };
+    program = Object.assign({}, program, {
+      tracks: tracks.map((t) => {
+        if (!_isObj(t)) return t;
+        // Python skips legacy batch_size on a track with a `replicates`
+        // key, however falsy; the key is gone below, so drop batch_size too.
+        const c = drop(t);
+        if (c !== t && c.batch_size !== undefined) delete c.batch_size;
+        return Array.isArray(c.steps) ? Object.assign({}, c, { steps: c.steps.map(drop) }) : c;
+      }),
+    });
+  }
   let out = expandReplicates(program);
   if (Array.isArray(out.tracks) && out.tracks.some((t) => _isObj(t) && !(Array.isArray(t.steps) && t.steps.length))) {
     out = Object.assign({}, out, { tracks: out.tracks.filter((t) => !_isObj(t) || (Array.isArray(t.steps) && t.steps.length)) });
@@ -478,6 +510,13 @@ function _authoredPaths(findings, expanded, authored) {
     const from = new RegExp(`${esc(m[0])}(?![\\d])`, "g");
     let message = f.message.replace(from, to);
     let fix = f.fix ? f.fix.replace(from, to) : f.fix;
+    if (m[2] !== undefined && f.code === "schema_required" && / is missing the required property "startTrigger"/.test(f.message)) {
+      // The advice names the step before this one; take it from the
+      // authored track, not the expanded one (where it is a copy's id, or
+      // nothing for a step copied to the head of a sub-track).
+      const at = /^tracks\[(\d+)\]\.steps\[(\d+)\]$/.exec(to);
+      if (at && f.where === m[0]) fix = JsonSchema.startTriggerFix(authored, Number(at[1]), Number(at[2]));
+    }
     if (copy) {
       const label = / \((?:step|track) "[^"]*"\)/;
       message = label.test(message) ? message.replace(label, ` (${copy})`) : `${message} (${copy[0].toUpperCase()}${copy.slice(1)}.)`;

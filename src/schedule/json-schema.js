@@ -489,13 +489,7 @@ function _programFix(e, program) {
   if (e.keyword === "required" && isStep && depth === 4) {
     if (e.missing === "stepId") return `Add a stepId to ${where}; stepIds must be unique across ALL tracks, not just within one track.`;
     if (e.missing === "name") return `Add a short imperative name to ${where}, e.g. "Sear the chicken".`;
-    if (e.missing === "startTrigger") {
-      const steps = program.tracks[e.path[1]].steps;
-      const prev = e.path[3] > 0 && _isObj(steps[e.path[3] - 1]) ? steps[e.path[3] - 1].stepId : undefined;
-      return e.path[3] === 0
-        ? `Add a startTrigger to ${where}; the first step of a track usually uses {"type": "programStart"}.`
-        : `Add a startTrigger to ${where}, e.g. {"type": "afterStep", "stepId": ${typeof prev === "string" ? _js(prev) : '"<previous step in this track>"'}} to chain it after the step before it.`;
-    }
+    if (e.missing === "startTrigger") return startTriggerFix(program, e.path[1], e.path[3]);
   }
   if (isStep && depth === 5 && e.path[4] === "duration" && e.keyword === "type") {
     return `Write ${where} as an object such as {"type": "fixed", "seconds": 300}; seconds may also be a time string like "5m".`;
@@ -504,6 +498,18 @@ function _programFix(e, program) {
     return `${e.fix} Seconds are a number or a time string such as "5m" or "1h30m".`;
   }
   return e.fix;
+}
+
+// The fix for a step with no startTrigger: tracks[ti].steps[si] of
+// `program`, chained after the step before it in its track.
+function startTriggerFix(program, ti, si) {
+  const where = `tracks[${ti}].steps[${si}]`;
+  const t = _isObj(program) && Array.isArray(program.tracks) ? program.tracks[ti] : undefined;
+  const steps = _isObj(t) && Array.isArray(t.steps) ? t.steps : [];
+  const prev = si > 0 && _isObj(steps[si - 1]) ? steps[si - 1].stepId : undefined;
+  return si === 0
+    ? `Add a startTrigger to ${where}; the first step of a track usually uses {"type": "programStart"}.`
+    : `Add a startTrigger to ${where}, e.g. {"type": "afterStep", "stepId": ${typeof prev === "string" ? _js(prev) : '"<previous step in this track>"'}} to chain it after the step before it.`;
 }
 
 // Name the track or step a path is in: 'tracks[0].steps[2].duration
@@ -556,6 +562,7 @@ module.exports = {
   checkJsonSchema,
   programSchema,
   schemaFindings,
+  startTriggerFix,
   unsupportedKeywords,
   normalizeTimeFields,
   SCHEMA_VERSIONS: Object.keys(SCHEMAS),
