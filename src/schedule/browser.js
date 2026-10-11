@@ -17,4 +17,7 @@ module.exports = Object.assign({}, Schedule, {
   galago: require("./galago.js"),
   labmcp: require("./labmcp.js"),
   history: require("./history.js"),
+  // Every code validateProgram can emit, with examples and fixes
+  // (finding-codes.json; test/finding-codes.test.js keeps it complete).
+  findingCodes: require("./finding-codes.json"),
 });

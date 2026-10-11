@@ -7,7 +7,8 @@
 //                                        criticalPath, resourceConflicts, ... }
 //
 // The instrument helpers (galago-tools commands, LabMCP servers) and the
-// run-history predictor the analyzer uses are exported as namespaces.
+// run-history predictor the analyzer uses are exported as namespaces, and
+// findingCodes catalogues every finding code validateProgram can emit.
 //
 // This is the Node entry: it registers the LabMCP instrument catalogue. The
 // browser entry (./browser.js) is the same module without it.

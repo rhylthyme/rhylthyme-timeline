@@ -30,4 +30,5 @@ export const {
   galago,
   labmcp,
   history,
+  findingCodes,
 } = M;

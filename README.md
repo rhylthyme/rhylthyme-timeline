@@ -604,6 +604,32 @@ cannot be written as JSON (a circular reference, a BigInt) gets the single
 error `not_json` instead of a schema check. Patterns are read as Python's
 `re.search` reads them (`$` also matches before a final newline).
 
+Every code `validateProgram` can report is catalogued in `findingCodes`
+(`src/schedule/finding-codes.json`): per code its area, severities, a
+summary, an explanation, a program fragment that triggers it, the fix, and
+what Python's `rhylthyme` validator reports for the same program. An app
+can show the explanation next to a finding:
+
+```js
+import { validateProgram, findingCodes } from '@rhylthyme/timeline/schedule';
+
+for (const f of validateProgram(program).errors) {
+  const about = findingCodes.codes[f.code];   // { area, severity, summary, explanation, examples, fix, python }
+  console.log(`${f.code}: ${f.message}\n  ${about.summary} ${about.fix}`);
+}
+```
+
+`test/finding-codes.test.js` keeps the catalogue complete both ways: every
+code in the source is in it, and every example in it makes `validateProgram`
+report its code with its severity. A few codes the source can emit but no
+program reaches today (`bad_trigger`, and `schema_<keyword>` for keywords
+the bundled schemas do not assert) are listed with `reachable: false` and
+the reason. The rendered reference is docs/development/finding-codes.md in
+rhylthyme-docs. These are the codes of this package's `validateProgram`;
+the hosted MCP server's `validate_program` (rhylthyme-mcp's
+`mcp-api/schedule.js`) still runs its own validator, whose codes differ
+(`missing_program_id` where this one reports `schema_required`, for one).
+
 ```js
 import { schemaFindings, programSchema, checkJsonSchema } from '@rhylthyme/timeline/schedule';
 

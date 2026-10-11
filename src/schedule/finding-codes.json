@@ -1,0 +1,1500 @@
+{
+  "$comment": "Every finding code @rhylthyme/timeline/schedule's validateProgram can emit. Maintained by hand; test/finding-codes.test.js checks it against the source and the validator in both directions. Exported as findingCodes.",
+  "version": 1,
+  "completion": "Each example's program is a fragment: its top-level keys replace those of baseProgram (a shallow merge), keys listed in omit are deleted, and the result is passed to validateProgram. With whole: true the program is passed as it is. bigint names a path whose number is passed as a BigInt. entry: \"browser\" means the browser entry without the LabMCP catalogue.",
+  "baseProgram": {"programId":"example","name":"Example","schemaVersion":"0.2.0-alpha","tracks":[{"trackId":"main","name":"Main","steps":[{"stepId":"prep","name":"Prep","duration":{"type":"fixed","seconds":300},"startTrigger":{"type":"programStart"}},{"stepId":"cook","name":"Cook","duration":{"type":"fixed","seconds":600},"startTrigger":{"type":"afterStep","stepId":"prep"}}]}],"resourceConstraints":[]},
+  "python": "python.cli is the code `rhylthyme validate --json` (validate_program_file_structured, the program as written) reports for the example, python.library the code rhylthyme.validate_program_structured (replicates expanded first) reports; null when it reports nothing for it. python.strict, when present, is the code `rhylthyme validate --strict --json` (validate_program_file_structured with strict=True) reports, always as an error; without it --strict reports the same as python.cli. python.severity is given when Python's severity differs; python.requires names the Python driver packages the examples need. logic_error, the library's code for a check it has no code for, is always an error.",
+  "areas": {
+    "schema": {
+      "title": "Schema",
+      "description": "The program does not match the JSON Schema its schemaVersion selects (rhylthyme-spec's, bundled), or cannot be checked against it."
+    },
+    "structure": {
+      "title": "Structure and references",
+      "description": "Ids, triggers and the references between steps."
+    },
+    "timing": {
+      "title": "Timing and overlap",
+      "description": "Durations, the resolved timeline, cycles and steps that overlap in a track."
+    },
+    "resources": {
+      "title": "Resources",
+      "description": "Tasks and resourceConstraints."
+    },
+    "instances": {
+      "title": "Instances and replicates",
+      "description": "Schema 0.3.0-alpha `instances` triggers, `replicates` and maxInFlight, and replicate expansion."
+    },
+    "alerts": {
+      "title": "Alerts",
+      "description": "Step alerts (offsets before or after a step's start or end)."
+    },
+    "instruments": {
+      "title": "Instruments",
+      "description": "Instrument steps: galago-tools commands and LabMCP server calls."
+    }
+  },
+  "codes": {
+    "not_an_object": {
+      "area": "schema",
+      "severity": [
+        "error"
+      ],
+      "summary": "The program is not a JSON object.",
+      "explanation": "validateProgram was given an array, a string, a number, null or another non-object. Nothing else is checked: the result has this one error and stats null.",
+      "examples": [
+        {
+          "severity": "error",
+          "program": ["not","a","program"],
+          "whole": true,
+          "note": "The whole value passed to validateProgram, not a fragment."
+        }
+      ],
+      "fix": "Pass the full program object ({\"programId\": ..., \"tracks\": [...]}), not a string, an array or a wrapper around it.",
+      "python": {
+        "cli": null,
+        "library": null,
+        "note": "Python raises on a program that is not an object instead of reporting a finding."
+      }
+    },
+    "not_json": {
+      "area": "schema",
+      "severity": [
+        "error"
+      ],
+      "summary": "The program cannot be written as JSON, so the schema was not checked.",
+      "explanation": "A JavaScript caller passed a value JSON cannot carry: a circular reference, a BigInt or similar. The JSON Schema check is skipped and this finding is reported in its place; the logic checks still run. Programs read from JSON text never get it.",
+      "examples": [
+        {
+          "severity": "error",
+          "program": {"metadata":{"bytes":10}},
+          "bigint": [
+            "metadata",
+            "bytes"
+          ],
+          "note": "With metadata.bytes passed as the BigInt 10n rather than the number 10."
+        }
+      ],
+      "fix": "Pass plain JSON data: no circular references, BigInt values, functions or class instances.",
+      "python": {
+        "cli": null,
+        "library": null,
+        "note": "Python always validates parsed JSON."
+      }
+    },
+    "schema_type": {
+      "area": "schema",
+      "severity": [
+        "error"
+      ],
+      "summary": "A value has the wrong JSON type.",
+      "explanation": "The schema expects a different type at this path: a string for a name, an integer for maxConcurrent, an object for a duration. Numbers written in quotes (\"2\") are strings. A value of the wrong type is reported once, not again by the oneOf/anyOf beside it.",
+      "examples": [
+        {
+          "severity": "error",
+          "program": {"tracks":[{"trackId":"main","name":"Main","steps":[{"stepId":"prep","name":7,"duration":{"type":"fixed","seconds":300},"startTrigger":{"type":"programStart"}}]}]}
+        }
+      ],
+      "fix": "Write the value as the type the message names; for a quoted number, drop the quotes.",
+      "python": {
+        "cli": "schema_error",
+        "library": "schema_error",
+        "note": "Python reports the first schema violation only, as one schema_error whose message is jsonschema's."
+      },
+      "schemaKeyword": "type"
+    },
+    "schema_enum": {
+      "area": "schema",
+      "severity": [
+        "error"
+      ],
+      "summary": "A value is not one of the allowed choices.",
+      "explanation": "The field accepts a fixed set of strings (an alert's level, a replicates mode, a trigger's event). Choices that tell apart the shapes of a oneOf, such as a duration's type, are reported as schema_oneOf instead.",
+      "examples": [
+        {
+          "severity": "error",
+          "program": {"tracks":[{"trackId":"main","name":"Main","steps":[{"stepId":"prep","name":"Prep","duration":{"type":"fixed","seconds":300},"startTrigger":{"type":"programStart"},"alerts":[{"event":"end","level":"loud"}]}]}]}
+        }
+      ],
+      "fix": "Use one of the values listed in the message.",
+      "python": {
+        "cli": "schema_error",
+        "library": "schema_error",
+        "note": "Python reports the first schema violation only, as one schema_error whose message is jsonschema's."
+      },
+      "schemaKeyword": "enum"
+    },
+    "schema_const": {
+      "area": "schema",
+      "severity": [
+        "error"
+      ],
+      "summary": "A value is not the one fixed value the schema allows.",
+      "explanation": "A `const` keyword pins a field to one value.",
+      "examples": [],
+      "fix": "Set the field to the value the message names.",
+      "python": {
+        "cli": "schema_error",
+        "library": "schema_error",
+        "note": "Python reports the first schema violation only, as one schema_error whose message is jsonschema's."
+      },
+      "schemaKeyword": "const",
+      "reachable": false,
+      "unreachableBecause": "The bundled 0.3.0-alpha schema uses `const` only inside an `if` (metadata.varianceFactors), where a mismatch selects the other branch instead of failing, and 0.2.0-alpha does not use it. The checker supports it so that a schema update that starts using it keeps working; test/finding-codes.test.js fails when that happens, asking for an example here."
+    },
+    "schema_required": {
+      "area": "schema",
+      "severity": [
+        "error"
+      ],
+      "summary": "A required property is missing.",
+      "explanation": "Every program needs programId, name, tracks and resourceConstraints (or environment / environmentType); every track a trackId, name and steps; every step a stepId, name and startTrigger; every resource constraint a task and maxConcurrent. A missing startTrigger's fix names the step to chain after.",
+      "examples": [
+        {
+          "severity": "error",
+          "program": {"tracks":[{"trackId":"main","steps":[{"stepId":"prep","name":"Prep","duration":{"type":"fixed","seconds":300},"startTrigger":{"type":"programStart"}}]}]}
+        }
+      ],
+      "fix": "Add the property the message names.",
+      "python": {
+        "cli": "schema_error",
+        "library": "schema_error",
+        "note": "Python reports the first schema violation only, as one schema_error whose message is jsonschema's."
+      },
+      "schemaKeyword": "required"
+    },
+    "schema_additionalProperties": {
+      "area": "schema",
+      "severity": [
+        "error"
+      ],
+      "summary": "An object has a property the schema does not allow.",
+      "explanation": "Some objects are closed (instrument, instrument actions, alerts, ...): any key besides the listed ones is an error, usually a typo. Programs, tracks, steps and triggers are open and accept extra keys.",
+      "examples": [
+        {
+          "severity": "error",
+          "program": {"tracks":[{"trackId":"main","name":"Main","steps":[{"stepId":"prep","name":"Prep","duration":{"type":"fixed","seconds":300},"startTrigger":{"type":"programStart"},"instrument":{"tool":"shaker","toolType":"bioshake","command":"start_shake","params":{"speed":1000,"duration":300},"retries":2}}]}]}
+        }
+      ],
+      "fix": "Remove the key or fix its spelling; the fix lists the keys allowed there.",
+      "python": {
+        "cli": "schema_error",
+        "library": "schema_error",
+        "note": "Python reports the first schema violation only, as one schema_error whose message is jsonschema's."
+      },
+      "schemaKeyword": "additionalProperties"
+    },
+    "schema_minItems": {
+      "area": "schema",
+      "severity": [
+        "error"
+      ],
+      "summary": "A list has too few items.",
+      "explanation": "Lists such as a compound trigger's triggers (at least 2), an instrument's start/end actions and a step's alerts must not be empty or too short.",
+      "examples": [
+        {
+          "severity": "error",
+          "program": {"tracks":[{"trackId":"main","name":"Main","steps":[{"stepId":"prep","name":"Prep","duration":{"type":"fixed","seconds":300},"startTrigger":{"type":"programStart"},"alerts":[]}]}]}
+        }
+      ],
+      "fix": "Add items, or remove the optional list entirely.",
+      "python": {
+        "cli": "schema_error",
+        "library": "schema_error",
+        "note": "Python reports the first schema violation only, as one schema_error whose message is jsonschema's."
+      },
+      "schemaKeyword": "minItems"
+    },
+    "schema_maxItems": {
+      "area": "schema",
+      "severity": [
+        "error"
+      ],
+      "summary": "A list has too many items.",
+      "explanation": "A `maxItems` keyword caps a list's length.",
+      "examples": [],
+      "fix": "Shorten the list.",
+      "python": {
+        "cli": "schema_error",
+        "library": "schema_error",
+        "note": "Python reports the first schema violation only, as one schema_error whose message is jsonschema's."
+      },
+      "schemaKeyword": "maxItems",
+      "reachable": false,
+      "unreachableBecause": "No bundled program schema (0.2.0-alpha, 0.3.0-alpha) uses `maxItems` where a failure is reported, so validateProgram cannot emit this code today. The checker supports it so that a schema update that starts using it keeps working; test/finding-codes.test.js fails when that happens, asking for an example here."
+    },
+    "schema_minLength": {
+      "area": "schema",
+      "severity": [
+        "error"
+      ],
+      "summary": "A string is shorter than allowed (usually empty).",
+      "explanation": "Names that must not be empty: an instrument's tool and command, an alert's message.",
+      "examples": [
+        {
+          "severity": "error",
+          "program": {"tracks":[{"trackId":"main","name":"Main","steps":[{"stepId":"prep","name":"Prep","duration":{"type":"fixed","seconds":300},"startTrigger":{"type":"programStart"},"instrument":{"tool":"","command":"start_shake"}}]}]}
+        }
+      ],
+      "fix": "Give the string a value, or remove the optional field.",
+      "python": {
+        "cli": "schema_error",
+        "library": "schema_error",
+        "note": "Python reports the first schema violation only, as one schema_error whose message is jsonschema's."
+      },
+      "schemaKeyword": "minLength"
+    },
+    "schema_maxLength": {
+      "area": "schema",
+      "severity": [
+        "error"
+      ],
+      "summary": "A string is longer than allowed.",
+      "explanation": "An alert's message is at most 200 characters (code points, as Python counts them).",
+      "examples": [
+        {
+          "severity": "error",
+          "program": {"tracks":[{"trackId":"main","name":"Main","steps":[{"stepId":"prep","name":"Prep","duration":{"type":"fixed","seconds":300},"startTrigger":{"type":"programStart"},"alerts":[{"event":"end","message":"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"}]}]}]}
+        }
+      ],
+      "fix": "Shorten the string to the length the message names.",
+      "python": {
+        "cli": "schema_error",
+        "library": "schema_error",
+        "note": "Python reports the first schema violation only, as one schema_error whose message is jsonschema's."
+      },
+      "schemaKeyword": "maxLength"
+    },
+    "schema_pattern": {
+      "area": "schema",
+      "severity": [
+        "error"
+      ],
+      "summary": "A string does not match the required pattern.",
+      "explanation": "Schema 0.3.0-alpha constrains a few identifiers: metadata.varianceFactors keys (a letter, then letters, digits, _ and -) and a duration's calibratedFrom.programVersion (\"sha256:\" and 64 hex digits; inside a duration it is reported as schema_oneOf).",
+      "examples": [
+        {
+          "severity": "error",
+          "program": {"schemaVersion":"0.3.0-alpha","metadata":{"varianceFactors":[{"key":"2nd oven","type":"number"}]}}
+        }
+      ],
+      "fix": "Make the string match the pattern in the message.",
+      "python": {
+        "cli": "schema_error",
+        "library": "schema_error",
+        "note": "Python reports the first schema violation only, as one schema_error whose message is jsonschema's."
+      },
+      "schemaKeyword": "pattern"
+    },
+    "schema_minimum": {
+      "area": "schema",
+      "severity": [
+        "error"
+      ],
+      "summary": "A number is below the minimum.",
+      "explanation": "maxConcurrent is at least 1; durations and their bounds are at least 0.",
+      "examples": [
+        {
+          "severity": "error",
+          "program": {"resourceConstraints":[{"task":"oven","maxConcurrent":0}]}
+        }
+      ],
+      "fix": "Use a value at or above the minimum the message names.",
+      "python": {
+        "cli": "schema_error",
+        "library": "schema_error",
+        "note": "Python reports the first schema violation only, as one schema_error whose message is jsonschema's."
+      },
+      "schemaKeyword": "minimum"
+    },
+    "schema_maximum": {
+      "area": "schema",
+      "severity": [
+        "error"
+      ],
+      "summary": "A number is above the maximum.",
+      "explanation": "A taskResources fraction (the share of a resource a step occupies) is at most 1.",
+      "examples": [
+        {
+          "severity": "error",
+          "program": {"tracks":[{"trackId":"main","name":"Main","steps":[{"stepId":"prep","name":"Prep","duration":{"type":"fixed","seconds":300},"startTrigger":{"type":"programStart"},"taskResources":[{"name":"oven","fraction":1.5}]}]}]},
+          "note": "Also emits task_not_constrained for the oven."
+        }
+      ],
+      "fix": "Use a value at or below the maximum the message names.",
+      "python": {
+        "cli": "schema_error",
+        "library": "schema_error",
+        "note": "Python reports the first schema violation only, as one schema_error whose message is jsonschema's."
+      },
+      "schemaKeyword": "maximum"
+    },
+    "schema_exclusiveMinimum": {
+      "area": "schema",
+      "severity": [
+        "error"
+      ],
+      "summary": "A number must be greater than a bound and is not.",
+      "explanation": "An instrument's or action's timeoutSeconds must be greater than 0.",
+      "examples": [
+        {
+          "severity": "error",
+          "program": {"tracks":[{"trackId":"main","name":"Main","steps":[{"stepId":"prep","name":"Prep","duration":{"type":"fixed","seconds":300},"startTrigger":{"type":"programStart"},"instrument":{"tool":"shaker","toolType":"bioshake","command":"start_shake","params":{"speed":1000,"duration":300},"timeoutSeconds":0}}]}]}
+        }
+      ],
+      "fix": "Use a value greater than the bound, or remove the optional field.",
+      "python": {
+        "cli": "schema_error",
+        "library": "schema_error",
+        "note": "Python reports the first schema violation only, as one schema_error whose message is jsonschema's."
+      },
+      "schemaKeyword": "exclusiveMinimum"
+    },
+    "schema_exclusiveMaximum": {
+      "area": "schema",
+      "severity": [
+        "error"
+      ],
+      "summary": "A number must be less than a bound and is not.",
+      "explanation": "An `exclusiveMaximum` keyword caps a number below a bound.",
+      "examples": [],
+      "fix": "Use a value below the bound.",
+      "python": {
+        "cli": "schema_error",
+        "library": "schema_error",
+        "note": "Python reports the first schema violation only, as one schema_error whose message is jsonschema's."
+      },
+      "schemaKeyword": "exclusiveMaximum",
+      "reachable": false,
+      "unreachableBecause": "No bundled program schema (0.2.0-alpha, 0.3.0-alpha) uses `exclusiveMaximum` where a failure is reported, so validateProgram cannot emit this code today. The checker supports it so that a schema update that starts using it keeps working; test/finding-codes.test.js fails when that happens, asking for an example here."
+    },
+    "schema_oneOf": {
+      "area": "schema",
+      "severity": [
+        "error"
+      ],
+      "summary": "A value matches none, or more than one, of the allowed shapes.",
+      "explanation": "Durations, start triggers and the program's own startTrigger have several shapes told apart by their `type`. A value that fits none gets the closest shape's first problem (or the list of allowed types); a value that fits two (a duration with both seconds and timeString) is ambiguous.",
+      "examples": [
+        {
+          "severity": "error",
+          "program": {"tracks":[{"trackId":"main","name":"Main","steps":[{"stepId":"prep","name":"Prep","duration":{"type":"fixd","seconds":300},"startTrigger":{"type":"programStart"}}]}]}
+        }
+      ],
+      "fix": "Follow the fix: set `type` to an allowed value, add the keys the closest shape needs, or remove the keys that make it ambiguous.",
+      "python": {
+        "cli": "schema_error",
+        "library": "schema_error",
+        "note": "Python reports the first schema violation only, as one schema_error whose message is jsonschema's."
+      },
+      "schemaKeyword": "oneOf"
+    },
+    "schema_anyOf": {
+      "area": "schema",
+      "severity": [
+        "error"
+      ],
+      "summary": "A value matches none of the alternatives it may take.",
+      "explanation": "A program needs resourceConstraints, environment or environmentType; an instrument needs a command, an until, or start/end actions. The message lists the alternatives.",
+      "examples": [
+        {
+          "severity": "error",
+          "program": {},
+          "omit": [
+            "resourceConstraints"
+          ]
+        }
+      ],
+      "fix": "Add one of the alternatives the message lists.",
+      "python": {
+        "cli": "schema_error",
+        "library": "schema_error",
+        "note": "Python reports the first schema violation only, as one schema_error whose message is jsonschema's."
+      },
+      "schemaKeyword": "anyOf"
+    },
+    "schema_not": {
+      "area": "schema",
+      "severity": [
+        "error"
+      ],
+      "summary": "A value has a combination of keys the schema forbids.",
+      "explanation": "An instrument has both command and until (only one call can end the step); a program has resourceConstraints together with environment or environmentType.",
+      "examples": [
+        {
+          "severity": "error",
+          "program": {"tracks":[{"trackId":"main","name":"Main","steps":[{"stepId":"prep","name":"Prep","duration":{"type":"fixed","seconds":300},"startTrigger":{"type":"programStart"},"instrument":{"tool":"shaker","command":"start_shake","until":{"command":"wait"}}}]}]},
+          "note": "Also emits instrument_bad_shape."
+        }
+      ],
+      "fix": "Keep only one of the keys the message names.",
+      "python": {
+        "cli": "schema_error",
+        "library": "schema_error",
+        "note": "Python reports the first schema violation only, as one schema_error whose message is jsonschema's."
+      },
+      "schemaKeyword": "not"
+    },
+    "schema_false": {
+      "area": "schema",
+      "severity": [
+        "error"
+      ],
+      "summary": "A value is present where the schema allows nothing.",
+      "explanation": "A `false` subschema forbids any value at that path.",
+      "examples": [],
+      "fix": "Remove the value.",
+      "python": {
+        "cli": "schema_error",
+        "library": "schema_error",
+        "note": "Python reports the first schema violation only, as one schema_error whose message is jsonschema's."
+      },
+      "schemaKeyword": "false",
+      "reachable": false,
+      "unreachableBecause": "No bundled program schema (0.2.0-alpha, 0.3.0-alpha) uses a `false` subschema (a boolean schema) where a failure is reported, so validateProgram cannot emit this code today. The checker supports it so that a schema update that starts using it keeps working; test/finding-codes.test.js fails when that happens, asking for an example here."
+    },
+    "program_id_format": {
+      "area": "structure",
+      "severity": [
+        "warning"
+      ],
+      "summary": "programId is not kebab-case.",
+      "explanation": "programId should start with a letter or digit and contain only letters, digits, dashes and underscores, so it is safe in URLs and file names.",
+      "examples": [
+        {
+          "severity": "warning",
+          "program": {"programId":"My Program!"}
+        }
+      ],
+      "fix": "Use lowercase letters, digits and dashes, e.g. \"my-program\".",
+      "python": {
+        "cli": null,
+        "library": null
+      }
+    },
+    "missing_schema_version": {
+      "area": "structure",
+      "severity": [
+        "warning"
+      ],
+      "summary": "schemaVersion is missing.",
+      "explanation": "Without schemaVersion the program is checked against the 0.2.0-alpha schema and the viewer assumes 0.1.0. `instances` triggers and maxInFlight need 0.3.0-alpha.",
+      "examples": [
+        {
+          "severity": "warning",
+          "program": {},
+          "omit": [
+            "schemaVersion"
+          ]
+        }
+      ],
+      "fix": "Set schemaVersion: \"0.1.0\", \"0.2.0-alpha\" (choice branching) or \"0.3.0-alpha\" (`instances` on triggers).",
+      "python": {
+        "cli": null,
+        "library": null
+      }
+    },
+    "empty_track": {
+      "area": "structure",
+      "severity": [
+        "warning"
+      ],
+      "summary": "A track has no steps; it is left out.",
+      "explanation": "A track whose steps list is missing or empty (and that names no templateId) is dropped before the other checks, as Python's expander drops it.",
+      "examples": [
+        {
+          "severity": "warning",
+          "program": {"tracks":[{"trackId":"main","name":"Main","steps":[{"stepId":"prep","name":"Prep","duration":{"type":"fixed","seconds":300},"startTrigger":{"type":"programStart"}}]},{"trackId":"idle","name":"Idle","steps":[]}]}
+        }
+      ],
+      "fix": "Add steps to the track or remove it.",
+      "python": {
+        "cli": "schema_error",
+        "library": null,
+        "severity": "error",
+        "note": "`rhylthyme validate` checks the program as written, where an empty steps list breaks the schema; validate_program_structured drops the track while expanding, as JS does, and says nothing."
+      }
+    },
+    "duplicate_track_id": {
+      "area": "structure",
+      "severity": [
+        "error"
+      ],
+      "summary": "Two tracks share a trackId.",
+      "explanation": "trackIds must be unique: the renderer, the runner and replicate expansion address tracks by id.",
+      "examples": [
+        {
+          "severity": "error",
+          "program": {"tracks":[{"trackId":"main","name":"Main","steps":[{"stepId":"prep","name":"Prep","duration":{"type":"fixed","seconds":300},"startTrigger":{"type":"programStart"}}]},{"trackId":"main","name":"Main","steps":[{"stepId":"cook","name":"Cook","duration":{"type":"fixed","seconds":300},"startTrigger":{"type":"programStart"}}]}]}
+        }
+      ],
+      "fix": "Give every track its own trackId.",
+      "python": {
+        "cli": null,
+        "library": null
+      }
+    },
+    "duplicate_step_id": {
+      "area": "structure",
+      "severity": [
+        "error"
+      ],
+      "summary": "A stepId is used more than once.",
+      "explanation": "stepIds must be unique across the whole program, not only within a track, since triggers refer to steps by id alone. Replicate copies get ids \"<stepId>-r<n>\"; a hand-written step with such an id collides with them.",
+      "examples": [
+        {
+          "severity": "error",
+          "program": {"tracks":[{"trackId":"main","name":"Main","steps":[{"stepId":"prep","name":"Prep","duration":{"type":"fixed","seconds":300},"startTrigger":{"type":"programStart"}}]},{"trackId":"side","name":"Side","steps":[{"stepId":"prep","name":"Prep","duration":{"type":"fixed","seconds":300},"startTrigger":{"type":"programStart"}}]}]}
+        }
+      ],
+      "fix": "Rename one of the steps and update the triggers that point at it.",
+      "python": {
+        "cli": "duplicate_step_id",
+        "library": "duplicate_step_id"
+      }
+    },
+    "compound_without_triggers": {
+      "area": "structure",
+      "severity": [
+        "error"
+      ],
+      "summary": "A trigger has `logic` but no `triggers` list.",
+      "explanation": "`logic` (\"all\"/\"any\") combines the triggers in `triggers`; on a single trigger it has nothing to combine. The schema accepts the extra key on a single trigger, so this check names it.",
+      "examples": [
+        {
+          "severity": "error",
+          "program": {"tracks":[{"trackId":"main","name":"Main","steps":[{"stepId":"prep","name":"Prep","duration":{"type":"fixed","seconds":300},"startTrigger":{"type":"programStart","logic":"all"}}]}]}
+        }
+      ],
+      "fix": "Remove `logic`, or make the trigger compound: {\"logic\": \"all\", \"triggers\": [...]} with at least two triggers.",
+      "python": {
+        "cli": null,
+        "library": null
+      }
+    },
+    "bad_trigger_logic": {
+      "area": "structure",
+      "severity": [
+        "error"
+      ],
+      "summary": "A trigger's `logic` is not \"all\" or \"any\".",
+      "explanation": "Reported when the trigger otherwise passes the schema as a single trigger that also carries logic and triggers keys; a compound trigger with a bad logic value is a schema_oneOf finding.",
+      "examples": [
+        {
+          "severity": "error",
+          "program": {"tracks":[{"trackId":"main","name":"Main","steps":[{"stepId":"prep","name":"Prep","duration":{"type":"fixed","seconds":300},"startTrigger":{"type":"programStart"}}]},{"trackId":"side","name":"Side","steps":[{"stepId":"cook","name":"Cook","duration":{"type":"fixed","seconds":300},"startTrigger":{"type":"programStart","logic":"xor","triggers":[{"type":"afterStep","stepId":"prep"},{"type":"programStart"}]}}]}]}
+        }
+      ],
+      "fix": "Use logic \"all\" (every trigger must fire) or \"any\" (the first one starts the step).",
+      "python": {
+        "cli": null,
+        "library": null
+      }
+    },
+    "bad_trigger": {
+      "area": "structure",
+      "severity": [
+        "error"
+      ],
+      "summary": "A trigger inside a compound trigger is not an object.",
+      "explanation": "Meant for a non-object entry in a compound trigger's triggers list.",
+      "examples": [],
+      "fix": "Make every entry of triggers an object such as {\"type\": \"afterStep\", \"stepId\": \"...\"}.",
+      "python": {
+        "cli": null,
+        "library": null
+      },
+      "reachable": false,
+      "unreachableBecause": "Non-object entries are dropped when the trigger is flattened, before this check looks at them, and the schema reports them (schema_type / schema_oneOf) wherever they would matter. Dead code in validateProgram."
+    },
+    "unknown_trigger_type": {
+      "area": "structure",
+      "severity": [
+        "error"
+      ],
+      "summary": "A trigger's type is not one the runner knows.",
+      "explanation": "Known types: programStart, programStartOffset, afterStep, afterStepWithBuffer, manual, onAbort. A bad type on a trigger the schema checks is a schema_oneOf finding; this check reaches the entries of a triggers list on a trigger the schema took as a single trigger.",
+      "examples": [
+        {
+          "severity": "error",
+          "program": {"tracks":[{"trackId":"main","name":"Main","steps":[{"stepId":"prep","name":"Prep","duration":{"type":"fixed","seconds":300},"startTrigger":{"type":"programStart"}}]},{"trackId":"side","name":"Side","steps":[{"stepId":"cook","name":"Cook","duration":{"type":"fixed","seconds":300},"startTrigger":{"type":"programStart","logic":"all","triggers":[{"type":"afterStepp","stepId":"prep"},{"type":"programStart"}]}}]}]}
+        }
+      ],
+      "fix": "Use programStart, programStartOffset, afterStep, afterStepWithBuffer, manual or onAbort.",
+      "python": {
+        "cli": null,
+        "library": null
+      }
+    },
+    "trigger_without_step_id": {
+      "area": "structure",
+      "severity": [
+        "error"
+      ],
+      "summary": "An afterStep, afterStepWithBuffer or onAbort trigger has an empty stepId.",
+      "explanation": "These triggers wait for another step and need its id. The schema requires the key; this check catches an empty string.",
+      "examples": [
+        {
+          "severity": "error",
+          "program": {"tracks":[{"trackId":"main","name":"Main","steps":[{"stepId":"prep","name":"Prep","duration":{"type":"fixed","seconds":300},"startTrigger":{"type":"programStart"}}]},{"trackId":"side","name":"Side","steps":[{"stepId":"cook","name":"Cook","duration":{"type":"fixed","seconds":300},"startTrigger":{"type":"afterStep","stepId":""}}]}]}
+        }
+      ],
+      "fix": "Set stepId to the step this one waits for.",
+      "python": {
+        "cli": "dangling_step_ref",
+        "library": "dangling_step_ref",
+        "note": "Python reports the empty id as a reference to a step that does not exist."
+      }
+    },
+    "dangling_step_ref": {
+      "area": "structure",
+      "severity": [
+        "error"
+      ],
+      "summary": "A trigger waits for a step that does not exist.",
+      "explanation": "The stepId in an afterStep, afterStepWithBuffer or onAbort trigger matches no step. Ids are case-sensitive; after replicate expansion a replicated step's copies are \"<id>-r1\", \"<id>-r2\", ... and the authored id is kept for barriers.",
+      "examples": [
+        {
+          "severity": "error",
+          "program": {"tracks":[{"trackId":"main","name":"Main","steps":[{"stepId":"prep","name":"Prep","duration":{"type":"fixed","seconds":300},"startTrigger":{"type":"programStart"}},{"stepId":"cook","name":"Cook","duration":{"type":"fixed","seconds":300},"startTrigger":{"type":"afterStep","stepId":"Prep"}}]}]}
+        }
+      ],
+      "fix": "Point the trigger at an existing stepId (check case and spelling).",
+      "python": {
+        "cli": "dangling_step_ref",
+        "library": "dangling_step_ref"
+      }
+    },
+    "self_reference": {
+      "area": "structure",
+      "severity": [
+        "error"
+      ],
+      "summary": "A step waits for itself.",
+      "explanation": "A step's trigger names its own stepId, so it can never start.",
+      "examples": [
+        {
+          "severity": "error",
+          "program": {"tracks":[{"trackId":"main","name":"Main","steps":[{"stepId":"prep","name":"Prep","duration":{"type":"fixed","seconds":300},"startTrigger":{"type":"afterStep","stepId":"prep"}}]}]},
+          "note": "Also emits dependency_cycle."
+        }
+      ],
+      "fix": "Point the trigger at the step before it, or use programStart.",
+      "python": {
+        "cli": null,
+        "library": null,
+        "note": "Python reports nothing; the step is left unscheduled."
+      }
+    },
+    "buffer_without_seconds": {
+      "area": "structure",
+      "severity": [
+        "error"
+      ],
+      "summary": "An afterStepWithBuffer trigger has no bufferSeconds.",
+      "explanation": "The schema requires bufferSeconds on a trigger it checks; this check reaches the entries of a triggers list on a trigger the schema took as a single trigger.",
+      "examples": [
+        {
+          "severity": "error",
+          "program": {"tracks":[{"trackId":"main","name":"Main","steps":[{"stepId":"prep","name":"Prep","duration":{"type":"fixed","seconds":300},"startTrigger":{"type":"programStart"}}]},{"trackId":"side","name":"Side","steps":[{"stepId":"cook","name":"Cook","duration":{"type":"fixed","seconds":300},"startTrigger":{"type":"programStart","logic":"all","triggers":[{"type":"afterStepWithBuffer","stepId":"prep"},{"type":"programStart"}]}}]}]}
+        }
+      ],
+      "fix": "Add bufferSeconds (seconds or a time string such as \"5m\"), or use afterStep.",
+      "python": {
+        "cli": null,
+        "library": null
+      }
+    },
+    "bad_trigger_event": {
+      "area": "structure",
+      "severity": [
+        "error"
+      ],
+      "summary": "A trigger's event is not \"start\" or \"end\".",
+      "explanation": "event chooses whether the trigger anchors on the referenced step's start or end (the default). A bad value on a trigger the schema checks is a schema finding; this check reaches the entries of a triggers list on a trigger the schema took as a single trigger.",
+      "examples": [
+        {
+          "severity": "error",
+          "program": {"tracks":[{"trackId":"main","name":"Main","steps":[{"stepId":"prep","name":"Prep","duration":{"type":"fixed","seconds":300},"startTrigger":{"type":"programStart"}}]},{"trackId":"side","name":"Side","steps":[{"stepId":"cook","name":"Cook","duration":{"type":"fixed","seconds":300},"startTrigger":{"type":"programStart","logic":"all","triggers":[{"type":"afterStep","stepId":"prep","event":"middle"},{"type":"programStart"}]}}]}]}
+        }
+      ],
+      "fix": "Use event \"start\" or \"end\", or leave it out (\"end\").",
+      "python": {
+        "cli": null,
+        "library": null
+      }
+    },
+    "offset_without_seconds": {
+      "area": "structure",
+      "severity": [
+        "error"
+      ],
+      "summary": "A programStartOffset trigger has no offsetSeconds.",
+      "explanation": "The schema requires offsetSeconds on a trigger it checks; this check reaches the entries of a triggers list on a trigger the schema took as a single trigger.",
+      "examples": [
+        {
+          "severity": "error",
+          "program": {"tracks":[{"trackId":"main","name":"Main","steps":[{"stepId":"prep","name":"Prep","duration":{"type":"fixed","seconds":300},"startTrigger":{"type":"programStart","logic":"all","triggers":[{"type":"programStartOffset"},{"type":"programStart"}]}}]}]}
+        }
+      ],
+      "fix": "Add offsetSeconds (seconds or a time string such as \"10m\"), or use programStart.",
+      "python": {
+        "cli": null,
+        "library": null
+      }
+    },
+    "choice_ref_no_choice": {
+      "area": "structure",
+      "severity": [
+        "error"
+      ],
+      "summary": "A trigger's choiceId refers to a step that offers no choice.",
+      "explanation": "choiceId makes a step run only when the referenced step's choice selects that option (schema 0.2.0-alpha branching). The referenced step has no `choice`.",
+      "examples": [
+        {
+          "severity": "error",
+          "program": {"tracks":[{"trackId":"main","name":"Main","steps":[{"stepId":"prep","name":"Prep","duration":{"type":"fixed","seconds":300},"startTrigger":{"type":"programStart"}},{"stepId":"cook","name":"Cook","duration":{"type":"fixed","seconds":300},"startTrigger":{"type":"afterStep","stepId":"prep","choiceId":"red"}}]}]}
+        }
+      ],
+      "fix": "Add a choice with that option to the referenced step, or remove choiceId.",
+      "python": {
+        "cli": "choice_ref",
+        "library": "choice_ref",
+        "note": "Python has one code for both choiceId problems."
+      }
+    },
+    "choice_ref_unknown": {
+      "area": "structure",
+      "severity": [
+        "error"
+      ],
+      "summary": "A trigger's choiceId is not one of the referenced step's options.",
+      "explanation": "The referenced step offers a choice, but none of its options has this choiceId. The message lists the options.",
+      "examples": [
+        {
+          "severity": "error",
+          "program": {"tracks":[{"trackId":"main","name":"Main","steps":[{"stepId":"pick","name":"Pick","duration":{"type":"fixed","seconds":60},"startTrigger":{"type":"programStart"},"choice":{"prompt":"Sauce?","options":[{"choiceId":"red","label":"Red"},{"choiceId":"white","label":"White"}]}},{"stepId":"cook","name":"Cook","duration":{"type":"fixed","seconds":300},"startTrigger":{"type":"afterStep","stepId":"pick","choiceId":"pesto"}}]}]}
+        }
+      ],
+      "fix": "Use one of the option ids the message lists (ids are case-sensitive).",
+      "python": {
+        "cli": "choice_ref",
+        "library": "choice_ref",
+        "note": "Python has one code for both choiceId problems."
+      }
+    },
+    "missing_duration": {
+      "area": "timing",
+      "severity": [
+        "error"
+      ],
+      "summary": "A step has no duration.",
+      "explanation": "Every step needs a duration, except an instrument step whose command or until call ends it (see I_INSTRUMENT_DURATION) or one with only start/end actions (see instrument_no_end).",
+      "examples": [
+        {
+          "severity": "error",
+          "program": {"tracks":[{"trackId":"main","name":"Main","steps":[{"stepId":"prep","name":"Prep","startTrigger":{"type":"programStart"}}]}]}
+        }
+      ],
+      "fix": "Add duration: {\"type\": \"fixed\", \"seconds\": 300} (or \"5m\"), variable with min/max, or indefinite.",
+      "python": {
+        "cli": null,
+        "library": null,
+        "note": "Python times a step with no duration as 0 s."
+      }
+    },
+    "unparseable_duration": {
+      "area": "timing",
+      "severity": [
+        "error"
+      ],
+      "summary": "A fixed duration's seconds is not a positive number or time string.",
+      "explanation": "seconds may be a number or a string such as \"90s\", \"5m\", \"1h30m\". A string that does not parse (\"soon\") or a negative one is reported here; the schema accepts any string.",
+      "examples": [
+        {
+          "severity": "error",
+          "program": {"tracks":[{"trackId":"main","name":"Main","steps":[{"stepId":"prep","name":"Prep","duration":{"type":"fixed","seconds":"soon"},"startTrigger":{"type":"programStart"}}]}]}
+        }
+      ],
+      "fix": "Use a number of seconds or a time string like \"5m\" or \"1h30m\".",
+      "python": {
+        "cli": null,
+        "library": null
+      }
+    },
+    "variable_min_gt_max": {
+      "area": "timing",
+      "severity": [
+        "error"
+      ],
+      "summary": "A variable duration's minSeconds is greater than its maxSeconds.",
+      "explanation": "A variable step can end anywhere between minSeconds and maxSeconds; the bounds are the wrong way round.",
+      "examples": [
+        {
+          "severity": "error",
+          "program": {"tracks":[{"trackId":"main","name":"Main","steps":[{"stepId":"prep","name":"Prep","duration":{"type":"variable","minSeconds":600,"maxSeconds":300,"defaultSeconds":450},"startTrigger":{"type":"programStart"}}]}]}
+        }
+      ],
+      "fix": "Swap the bounds so minSeconds <= maxSeconds.",
+      "python": {
+        "cli": null,
+        "library": null
+      }
+    },
+    "variable_without_default": {
+      "area": "timing",
+      "severity": [
+        "warning"
+      ],
+      "summary": "A variable duration has no defaultSeconds; planning uses maxSeconds.",
+      "explanation": "Previews, the makespan and the analyzer place a variable step at defaultSeconds; without it they use maxSeconds, the worst case.",
+      "examples": [
+        {
+          "severity": "warning",
+          "program": {"tracks":[{"trackId":"main","name":"Main","steps":[{"stepId":"prep","name":"Prep","duration":{"type":"variable","minSeconds":300,"maxSeconds":600},"startTrigger":{"type":"programStart"}}]}]}
+        }
+      ],
+      "fix": "Add defaultSeconds (the expected time).",
+      "python": {
+        "cli": null,
+        "library": null
+      }
+    },
+    "negative_offset_on_fixed": {
+      "area": "timing",
+      "severity": [
+        "warning"
+      ],
+      "summary": "A negative offset counts down into a step that is not indefinite.",
+      "explanation": "A negative offsetSeconds on afterStep starts this step before the referenced step ends. The live runner can only honour that when the referenced step is indefinite (its end is announced, so the countdown has an anchor); against a fixed or variable step it is ignored at run time.",
+      "examples": [
+        {
+          "severity": "warning",
+          "program": {"tracks":[{"trackId":"main","name":"Main","steps":[{"stepId":"prep","name":"Prep","duration":{"type":"fixed","seconds":600},"startTrigger":{"type":"programStart"}},{"stepId":"cook","name":"Cook","duration":{"type":"fixed","seconds":300},"startTrigger":{"type":"afterStep","stepId":"prep","offsetSeconds":-120}}]}]},
+          "note": "The two steps overlap, so track_overlap is reported too; put them in separate tracks to see the warning alone."
+        }
+      ],
+      "fix": "Give the referenced step duration.type \"indefinite\", or use a positive offset from event \"start\".",
+      "python": {
+        "cli": "negative_offset",
+        "library": "negative_offset",
+        "severity": "error",
+        "note": "An error in Python, which also rejects a negative offset on any trigger other than afterStep / afterStepWithBuffer."
+      }
+    },
+    "dependency_cycle": {
+      "area": "timing",
+      "severity": [
+        "error"
+      ],
+      "summary": "Steps wait for each other in a cycle.",
+      "explanation": "Each step in the cycle waits (directly or transitively) for itself, so none of them can be scheduled. Reported once per step left unscheduled whose references all exist.",
+      "examples": [
+        {
+          "severity": "error",
+          "program": {"tracks":[{"trackId":"main","name":"Main","steps":[{"stepId":"prep","name":"Prep","duration":{"type":"fixed","seconds":300},"startTrigger":{"type":"afterStep","stepId":"cook"}}]},{"trackId":"side","name":"Side","steps":[{"stepId":"cook","name":"Cook","duration":{"type":"fixed","seconds":300},"startTrigger":{"type":"afterStep","stepId":"prep"}}]}]}
+        }
+      ],
+      "fix": "Break the cycle: start one of the steps from programStart or from a step outside the cycle.",
+      "python": {
+        "cli": null,
+        "library": null,
+        "note": "Python reports nothing; the steps are left unscheduled."
+      }
+    },
+    "track_overlap": {
+      "area": "timing",
+      "severity": [
+        "error"
+      ],
+      "summary": "Two steps in one track overlap in time.",
+      "explanation": "Steps in a track run one after another (a track is one person, machine or lane). Two steps whose resolved times overlap usually lack an afterStep chain. Steps on different choice branches are exempt.",
+      "examples": [
+        {
+          "severity": "error",
+          "program": {"tracks":[{"trackId":"main","name":"Main","steps":[{"stepId":"prep","name":"Prep","duration":{"type":"fixed","seconds":300},"startTrigger":{"type":"programStart"}},{"stepId":"cook","name":"Cook","duration":{"type":"fixed","seconds":300},"startTrigger":{"type":"programStart"}}]}]}
+        }
+      ],
+      "fix": "Chain the later step with {\"type\": \"afterStep\", \"stepId\": \"<earlier>\"}, or move it to its own track if it really runs in parallel.",
+      "python": {
+        "cli": "track_overlap",
+        "library": "track_overlap"
+      }
+    },
+    "tracks_finish_far_apart": {
+      "area": "timing",
+      "severity": [
+        "warning"
+      ],
+      "summary": "Some tracks finish long before the last one.",
+      "explanation": "At least one track ends more than 30 minutes (or half the makespan, whichever is more) before the program does. Often fine; but if everything should be ready together, the early tracks start too soon.",
+      "examples": [
+        {
+          "severity": "warning",
+          "program": {"tracks":[{"trackId":"main","name":"Main","steps":[{"stepId":"prep","name":"Prep","duration":{"type":"fixed","seconds":7200},"startTrigger":{"type":"programStart"}}]},{"trackId":"side","name":"Side","steps":[{"stepId":"cook","name":"Cook","duration":{"type":"fixed","seconds":600},"startTrigger":{"type":"programStart"}}]}]}
+        }
+      ],
+      "fix": "Delay the early tracks with programStartOffset or afterStep so they converge at the end, or ignore it when finishing apart is intended.",
+      "python": {
+        "cli": null,
+        "library": null
+      }
+    },
+    "bad_resource_constraint": {
+      "area": "resources",
+      "severity": [
+        "error"
+      ],
+      "summary": "A resource constraint has an empty task name.",
+      "explanation": "Each entry of resourceConstraints limits one task type. A missing task is a schema_required finding; an empty string is reported here.",
+      "examples": [
+        {
+          "severity": "error",
+          "program": {"resourceConstraints":[{"task":"","maxConcurrent":1}]}
+        }
+      ],
+      "fix": "Set task to the task name the steps use, or remove the entry.",
+      "python": {
+        "cli": null,
+        "library": null
+      }
+    },
+    "duplicate_constraint": {
+      "area": "resources",
+      "severity": [
+        "warning"
+      ],
+      "summary": "Two resource constraints name the same task.",
+      "explanation": "Only one limit can apply to a task; which one wins depends on the reader.",
+      "examples": [
+        {
+          "severity": "warning",
+          "program": {"tracks":[{"trackId":"main","name":"Main","steps":[{"stepId":"prep","name":"Prep","duration":{"type":"fixed","seconds":300},"startTrigger":{"type":"programStart"},"task":"oven"}]}],"resourceConstraints":[{"task":"oven","maxConcurrent":1},{"task":"oven","maxConcurrent":2}]}
+        }
+      ],
+      "fix": "Keep one constraint per task.",
+      "python": {
+        "cli": null,
+        "library": null
+      }
+    },
+    "bad_max_concurrent": {
+      "area": "resources",
+      "severity": [
+        "error"
+      ],
+      "summary": "A resource constraint's maxConcurrent is not an integer >= 1.",
+      "explanation": "The schema reports a bad maxConcurrent itself (schema_minimum, schema_type, schema_required), and this check stays quiet where it has. A program with an instances or replicates error (an E_* code) is checked against the schema as written, and those schema findings do not quiet the checks that follow, so this code is reported next to the schema's.",
+      "examples": [
+        {
+          "severity": "error",
+          "program": {"schemaVersion":"0.3.0-alpha","tracks":[{"trackId":"main","name":"Main","steps":[{"stepId":"mix","name":"Mix","duration":{"type":"fixed","seconds":300},"startTrigger":{"type":"programStart"}},{"stepId":"cool","name":"Cool","duration":{"type":"fixed","seconds":300},"startTrigger":{"type":"afterStep","stepId":"mix","instances":"each"}}]}],"resourceConstraints":[{"task":"oven","maxConcurrent":0}]},
+          "note": "Also emits E_INSTANCES_ON_SINGLE, schema_minimum and unused_constraint."
+        }
+      ],
+      "fix": "Set maxConcurrent to a whole number of at least 1.",
+      "python": {
+        "cli": null,
+        "library": null
+      }
+    },
+    "task_not_constrained": {
+      "area": "resources",
+      "severity": [
+        "error",
+        "warning"
+      ],
+      "summary": "A task used by steps has no resource constraint.",
+      "explanation": "Every task named by a step (task, tasks, taskResources, buffer taskResources) needs an entry in resourceConstraints, so the runner knows how many can run at once. It is an error, unless the program names an environment or actors, which may supply the constraint: then it is a warning.",
+      "examples": [
+        {
+          "severity": "error",
+          "program": {"tracks":[{"trackId":"main","name":"Main","steps":[{"stepId":"prep","name":"Prep","duration":{"type":"fixed","seconds":300},"startTrigger":{"type":"programStart"},"task":"oven"}]}]}
+        },
+        {
+          "severity": "warning",
+          "program": {"tracks":[{"trackId":"main","name":"Main","steps":[{"stepId":"prep","name":"Prep","duration":{"type":"fixed","seconds":300},"startTrigger":{"type":"programStart"},"task":"oven"}]}],"actors":2}
+        }
+      ],
+      "fix": "Add {\"task\": \"<task>\", \"maxConcurrent\": N} to resourceConstraints.",
+      "python": {
+        "cli": null,
+        "library": null,
+        "strict": "task_not_constrained",
+        "note": "That includes a program that names an environment or actors, where validateProgram reports a warning. The library (validate_program_structured) has no strict mode."
+      }
+    },
+    "unused_constraint": {
+      "area": "resources",
+      "severity": [
+        "warning"
+      ],
+      "summary": "A resource constraint names a task no step uses.",
+      "explanation": "Usually a typo in the task name on the constraint or on the steps.",
+      "examples": [
+        {
+          "severity": "warning",
+          "program": {"resourceConstraints":[{"task":"oven","maxConcurrent":1}]}
+        }
+      ],
+      "fix": "Remove the constraint, or set task on the steps that use it.",
+      "python": {
+        "cli": null,
+        "library": null
+      }
+    },
+    "E_INSTANCES_ON_SINGLE": {
+      "area": "instances",
+      "severity": [
+        "error"
+      ],
+      "summary": "`instances` is used on a reference to a step that is not replicated.",
+      "explanation": "`instances` (\"each\", \"all\", \"any\") says how a reference fans in over a replicated step's copies. The referenced step has no `replicates` and is not itself per-instance, so there is nothing to fan in.",
+      "examples": [
+        {
+          "severity": "error",
+          "program": {"schemaVersion":"0.3.0-alpha","tracks":[{"trackId":"main","name":"Main","steps":[{"stepId":"mix","name":"Mix","duration":{"type":"fixed","seconds":300},"startTrigger":{"type":"programStart"}},{"stepId":"cool","name":"Cool","duration":{"type":"fixed","seconds":300},"startTrigger":{"type":"afterStep","stepId":"mix","instances":"each"}}]}]}
+        }
+      ],
+      "fix": "Remove `instances`, or add `replicates` to the referenced step.",
+      "python": {
+        "cli": "E_INSTANCES_ON_SINGLE",
+        "library": "E_INSTANCES_ON_SINGLE"
+      }
+    },
+    "E_EACH_WITH_REPLICATES": {
+      "area": "instances",
+      "severity": [
+        "error"
+      ],
+      "summary": "A step has both an instances: \"each\" trigger and its own `replicates`.",
+      "explanation": "instances: \"each\" already makes one copy of the step per upstream instance; its own `replicates` would multiply them again.",
+      "examples": [
+        {
+          "severity": "error",
+          "program": {"schemaVersion":"0.3.0-alpha","tracks":[{"trackId":"main","name":"Main","steps":[{"stepId":"mix","name":"Mix","duration":{"type":"fixed","seconds":300},"startTrigger":{"type":"programStart"}},{"stepId":"bake","name":"Bake","duration":{"type":"fixed","seconds":300},"startTrigger":{"type":"afterStep","stepId":"mix"},"replicates":{"count":3}},{"stepId":"cool","name":"Cool","duration":{"type":"fixed","seconds":300},"startTrigger":{"type":"afterStep","stepId":"bake","instances":"each"},"replicates":{"count":2}}]}]}
+        }
+      ],
+      "fix": "Drop `replicates` on the step; it inherits the upstream count.",
+      "python": {
+        "cli": "E_EACH_WITH_REPLICATES",
+        "library": "E_EACH_WITH_REPLICATES"
+      }
+    },
+    "E_EACH_COUNT_MISMATCH": {
+      "area": "instances",
+      "severity": [
+        "error"
+      ],
+      "summary": "A compound \"each\" trigger pairs groups of different sizes.",
+      "explanation": "Instance i of the step pairs with instance i of every \"each\" upstream, so all of them need the same count.",
+      "examples": [
+        {
+          "severity": "error",
+          "program": {"schemaVersion":"0.3.0-alpha","tracks":[{"trackId":"sauce","name":"Sauce","steps":[{"stepId":"sauce","name":"Sauce","duration":{"type":"fixed","seconds":300},"startTrigger":{"type":"programStart"},"replicates":{"count":2}}]},{"trackId":"pasta","name":"Pasta","steps":[{"stepId":"pasta","name":"Pasta","duration":{"type":"fixed","seconds":300},"startTrigger":{"type":"programStart"},"replicates":{"count":3}}]},{"trackId":"plating","name":"Plating","steps":[{"stepId":"plate","name":"Plate","duration":{"type":"fixed","seconds":300},"startTrigger":{"logic":"all","triggers":[{"type":"afterStep","stepId":"sauce","instances":"each"},{"type":"afterStep","stepId":"pasta","instances":"each"}]}}]}]}
+        }
+      ],
+      "fix": "Give the upstream steps the same replicates.count.",
+      "python": {
+        "cli": "E_EACH_COUNT_MISMATCH",
+        "library": "E_EACH_COUNT_MISMATCH"
+      }
+    },
+    "E_INFLIGHT_GT_COUNT": {
+      "area": "instances",
+      "severity": [
+        "error"
+      ],
+      "summary": "replicates.maxInFlight is greater than replicates.count.",
+      "explanation": "maxInFlight caps how many instances are in progress at once; it cannot exceed the number of instances.",
+      "examples": [
+        {
+          "severity": "error",
+          "program": {"schemaVersion":"0.3.0-alpha","tracks":[{"trackId":"main","name":"Main","steps":[{"stepId":"mix","name":"Mix","duration":{"type":"fixed","seconds":300},"startTrigger":{"type":"programStart"}},{"stepId":"bake","name":"Bake","duration":{"type":"fixed","seconds":300},"startTrigger":{"type":"afterStep","stepId":"mix"},"replicates":{"count":3,"maxInFlight":5}},{"stepId":"cool","name":"Cool","duration":{"type":"fixed","seconds":300},"startTrigger":{"type":"afterStep","stepId":"bake","instances":"each"}},{"stepId":"box","name":"Box","duration":{"type":"fixed","seconds":300},"startTrigger":{"type":"afterStep","stepId":"cool","instances":"all"}}]}]}
+        }
+      ],
+      "fix": "Set maxInFlight to at most count, or omit it.",
+      "python": {
+        "cli": "E_INFLIGHT_GT_COUNT",
+        "library": "E_INFLIGHT_GT_COUNT"
+      }
+    },
+    "E_INFLIGHT_NO_CHAIN": {
+      "area": "instances",
+      "severity": [
+        "error"
+      ],
+      "summary": "maxInFlight on a serial replicate with no \"each\" descendants has no effect.",
+      "explanation": "Serial instances never overlap, and with no per-instance steps after them an instance is done as soon as it ends, so the cap never holds one back.",
+      "examples": [
+        {
+          "severity": "error",
+          "program": {"schemaVersion":"0.3.0-alpha","tracks":[{"trackId":"main","name":"Main","steps":[{"stepId":"mix","name":"Mix","duration":{"type":"fixed","seconds":300},"startTrigger":{"type":"programStart"}},{"stepId":"bake","name":"Bake","duration":{"type":"fixed","seconds":300},"startTrigger":{"type":"afterStep","stepId":"mix"},"replicates":{"count":3,"mode":"serial","maxInFlight":2}},{"stepId":"box","name":"Box","duration":{"type":"fixed","seconds":300},"startTrigger":{"type":"afterStep","stepId":"bake","instances":"all"}}]}]}
+        }
+      ],
+      "fix": "Remove maxInFlight, or chain a per-instance step after it with instances: \"each\".",
+      "python": {
+        "cli": "E_INFLIGHT_NO_CHAIN",
+        "library": "E_INFLIGHT_NO_CHAIN"
+      }
+    },
+    "W_UNBARRIERED_CHAIN": {
+      "area": "instances",
+      "severity": [
+        "warning"
+      ],
+      "summary": "An instances: \"each\" chain has no \"all\" barrier, but later steps do not wait for it.",
+      "explanation": "The per-instance chain is never joined, so nothing waits for every instance to finish while other work carries on. Often a missing barrier step.",
+      "examples": [
+        {
+          "severity": "warning",
+          "program": {"schemaVersion":"0.3.0-alpha","tracks":[{"trackId":"cookies","name":"Cookies","steps":[{"stepId":"mix","name":"Mix","duration":{"type":"fixed","seconds":300},"startTrigger":{"type":"programStart"}},{"stepId":"bake","name":"Bake","duration":{"type":"fixed","seconds":300},"startTrigger":{"type":"afterStep","stepId":"mix"},"replicates":{"count":3,"mode":"serial"}},{"stepId":"cool","name":"Cool","duration":{"type":"fixed","seconds":300},"startTrigger":{"type":"afterStep","stepId":"bake","instances":"each"}}]},{"trackId":"cleanup","name":"Cleanup","steps":[{"stepId":"wipe","name":"Wipe","duration":{"type":"fixed","seconds":300},"startTrigger":{"type":"programStartOffset","offsetSeconds":3600}}]}]}
+        }
+      ],
+      "fix": "Add a step with instances: \"all\" on the chain's last step if later work should wait for every instance.",
+      "python": {
+        "cli": "W_UNBARRIERED_CHAIN",
+        "library": "W_UNBARRIERED_CHAIN"
+      }
+    },
+    "I_IMPLICIT_BARRIER": {
+      "area": "instances",
+      "severity": [
+        "info"
+      ],
+      "summary": "A 0.3.0 program waits for a replicated step without saying `instances`.",
+      "explanation": "A reference to a replicated step with no `instances` waits for every instance (an implicit \"all\" barrier), as in 0.2.0. In 0.3.0-alpha programs the note suggests saying so.",
+      "examples": [
+        {
+          "severity": "info",
+          "program": {"schemaVersion":"0.3.0-alpha","tracks":[{"trackId":"main","name":"Main","steps":[{"stepId":"mix","name":"Mix","duration":{"type":"fixed","seconds":300},"startTrigger":{"type":"programStart"}},{"stepId":"bake","name":"Bake","duration":{"type":"fixed","seconds":300},"startTrigger":{"type":"afterStep","stepId":"mix"},"replicates":{"count":3,"mode":"serial"}},{"stepId":"box","name":"Box","duration":{"type":"fixed","seconds":300},"startTrigger":{"type":"afterStep","stepId":"bake"}}]}]}
+        }
+      ],
+      "fix": "Add instances: \"all\" to make the barrier explicit, or \"each\" to run the step once per instance.",
+      "python": {
+        "cli": null,
+        "library": null,
+        "note": "JS only (PRD per-instance triggers §9 Q5)."
+      }
+    },
+    "expansion_failed": {
+      "area": "instances",
+      "severity": [
+        "error"
+      ],
+      "summary": "Replicates could not be expanded.",
+      "explanation": "The replicate expander rejected the program; the message says why. The one case the checks before it do not catch: instances: \"all\" or \"any\" inside a compound trigger of the other logic, which would need a nested compound. The program is then schema-checked as written.",
+      "examples": [
+        {
+          "severity": "error",
+          "program": {"schemaVersion":"0.3.0-alpha","tracks":[{"trackId":"main","name":"Main","steps":[{"stepId":"bake","name":"Bake","duration":{"type":"fixed","seconds":300},"startTrigger":{"type":"programStart"},"replicates":{"count":2}},{"stepId":"box","name":"Box","duration":{"type":"fixed","seconds":300},"startTrigger":{"logic":"all","triggers":[{"type":"afterStep","stepId":"bake","instances":"any"},{"type":"programStart"}]}}]}]}
+        }
+      ],
+      "fix": "Check `replicates` and `instances` on the steps the message names; match the compound's logic to `instances` or split the trigger.",
+      "python": {
+        "cli": null,
+        "library": "expansion_failed",
+        "note": "`rhylthyme validate` does not expand replicates, so it has nothing to fail; validate_program_structured does."
+      }
+    },
+    "E_ALERT_BAD_OFFSET": {
+      "area": "alerts",
+      "severity": [
+        "error"
+      ],
+      "summary": "An alert's offsetSeconds is not a number or time string.",
+      "explanation": "offsetSeconds is signed seconds or a signed time string (\"-2m\", \"30s\", \"1h30m\") relative to the step's start or end.",
+      "examples": [
+        {
+          "severity": "error",
+          "program": {"tracks":[{"trackId":"main","name":"Main","steps":[{"stepId":"prep","name":"Prep","duration":{"type":"fixed","seconds":300},"startTrigger":{"type":"programStart"},"alerts":[{"event":"end","offsetSeconds":"a bit before"}]}]}]}
+        }
+      ],
+      "fix": "Use seconds (-120) or a signed time string (\"-2m\").",
+      "python": {
+        "cli": "E_ALERT_BAD_OFFSET",
+        "library": "E_ALERT_BAD_OFFSET"
+      }
+    },
+    "W_ALERT_BEFORE_MANUAL_START": {
+      "area": "alerts",
+      "severity": [
+        "warning"
+      ],
+      "summary": "An alert before the start of a manually started step never fires.",
+      "explanation": "A manual step's start is not known until someone starts it, so an alert timed before it has no anchor.",
+      "examples": [
+        {
+          "severity": "warning",
+          "program": {"tracks":[{"trackId":"main","name":"Main","steps":[{"stepId":"prep","name":"Prep","duration":{"type":"fixed","seconds":300},"startTrigger":{"type":"manual"},"alerts":[{"event":"start","offsetSeconds":"-1m"}]}]}]}
+        }
+      ],
+      "fix": "Anchor the alert on the end of the step before, or use offsetSeconds >= 0.",
+      "python": {
+        "cli": "W_ALERT_BEFORE_MANUAL_START",
+        "library": "W_ALERT_BEFORE_MANUAL_START"
+      }
+    },
+    "W_ALERT_BEFORE_PROGRAM_START": {
+      "area": "alerts",
+      "severity": [
+        "warning"
+      ],
+      "summary": "An alert would fire before the program starts, so it never fires.",
+      "explanation": "The step starts at (or soon after) the program start and the alert's negative offset reaches further back than that.",
+      "examples": [
+        {
+          "severity": "warning",
+          "program": {"tracks":[{"trackId":"main","name":"Main","steps":[{"stepId":"prep","name":"Prep","duration":{"type":"fixed","seconds":300},"startTrigger":{"type":"programStart"},"alerts":[{"event":"start","offsetSeconds":-300}]}]}]}
+        }
+      ],
+      "fix": "Shorten the offset, or delay the step with programStartOffset.",
+      "python": {
+        "cli": "W_ALERT_BEFORE_PROGRAM_START",
+        "library": "W_ALERT_BEFORE_PROGRAM_START"
+      }
+    },
+    "W_ALERT_BEFORE_INDEFINITE_END": {
+      "area": "alerts",
+      "severity": [
+        "warning"
+      ],
+      "summary": "An alert before the end of an indefinite step never fires.",
+      "explanation": "An indefinite step has no projected end, so an alert timed before it has no anchor.",
+      "examples": [
+        {
+          "severity": "warning",
+          "program": {"tracks":[{"trackId":"main","name":"Main","steps":[{"stepId":"prep","name":"Prep","duration":{"type":"indefinite","defaultSeconds":900},"startTrigger":{"type":"programStart"},"alerts":[{"event":"end","offsetSeconds":"-2m"}]}]}]}
+        }
+      ],
+      "fix": "Use offsetSeconds >= 0 on event \"end\", or give the step a fixed or variable duration.",
+      "python": {
+        "cli": "W_ALERT_BEFORE_INDEFINITE_END",
+        "library": "W_ALERT_BEFORE_INDEFINITE_END"
+      }
+    },
+    "I_INSTRUMENT_DURATION": {
+      "area": "instruments",
+      "severity": [
+        "info"
+      ],
+      "summary": "An instrument step with no duration ends when its call replies; timings use an estimate.",
+      "explanation": "The step's command (or until call) ends it, so it needs no duration. For planning, the validator and analyzer time it by an estimate from its params (e.g. a shake's duration, a LabMCP series' count x interval) or a default, and say which.",
+      "examples": [
+        {
+          "severity": "info",
+          "program": {"tracks":[{"trackId":"main","name":"Main","steps":[{"stepId":"shake","name":"Shake","startTrigger":{"type":"programStart"},"instrument":{"tool":"shaker","toolType":"bioshake","command":"start_shake","params":{"speed":1000,"duration":300}}}]}]}
+        }
+      ],
+      "fix": "Nothing to fix. `rhylthyme plan --workcell` writes the tool's own estimate into the program.",
+      "python": {
+        "cli": null,
+        "library": null
+      }
+    },
+    "instrument_bad_shape": {
+      "area": "instruments",
+      "severity": [
+        "error"
+      ],
+      "summary": "A step's instrument block is malformed.",
+      "explanation": "The instrument has a missing or empty tool, both command and until, no call or actions at all, an empty start/end/onAbort list, an action without a command, an unknown key or a bad timeoutSeconds. The schema reports the same problem (schema_*), with the program path; this finding says it in the instrument's own terms. The step's calls are not checked further.",
+      "examples": [
+        {
+          "severity": "error",
+          "program": {"tracks":[{"trackId":"main","name":"Main","steps":[{"stepId":"shake","name":"Shake","startTrigger":{"type":"programStart"},"instrument":{"tool":"shaker","toolType":"bioshake","command":"start_shake","params":{"speed":1000,"duration":300},"start":[]}}]}]},
+          "note": "Also emits schema_minItems."
+        }
+      ],
+      "fix": "Use {\"tool\": \"shaker\", \"command\": \"start_shake\", \"params\": {...}}, or start/until/end actions: {\"command\", \"params\", \"tool\"}.",
+      "python": {
+        "cli": "schema_error",
+        "library": "schema_error",
+        "note": "Python reports a malformed instrument through its schema check only."
+      }
+    },
+    "instrument_no_end": {
+      "area": "instruments",
+      "severity": [
+        "warning"
+      ],
+      "summary": "An instrument step has no command, no until and no duration: only the operator can end it.",
+      "explanation": "Its start actions run and nothing ends the step on its own. Timings use a default.",
+      "examples": [
+        {
+          "severity": "warning",
+          "program": {"tracks":[{"trackId":"main","name":"Main","steps":[{"stepId":"shake","name":"Shake","startTrigger":{"type":"programStart"},"instrument":{"tool":"shaker","toolType":"bioshake","start":[{"command":"start_shake","params":{"speed":1000,"duration":300}}]}}]}]}
+        }
+      ],
+      "fix": "Add a duration, or an until action whose reply ends the step.",
+      "python": {
+        "cli": "instrument_no_end",
+        "library": null,
+        "note": "validate_program_structured keeps only the errors of the instrument checks."
+      }
+    },
+    "instrument_unchecked": {
+      "area": "instruments",
+      "severity": [
+        "warning"
+      ],
+      "summary": "Instrument calls were not checked.",
+      "explanation": "The step's instrument has no toolType, or some of its actions go to another tool, so the commands cannot be checked without the lab's workcell file.",
+      "examples": [
+        {
+          "severity": "warning",
+          "program": {"tracks":[{"trackId":"main","name":"Main","steps":[{"stepId":"shake","name":"Shake","startTrigger":{"type":"programStart"},"instrument":{"tool":"shaker","command":"start_shake","params":{"speed":1000,"duration":300}}}]}]}
+        }
+      ],
+      "fix": "Add toolType (the galago tool type, e.g. \"bioshake\", or a LabMCP package such as \"labmcp-ika\"), or run `rhylthyme validate --workcell`.",
+      "python": {
+        "cli": "instrument_unchecked",
+        "library": null,
+        "note": "Python reports it once per program (\"Instrument steps were not checked\") when the driver package is missing, and as an error with --workcell. validate_program_structured keeps only the errors of the instrument checks."
+      }
+    },
+    "instrument_unknown_tool_type": {
+      "area": "instruments",
+      "severity": [
+        "error",
+        "warning"
+      ],
+      "summary": "An instrument's toolType is not a known galago tool type or LabMCP server.",
+      "explanation": "An unknown galago toolType is an error. A toolType starting with \"labmcp-\" that is not in the LabMCP catalogue is a warning: the server may be newer than the catalogue, so its calls are just not checked.",
+      "examples": [
+        {
+          "severity": "error",
+          "program": {"tracks":[{"trackId":"main","name":"Main","steps":[{"stepId":"shake","name":"Shake","startTrigger":{"type":"programStart"},"instrument":{"tool":"shaker","toolType":"blender","command":"start_shake"}}]}]}
+        },
+        {
+          "severity": "warning",
+          "program": {"tracks":[{"trackId":"main","name":"Main","steps":[{"stepId":"heat","name":"Heat","duration":{"type":"fixed","seconds":300},"startTrigger":{"type":"programStart"},"instrument":{"tool":"stirrer","toolType":"labmcp-nope","command":"stop_heating"}}]}]}
+        }
+      ],
+      "fix": "Use a galago tool type the message lists, or a LabMCP package name from the catalogue.",
+      "python": {
+        "cli": "instrument_unknown_tool_type",
+        "library": "logic_error",
+        "requires": [
+          "rhylthyme-galago",
+          "rhylthyme-labmcp"
+        ],
+        "note": "validate_program_structured keeps only the errors of the instrument checks, as logic_error."
+      }
+    },
+    "instrument_invalid_command": {
+      "area": "instruments",
+      "severity": [
+        "error"
+      ],
+      "summary": "An instrument call is not valid for its tool type.",
+      "explanation": "The command does not exist for the toolType, or its params do not match the command's parameters (unknown, missing or of the wrong type). galago tool types are checked against galago-tools' commands, LabMCP servers against the LabMCP catalogue.",
+      "examples": [
+        {
+          "severity": "error",
+          "program": {"tracks":[{"trackId":"main","name":"Main","steps":[{"stepId":"shake","name":"Shake","startTrigger":{"type":"programStart"},"instrument":{"tool":"shaker","toolType":"bioshake","command":"start_shake","params":{"rpm":1000}}}]}]}
+        }
+      ],
+      "fix": "Use a command and params the message lists for that tool type.",
+      "python": {
+        "cli": "instrument_invalid_command",
+        "library": "logic_error",
+        "requires": [
+          "rhylthyme-galago"
+        ],
+        "note": "From the rhylthyme-galago / rhylthyme-labmcp driver packages, when installed. validate_program_structured reports it as logic_error."
+      }
+    },
+    "instrument_over_limit": {
+      "area": "instruments",
+      "severity": [
+        "error"
+      ],
+      "summary": "A LabMCP call's parameter is beyond the server's default limit.",
+      "explanation": "LabMCP servers refuse values past their safety limits (a maximum temperature, a series length, ...). The check uses each server's default limits; a lab may configure others.",
+      "examples": [
+        {
+          "severity": "error",
+          "program": {"tracks":[{"trackId":"main","name":"Main","steps":[{"stepId":"heat","name":"Heat","duration":{"type":"fixed","seconds":300},"startTrigger":{"type":"programStart"},"instrument":{"tool":"stirrer","toolType":"labmcp-ika","start":[{"command":"set_temperature","params":{"temperature_c":200}}]}}]}]}
+        }
+      ],
+      "fix": "Use a value within the limit the message names, or raise the limit in the server's configuration.",
+      "python": {
+        "cli": "instrument_over_limit",
+        "library": "logic_error",
+        "requires": [
+          "rhylthyme-labmcp"
+        ],
+        "note": "From rhylthyme-labmcp, when installed. validate_program_structured reports it as logic_error."
+      }
+    },
+    "instrument_returns_early": {
+      "area": "instruments",
+      "severity": [
+        "error"
+      ],
+      "summary": "A LabMCP call that replies as soon as it starts is used to end a step.",
+      "explanation": "Some calls (a syringe pump's infuse and withdraw) reply when the work starts, not when it is done; as the step's command or until call they would end the step at once.",
+      "examples": [
+        {
+          "severity": "error",
+          "program": {"tracks":[{"trackId":"main","name":"Main","steps":[{"stepId":"dose","name":"Dose","startTrigger":{"type":"programStart"},"instrument":{"tool":"pump","toolType":"labmcp-new-era","command":"infuse","params":{"volume_ml":1,"rate_ml_min":1}}}]}]}
+        }
+      ],
+      "fix": "Send it as a start action and give the step a duration at least as long as the dose.",
+      "python": {
+        "cli": "instrument_returns_early",
+        "library": "logic_error",
+        "requires": [
+          "rhylthyme-labmcp"
+        ],
+        "note": "From rhylthyme-labmcp, when installed. validate_program_structured reports it as logic_error."
+      }
+    },
+    "instrument_dose_outlasts_step": {
+      "area": "instruments",
+      "severity": [
+        "warning"
+      ],
+      "summary": "A pump dose started by a step takes longer than the step.",
+      "explanation": "The dose's volume / rate is longer than the step's duration, so its end actions and the next steps start while the pump still runs.",
+      "examples": [
+        {
+          "severity": "warning",
+          "program": {"tracks":[{"trackId":"main","name":"Main","steps":[{"stepId":"dose","name":"Dose","duration":{"type":"fixed","seconds":10},"startTrigger":{"type":"programStart"},"instrument":{"tool":"pump","toolType":"labmcp-new-era","start":[{"command":"infuse","params":{"volume_ml":1,"rate_ml_min":1}}]}}]}]}
+        }
+      ],
+      "fix": "Lengthen the step to at least the dose time, or lower the volume or raise the rate.",
+      "python": {
+        "cli": "instrument_dose_outlasts_step",
+        "library": null,
+        "requires": [
+          "rhylthyme-labmcp"
+        ],
+        "note": "From rhylthyme-labmcp, when installed. validate_program_structured keeps only the errors of the instrument checks."
+      }
+    },
+    "instrument_catalog_not_loaded": {
+      "area": "instruments",
+      "severity": [
+        "warning"
+      ],
+      "summary": "A LabMCP step was not checked because the LabMCP catalogue is not loaded.",
+      "explanation": "The browser entry of @rhylthyme/timeline/schedule (and browser/schedule.js) leaves out the LabMCP catalogue (about 350 KB). Until it is registered, each LabMCP step gets this warning instead of its checks. The Node entry always has it.",
+      "examples": [
+        {
+          "severity": "warning",
+          "program": {"tracks":[{"trackId":"main","name":"Main","steps":[{"stepId":"heat","name":"Heat","duration":{"type":"fixed","seconds":300},"startTrigger":{"type":"programStart"},"instrument":{"tool":"stirrer","toolType":"labmcp-ika","start":[{"command":"set_temperature","params":{"temperature_c":40}}]}}]}]},
+          "entry": "browser",
+          "note": "Validated with the browser entry, before the catalogue is registered."
+        }
+      ],
+      "fix": "import '@rhylthyme/timeline/schedule/labmcp-catalog' (or add browser/labmcp-catalog.js to the page) before validating.",
+      "python": {
+        "cli": null,
+        "library": null,
+        "note": "Python always has its catalogue."
+      }
+    }
+  }
+}
