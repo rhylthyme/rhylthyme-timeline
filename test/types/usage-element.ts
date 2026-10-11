@@ -9,6 +9,11 @@ if (el) {
   el.start();
   const s: 'stopped' | 'running' | 'paused' | 'completed' = el.status;
   void s;
+  el.factors = { turkeyKg: 6.4 };
+  el.speed = 60;
+  const skipped: string[] = [];
+  el.addEventListener('rt-factors', (e) => { skipped.push(...e.detail.skipped); });
+  if (el.askFactors()) el.reconcileClock();
   // @ts-expect-error startStep takes a step id
   el.startStep(1);
 }

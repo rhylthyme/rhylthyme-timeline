@@ -25,8 +25,11 @@ const same: string = Rhylthyme.renderTimelineSvg(program);
 const v = validateProgram(program);
 const first: Finding | undefined = v.errors[0];
 const a: Analysis = analyzeSchedule(labmcp.withEstimates(program), { finishAt: '2026-11-26T18:00:00Z' });
+const wall: string | undefined = analyzeSchedule(program).wallClock?.startAt;
+const off: number | null = Schedule.parseAlertOffset('-5m');
+const grey: string = renderTimelineSvg(program, { palette: 'grayscale' });
 const conflicts: number = a.resourceConflicts.length + Schedule.analyzeSchedule(program).criticalPath.length;
-export const out = [t.end, svg.length, same.length, v.valid, first?.fix, a.wallClock?.startAt, conflicts];
+export const out = [wall, off, grey, t.end, svg.length, same.length, v.valid, first?.fix, a.wallClock?.startAt, conflicts];
 
 // @ts-expect-error a step needs a startTrigger
 const bad: Program = { tracks: [{ trackId: 'x', name: 'x', steps: [{ stepId: 's', name: 's' }] }] };

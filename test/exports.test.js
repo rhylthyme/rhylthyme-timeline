@@ -51,7 +51,10 @@ test('browser/schedule.js is a classic script that matches the module', () => {
   assert.equal(JSON.stringify(S.analyzeSchedule(program)), JSON.stringify(C.analyzeSchedule(program)));
 });
 
-test('element.js loads under CommonJS without a global engine and registers nothing in Node', () => {
+test('element.js loads under CommonJS without a global engine, registers nothing in Node, and attaches the hash helpers', () => {
   delete require.cache[require.resolve('../src/element.js')];
   assert.doesNotThrow(() => require('../src/element.js'));
+  const R = require('../src/index.js');
+  assert.equal(typeof R.programVersion, 'function');
+  assert.match(R.programVersion({ tracks: [] }), /^sha256:[0-9a-f]{64}$/);
 });

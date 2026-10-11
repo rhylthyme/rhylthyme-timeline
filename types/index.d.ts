@@ -26,7 +26,8 @@ export interface TimingOptions {
   now?: number;
 }
 
-export type PaletteName = 'classic' | 'vivid' | 'muted' | 'tableau' | 'google' | 'pastel' | 'd3' | 'cookbook';
+export type PaletteName =
+  | 'classic' | 'vivid' | 'muted' | 'tableau' | 'google' | 'pastel' | 'd3' | 'cookbook' | 'okabe-ito' | 'grayscale';
 
 export type LegendItem =
   | 'tracks' | 'tasks' | 'dependency' | 'negative-offset' | 'indefinite' | 'variable' | 'manual'
@@ -94,7 +95,7 @@ export function renderTimelineSvg(program: Program, opts?: RenderOptions): strin
 /** Sets container.innerHTML to the SVG and returns the markup. */
 export function renderTimeline(container: { innerHTML: string } | null, program: Program, opts?: RenderOptions): string;
 export function actualFromRun(record: unknown, program?: Program, opts?: { endsOnly?: boolean }): Actual;
-export function timingsFromRun(program: Program, record: unknown, opts?: { endsOnly?: boolean }): Timings;
+export function timingsFromRun(program: Program, record: unknown, opts?: { endsOnly?: boolean; now?: number }): Timings;
 /** knownIds: an object keyed by the expanded step ids (a timings object works). */
 export function runtimeStepId(entry: { stepId: string; instance?: number }, knownIds?: Record<string, unknown>): string;
 export function stepNeedsStart(step: Step): boolean;

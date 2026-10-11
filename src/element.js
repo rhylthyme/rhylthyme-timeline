@@ -111,8 +111,8 @@
       typeof require === 'function') {
     R = require('./index.js');
   }
-  if (typeof customElements === 'undefined') return;
   if (!R || !R.computeStepTimings) {
+    if (typeof customElements === 'undefined') return;
     throw new Error('rhylthyme-timeline element: load src/index.js (the engine) first');
   }
 

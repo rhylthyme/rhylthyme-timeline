@@ -105,8 +105,8 @@ export interface BindingConstraint {
 }
 
 export interface Analysis {
-  programId?: string;
-  name?: string;
+  programId: string | null;
+  name: string | null;
   makespanSeconds: number;
   /** e.g. "1h 14m". */
   makespan: string;
@@ -118,8 +118,8 @@ export interface Analysis {
   resourceConflicts: ResourceConflict[];
   inFlight: unknown[];
   actorPeak: { concurrentSteps: number; atSeconds: number; declaredActors: number | null };
-  /** Present when startAt or finishAt is given. */
-  wallClock?: { startAt: string; finishAt: string; anchoredBy: 'startAt' | 'finishAt' };
+  /** null unless startAt or finishAt is given. */
+  wallClock: { startAt: string; finishAt: string; anchoredBy: 'startAt' | 'finishAt' } | null;
   /** With history. */
   predictedMakespanSeconds?: number;
   predictedMakespan?: string;
@@ -149,8 +149,8 @@ export function formatAnalysis(analysis: Analysis): string;
 /** Schema 0.3.0-alpha `instances` / `replicates` checks on the unexpanded program. */
 export function instanceFindings(program: Program): SeverityFinding[];
 export function alertFindings(program: Program): SeverityFinding[];
-/** An alert offset in seconds (negative is before the event). */
-export function parseAlertOffset(value: Seconds | null | undefined): number;
+/** An alert offset in seconds (negative is before the event); 0 when absent, null when it cannot be read. */
+export function parseAlertOffset(value: Seconds | null | undefined): number | null;
 export function alertDefaultMessage(event: Alert['event'], offsetSeconds: number): string;
 export function projectedAlerts(step: Step, timing: StepTiming): ProjectedAlert[];
 /** A copy of the program with the given durations, by step id. */

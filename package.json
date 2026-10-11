@@ -5,6 +5,19 @@
   "main": "src/index.js",
   "module": "esm/index.mjs",
   "types": "types/index.d.ts",
+  "typesVersions": {
+    "*": {
+      "core": [
+        "types/index.d.ts"
+      ],
+      "element": [
+        "types/element.d.ts"
+      ],
+      "schedule": [
+        "types/schedule.d.ts"
+      ]
+    }
+  },
   "bin": {
     "rhylthyme-render": "bin/render.js"
   },
