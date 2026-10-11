@@ -6,6 +6,67 @@ Keep a Changelog; versions follow SemVer.
 ## [2.0.0-beta.7] - unreleased
 
 ### Added
+- `itinerary(program, { startAt?, finishAt?, actual?, now? })` in the core
+  engine: every expanded step in plan order with `name`, `trackName`,
+  `instanceOf` / `instanceIndex`, seconds, `needsStart` / `needsFinish`,
+  `task`, and ISO `startAt` / `endAt` when anchored (the same anchoring as
+  `analyzeSchedule`). Lets an app list the plan without loading
+  `./schedule` (#4). Types `ItineraryOptions` and `ItineraryEntry`;
+  `test/itinerary.test.js` checks it against `analyzeSchedule(...).steps`
+  on every rhylthyme-examples and gold program. The core has no LabMCP
+  catalogue, so a LabMCP step with no duration gets the generic instrument
+  estimate there.
+- `itinerary` in `@rhylthyme/timeline/schedule`: the core `itinerary` after
+  the LabMCP catalogue estimates, so it agrees with `analyzeSchedule` on
+  every program.
+- `labmcp.registerCatalog(catalog)` and `labmcp.hasCatalog()`;
+  `labmcp.CATALOG` is now the registered catalogue or `null`.
+- `<rhylthyme-timeline>`: `rt-step-began` and `rt-step-ended`, fired for
+  every step (replicate instances and steps that start and end on their
+  own included), exactly once per step per run, in time order within a
+  tick, with `detail {stepId, time, by}`. `time` is the transition's own
+  second, not the tick's. `by` is `person` or `plan` on began, and on
+  ended the run record's `endedBy` with `executor` called `person`
+  (`person`, `timer`, `trigger`, `abort`; `stop()` ends running steps
+  with `abort`). A forward `seek()` fires what it passes over; a new
+  `start()` after `stop()` is a fresh run. `rt-step-start` and
+  `rt-step-complete` are unchanged. Typed in `RhylthymeTimelineEventMap`
+  (`StepBeganBy`, `StepEndedBy`, `StepTransitionDetail`). (#6)
+- `<rhylthyme-timeline>`: a `labels` property for translating the player
+  (#7). Every user-visible string now comes from one `MESSAGES` table in
+  `src/element.js`; `labels` merges a partial override over the English
+  defaults, as strings (with `{0}`, `{1}`… placeholders) or functions.
+  Unknown keys and non-string values are ignored, a throwing function
+  falls back to English, and the text is always escaped. Typed as
+  `RhylthymeTimelineLabels` in `types/element.d.ts`. English output is
+  unchanged.
+- Accessible buttons: the glyphs (▶ ❚❚ ■ ✓) are wrapped in
+  `aria-hidden` spans and every transport, step and factor-form button
+  carries an `aria-label` with its text. The status element gains a
+  `data-status` attribute holding the untranslated state.
+- The chart inside the player is translatable too: `chartSubtitle` and
+  the `legend*` keys are passed to the renderer when set (English
+  output unchanged).
+- A `locale` attribute/property (opt-in): the clock, durations and speed
+  options are formatted with `Intl` in that locale (`""`/`"auto"`: the
+  browser's). Without it, times keep their fixed formats.
+- `validateProgram` checks the JSON Schema too (#8). The 0.2.0-alpha and
+  0.3.0-alpha program schemas from rhylthyme-spec are bundled
+  (`src/schedule/schemas/`, byte-for-byte copies) and checked by a small
+  zero-dependency Draft 7 checker (`src/schedule/json-schema.js`) for the
+  keywords they use, with Python `jsonschema`'s semantics: `oneOf` means
+  exactly one, `integer` rejects 2.5 and `"2"`, `format` is not checked,
+  siblings of `$ref` are ignored. `schemaVersion` 0.3.x selects
+  0.3.0-alpha, anything else 0.2.0-alpha. Failures are errors coded
+  `schema_<keyword>` with a `where` path and a `fix`. Time strings are
+  read as seconds first, as the Python validator does; the authored
+  program is checked, then (when that passes) the expanded one.
+- `schemaFindings(program)`, `programSchema(schemaVersion)` and
+  `checkJsonSchema(value, schema)` in `./schedule`, with types.
+- `test/parity.test.js`: the issue #8 programs and schema mutations of
+  every example program (a required key dropped, a wrong type, a float for
+  an integer, an ambiguous `oneOf`, unknown keys) must get the same
+  verdict from JS and Python.
 - `<rhylthyme-timeline labels='{"stop":"Arrêter","startStep":"Démarrer : {0}"}'>`:
   the player's translations can be set from HTML as a JSON object of
   strings (`{0}`, `{1}`… placeholders included), observed like the other
@@ -16,6 +77,7 @@ Keep a Changelog; versions follow SemVer.
   effect; removing the attribute clears the labels it supplied. Writing
   the attribute again with the value it already has counts as setting it
   (the same now holds for `data-factors`).
+
 ### Changed
 - `@rhylthyme/timeline/schedule` no longer bundles the 350 KB LabMCP
   instrument catalogue for browsers (#5). The Node entry (`require` and
@@ -79,14 +141,6 @@ Keep a Changelog; versions follow SemVer.
   `schema_oneOf` one.
 
 ### Fixed
-- Properties set on a `<rhylthyme-timeline>` before `element.js` defined
-  it (`program`, `labels`, `factors`, `predictions`, `mode`, `speed`,
-  `timeFormat`, `locale`, `startAt`) are now passed through the element's
-  setters when it upgrades. They used to stay as plain own properties
-  that hid the element's accessors, so `el.labels` (for one) returned the
-  raw object while the player showed something else. Where such a
-  property and its attribute (`src`, `labels`, `data-factors`,
-  `data-predictions`) were both present at upgrade, the property wins.
 - `analyzeSchedule(...).steps` (and `itinerary`) link the steps of a
   replicated track (`replicates` or legacy `batch_size` on the track) to
   their authored step through `instanceOf` / `instanceIndex`; they were
@@ -98,6 +152,14 @@ Keep a Changelog; versions follow SemVer.
   in the new labels.
 - A `noProgram` function override receives `'program'` and `'src'`, not
   internal placeholders; templates still draw `{0}`/`{1}` as `<code>`.
+- Properties set on a `<rhylthyme-timeline>` before `element.js` defined
+  it (`program`, `labels`, `factors`, `predictions`, `mode`, `speed`,
+  `timeFormat`, `locale`, `startAt`) are now passed through the element's
+  setters when it upgrades. They used to stay as plain own properties
+  that hid the element's accessors, so `el.labels` (for one) returned the
+  raw object while the player showed something else. Where such a
+  property and its attribute (`src`, `labels`, `data-factors`,
+  `data-predictions`) were both present at upgrade, the property wins.
 
 ## [2.0.0-beta.6] - 2026-10-11
 
