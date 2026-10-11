@@ -574,6 +574,55 @@
     out.transitions.seekOn = onlySteps(logS).slice();
     s1.remove();
 
+    // (v) zero-length steps: each ends right after its own begin, before the
+    //     begins that wait on it, even when the waiting step's track comes first.
+    const tprog = (tracks) => ({
+      schemaVersion: '0.2.0-alpha', programId: 'zero', name: 'zero', environmentType: 'kitchen',
+      tracks: tracks.map((steps, i) => ({ trackId: 't' + i, name: 't' + i, steps: steps })),
+      resourceConstraints: [{ task: 'x', maxConcurrent: 5 }],
+    });
+    const fx = (id, sec, trig) => ({ stepId: id, name: id, task: 'x', duration: { type: 'fixed', seconds: sec }, startTrigger: trig || { type: 'programStart' } });
+    let mZ = 0;
+    const z1 = makeEl(tprog([
+      [fx('B', 10, { type: 'afterStep', stepId: 'Z2' })],
+      [fx('A', 10), fx('Z1', 0, { type: 'afterStep', stepId: 'A' }), fx('Z2', 0, { type: 'afterStep', stepId: 'Z1' })],
+    ]));
+    z1.setClock(() => mZ);
+    const logZ = watch(z1);
+    z1.start();
+    mZ += 30000; z1.tick();
+    out.transitions.zeroLength = onlySteps(logZ);
+    z1.remove();
+
+    // (vi) a handler that calls back into the element: stop() from an
+    //      rt-step-ended handler sees the rest of the batch out before its
+    //      abort ends and rt-stop, and nothing fires after rt-stop;
+    //      completeStep() from a handler keeps the time order.
+    let mH = 0;
+    const h1 = makeEl(tprog([[fx('A', 10), fx('B', 10, { type: 'afterStep', stepId: 'A' }), fx('C', 10, { type: 'afterStep', stepId: 'B' })]]));
+    h1.setClock(() => mH);
+    const logH = watch(h1);
+    let stopped = false;
+    h1.addEventListener('rt-step-ended', (x) => { if (!stopped && x.detail.stepId === 'A') { stopped = true; h1.stop(); } });
+    h1.start();
+    mH += 25000; h1.tick();
+    out.transitions.stopInHandler = logH.slice();
+    out.transitions.stopInHandlerStatus = h1.status;
+    h1.remove();
+
+    let mK = 0;
+    const k1 = makeEl(tprog([
+      [fx('A', 10), { stepId: 'V', name: 'V', task: 'x', duration: { type: 'indefinite', defaultSeconds: 100 }, startTrigger: { type: 'afterStep', stepId: 'A' } }],
+      [fx('P', 5), fx('Q', 20, { type: 'afterStep', stepId: 'P' })],
+    ]));
+    k1.setClock(() => mK);
+    const logK = watch(k1);
+    k1.addEventListener('rt-step-began', (x) => { if (x.detail.stepId === 'V') k1.completeStep('V'); });
+    k1.start();
+    mK += 40000; k1.tick();
+    out.transitions.completeInHandler = onlySteps(logK);
+    k1.remove();
+
     // (d) programVersion parity: the same three programs are hashed in Node
     // with tools/hash-program.js. Base64 so multi-byte characters survive
     // the DOM dump unharmed.

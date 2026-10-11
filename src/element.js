@@ -462,7 +462,7 @@
       this._status = 'stopped';
       this._actual = {};
       this._caps = {};
-      this._transitions = newTransitions();
+      this._transitions = newTransitions(); this._transitionQueue = [];
       this._anchorWall = 0;
       this._anchorTime = 0;
       this._timer = null;
@@ -818,6 +818,7 @@
       if (this._status === 'stopped') return;
       this._stopTimer();
       this._abortTransitions();
+      if (this._status === 'stopped') return; // a handler stopped it meanwhile
       if (this._runActive()) this._emitRunRecord('aborted');
       this._reset();
       this.render();
@@ -834,7 +835,7 @@
 
     proto._reset = function () {
       this._time = 0; this._status = 'stopped'; this._actual = {}; this._caps = {};
-      this._transitions = newTransitions();
+      this._transitions = newTransitions(); this._transitionQueue = [];
       this._completedAt = null; this._executionStart = null; this._run = null;
       // Answers stay as presets for the next run; the question is asked again.
       this._factorsAsked = false; this._factorsOpen = false;
@@ -971,6 +972,9 @@
     // Engine-driven steps never pass through startStep()/_finish(), so the
     // transitions are found by comparing each step's state with what has been
     // fired so far this run, not by hooking the places that change it.
+    // They are dispatched from a queue: a handler that calls back into the
+    // element (completeStep(), pause(), stop()...) appends to it instead of
+    // dispatching in the middle of the batch, so the events stay in time order.
     proto._emitTransitions = function () {
       if (this._status === 'stopped' || !this._expanded) return;
       var tr = this._transitions, T = this._timings(), states = this._states(T), self = this, out = [];
@@ -978,25 +982,74 @@
         var st = states[id], a = self._actual[id] || {}, t = T[id];
         if (!t || (st !== 'active' && st !== 'done')) return;
         var start = a.start !== undefined ? a.start : t.start;
+        var zero = st === 'done' && Math.max(start, a.end !== undefined ? a.end : t.end) <= start;
         if (tr.began[id] === undefined) {
           tr.began[id] = start;
-          out.push({ name: 'rt-step-began', id: id, time: start, by: tr.beganBy[id] || 'plan', rank: 1, i: i });
+          out.push({ name: 'rt-step-began', id: id, time: start, by: tr.beganBy[id] || 'plan', rank: 1, zero: zero ? 0 : 1, sub: 0, i: i });
         }
         if (st === 'done' && !tr.ended[id]) {
           tr.ended[id] = true;
           var end = Math.max(start, a.end !== undefined ? a.end : t.end);
+          var z = end <= tr.began[id];
           // At the same second an end comes before the begins it makes way
-          // for, except a zero-length step's, which must follow its own begin.
-          out.push({ name: 'rt-step-ended', id: id, time: end, by: transitionBy(tr.endedBy[id]), rank: end > tr.began[id] ? 0 : 2, i: i });
+          // for. A zero-length step's end ranks with the begins, right after
+          // its own begin and before the begins that wait on it.
+          out.push({ name: 'rt-step-ended', id: id, time: end, by: transitionBy(tr.endedBy[id]), rank: z ? 1 : 0, zero: z ? 0 : 1, sub: 1, i: i });
         }
       });
-      out.sort(function (x, y) { return (x.time - y.time) || (x.rank - y.rank) || (x.i - y.i); });
-      out.forEach(function (e) { self._emit(e.name, { stepId: e.id, time: e.time, by: e.by }); });
+      out.sort(function (x, y) { return (x.time - y.time) || (x.rank - y.rank) || (x.zero - y.zero) || (x.i - y.i) || (x.sub - y.sub); });
+      this._transitionQueue = this._transitionQueue.concat(this._dependencyOrder(out));
+      this._drainTransitions();
+    };
+    // Stable reorder so nothing fires before what it waits on in the same
+    // batch: a step's begin after the ends of the steps its trigger names, a
+    // step's end after its own begin.
+    proto._dependencyOrder = function (out) {
+      if (out.length < 2) return out;
+      var self = this, deps = {};
+      out.forEach(function (e) {
+        if (e.name !== 'rt-step-began' || deps[e.id]) return;
+        var trig = (self._steps[e.id] || {}).startTrigger || {};
+        var list = (trig.logic && Array.isArray(trig.triggers)) ? trig.triggers : [trig];
+        deps[e.id] = list.map(function (t) { return t && t.stepId; }).filter(Boolean);
+      });
+      var mustFollow = function (e, p) {
+        if (p.time !== e.time) return false;
+        if (e.name === 'rt-step-ended') return p.name === 'rt-step-began' && p.id === e.id;
+        return p.name === 'rt-step-ended' && deps[e.id].indexOf(p.id) >= 0;
+      };
+      var pending = out.slice(), ordered = [];
+      while (pending.length) {
+        var k = 0;
+        for (; k < pending.length; k++) {
+          var e = pending[k];
+          if (!pending.some(function (p) { return p !== e && mustFollow(e, p); })) break;
+        }
+        if (k === pending.length) k = 0; // a cycle: keep the time order
+        ordered.push(pending.splice(k, 1)[0]);
+      }
+      return ordered;
+    };
+    // Dispatch queued transitions. A nested call (a handler acting on the
+    // element) returns at once and the outer loop dispatches what it added,
+    // unless `force`: stop() must see the queue out before its abort ends.
+    proto._drainTransitions = function (force) {
+      if (this._draining && !force) return;
+      var was = this._draining;
+      this._draining = true;
+      try {
+        while (this._transitionQueue.length) {
+          var e = this._transitionQueue.shift();
+          this._emit(e.name, { stepId: e.id, time: e.time, by: e.by });
+        }
+      } finally { this._draining = was; }
     };
     // stop() mid-run: every step that began and has not ended ends now, "abort".
     proto._abortTransitions = function () {
       if (this._status === 'stopped' || this._status === 'completed') return;
       this._emitTransitions();
+      this._drainTransitions(true);
+      if (this._status === 'stopped') return; // a handler stopped the run already
       var tr = this._transitions, now = this._time, self = this;
       this._order.forEach(function (id) {
         if (tr.began[id] === undefined || tr.ended[id]) return;

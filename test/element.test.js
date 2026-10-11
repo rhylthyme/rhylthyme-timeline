@@ -470,6 +470,43 @@ test('rt-step-began and rt-step-ended fire once per step per run, in time order'
       ['rt-step-ended', 'simmer', 100, 'person'],
     ]);
 
+    // A zero-length step ends right after its own begin and before the
+    // begins that wait on it, whatever the track order.
+    assert.deepStrictEqual(T.zeroLength, [
+      ['rt-step-began', 'A', 0, 'plan'],
+      ['rt-step-ended', 'A', 10, 'timer'],
+      ['rt-step-began', 'Z1', 10, 'plan'],
+      ['rt-step-ended', 'Z1', 10, 'timer'],
+      ['rt-step-began', 'Z2', 10, 'plan'],
+      ['rt-step-ended', 'Z2', 10, 'timer'],
+      ['rt-step-began', 'B', 10, 'plan'],
+      ['rt-step-ended', 'B', 20, 'timer'],
+    ]);
+
+    // stop() from a handler: the rest of the batch first, then the abort,
+    // then rt-stop, and nothing after it.
+    assert.deepStrictEqual(T.stopInHandler, [
+      ['rt-start', null, 0, null],
+      ['rt-step-began', 'A', 0, 'plan'],
+      ['rt-step-ended', 'A', 10, 'timer'],
+      ['rt-step-began', 'B', 10, 'plan'],
+      ['rt-step-ended', 'B', 20, 'timer'],
+      ['rt-step-began', 'C', 20, 'plan'],
+      ['rt-step-ended', 'C', 25, 'abort'],
+      ['rt-stop', null, null, null],
+    ]);
+    assert.strictEqual(T.stopInHandlerStatus, 'stopped');
+    // completeStep() from a handler: its end is queued behind the batch, so
+    // every step still begins before it ends and nothing repeats.
+    const k = T.completeInHandler;
+    assert.strictEqual(k.length, 8);
+    for (const id of ['A', 'V', 'P', 'Q']) {
+      const b = k.findIndex((e) => e[0] === 'rt-step-began' && e[1] === id);
+      const en = k.findIndex((e) => e[0] === 'rt-step-ended' && e[1] === id);
+      assert.ok(b >= 0 && en > b, id + ' began before it ended');
+    }
+    assert.deepStrictEqual(k.find((e) => e[0] === 'rt-step-ended' && e[1] === 'V'), ['rt-step-ended', 'V', 40, 'person']);
+
     // seek(): forward fires what it passes over, backward fires nothing, and
     // seeking forward again fires only what is new.
     assert.deepStrictEqual(T.seekForward, [
