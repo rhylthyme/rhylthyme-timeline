@@ -10,7 +10,11 @@ export type { Program } from './program';
 export interface Finding {
   code: string;
   message: string;
-  /** e.g. "step:bake", "track:oven", "resourceConstraints"; null when program-wide. */
+  /**
+   * e.g. "step:bake", "track:oven", "resourceConstraints"; for schema_*
+   * findings a path such as "tracks[0].steps[1].duration" ("program" for
+   * the root); null when program-wide.
+   */
   where: string | null;
   fix: string | null;
 }
@@ -145,6 +149,35 @@ export function analyzeSchedule(program: Program, opts?: AnalyzeOptions): Analys
 /** Markdown summaries, as the MCP tools return them. */
 export function formatValidation(result: ValidationResult): string;
 export function formatAnalysis(analysis: Analysis): string;
+
+/** One JSON Schema failure from checkJsonSchema. */
+export interface SchemaError {
+  /** The keyword that failed: "required", "type", "oneOf", "additionalProperties", ... */
+  keyword: string;
+  /** Keys and array indexes from the root to the failing value; [] is the root. */
+  path: Array<string | number>;
+  message: string;
+  fix: string;
+}
+
+/**
+ * The program checked against the bundled rhylthyme-spec schema its
+ * schemaVersion selects (0.3.x: 0.3.0-alpha, otherwise 0.2.0-alpha), with
+ * time strings read as seconds first, as the Python validator does. Each
+ * failure is a finding with code `schema_<keyword>`. validateProgram
+ * includes these in `errors`.
+ */
+export function schemaFindings(program: Program): Finding[];
+/** The bundled program schema (Draft 7 JSON) that a schemaVersion selects. */
+export function programSchema(schemaVersion?: string | null): Record<string, unknown>;
+/**
+ * Check a value against a Draft 7 schema that uses only the keywords the
+ * program schemas use (type, enum, const, required, properties,
+ * additionalProperties, items, min/maxItems, min/maxLength, pattern,
+ * minimum, maximum, exclusiveMinimum/Maximum, oneOf, anyOf, allOf, not,
+ * if/then/else, local $ref; format is ignored). [] means valid.
+ */
+export function checkJsonSchema(value: unknown, schema: Record<string, unknown> | boolean): SchemaError[];
 
 /** Schema 0.3.0-alpha `instances` / `replicates` checks on the unexpanded program. */
 export function instanceFindings(program: Program): SeverityFinding[];

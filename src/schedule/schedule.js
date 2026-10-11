@@ -9,7 +9,9 @@
 // Two entry points:
 //
 //   validateProgram(program)  -> { valid, errors[], warnings[], info[], stats }
-//       Structural + logic checks mirroring rhylthyme.validate_program
+//       The JSON Schema (rhylthyme-spec's, bundled; json-schema.js, codes
+//       schema_<keyword>), then structural + logic checks mirroring
+//       rhylthyme.validate_program
 //       (duplicate ids, dangling refs, cycles, within-track overlaps,
 //       tasks without resource constraints, choice references, bad
 //       durations, schema 0.3.0 `instances` codes, galago instrument
@@ -36,6 +38,7 @@ const TimelineRender = require("../index.js");
 const History = require("./history.js");
 const Galago = require("./galago.js");
 const Labmcp = require("./labmcp.js");
+const JsonSchema = require("./json-schema.js");
 
 const { computeStepTimings, parseSeconds, stepDurationSeconds, expandReplicates, instrumentEstimate } = TimelineRender;
 
@@ -412,12 +415,20 @@ function validateProgram(program) {
     if (f.severity === "error") err(f.code, f.message, f.where, f.fix);
     else warn(f.code, f.message, f.where, f.fix);
   });
+  // JSON Schema (rhylthyme-spec's, bundled): the authored program first,
+  // so paths point at what was written and a replicated step without a
+  // name is caught before expansion invents one; then, when that passes,
+  // the expanded program, which is where the Python validator checks it.
+  const authoredSchema = JsonSchema.schemaFindings(program);
+  const schemaErrors = (list) => list.forEach((f) => err(f.code, f.message, f.where, f.fix));
+  schemaErrors(authoredSchema);
   // Expand replicates next, as the Python validator does, so ids,
   // overlaps and timings are checked on the program that will run. An
   // expansion the expander cannot express is reported, not thrown; the
   // expander's own raises are only a backstop behind the checks above.
+  let expanded;
   try {
-    program = expandReplicates(program);
+    expanded = expandReplicates(program);
   } catch (e) {
     if (!instanceErrors) {
       err("expansion_failed", `Could not expand replicates: ${e && e.message ? e.message : e}`, "program",
@@ -425,6 +436,8 @@ function validateProgram(program) {
     }
     return { valid: false, errors, warnings, info, stats: null };
   }
+  if (!authoredSchema.length && !instanceErrors) schemaErrors(JsonSchema.schemaFindings(expanded));
+  program = expanded;
 
   // Top-level fields.
   if (!program.programId || typeof program.programId !== "string") {
@@ -1301,6 +1314,9 @@ function formatValidation(v) {
 
 module.exports = {
   validateProgram,
+  schemaFindings: JsonSchema.schemaFindings,
+  programSchema: JsonSchema.programSchema,
+  checkJsonSchema: JsonSchema.checkJsonSchema,
   instanceFindings,
   alertFindings,
   parseAlertOffset,

@@ -25,6 +25,7 @@ function program(...steps) {
   return {
     programId: "shake-plate", name: "Shake a plate", schemaVersion: "0.2.0-alpha",
     tracks: [{ trackId: "bench", name: "Bench", steps }],
+    resourceConstraints: [],
   };
 }
 const load = { stepId: "load", name: "Load", duration: { type: "fixed", seconds: 3 }, startTrigger: { type: "programStart" } };

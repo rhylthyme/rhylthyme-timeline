@@ -792,7 +792,7 @@ function alertProgram() {
       { trackId: "cook", name: "Cook", steps: [
         fixed("taste", 60, { type: "manual" }, { alerts: [{ event: "start", offsetSeconds: "30s" }] }),
         Object.assign(fixed("rest", 0, { type: "afterStep", stepId: "taste" }), {
-          duration: { type: "indefinite" },
+          duration: { type: "indefinite", defaultSeconds: 60 },
           alerts: [{ event: "end", offsetSeconds: "5m" }],
         }),
       ] },
@@ -853,14 +853,16 @@ test("unprojectable alerts warn with the contract codes; bad offsets are errors"
   assert.deepEqual(v.errors.map((e) => [e.code, e.where]), [["E_ALERT_BAD_OFFSET", "step:bake"]]);
 });
 
-test("malformed alerts are reported (the JS validator has no schema pass)", () => {
+test("malformed alerts are reported by the alert checks and by the schema", () => {
   for (const alerts of [[], "soon", [{ event: "middle" }], [{ event: "end", level: "siren" }],
     [{ event: "end", sound: "chime" }], [{ event: "start", message: "" }], [{ event: "start", message: "x".repeat(201) }]]) {
     const p = alertProgram();
     p.tracks[0].steps[0].alerts = alerts;
     const v = S.validateProgram(p);
     assert.equal(v.valid, false, JSON.stringify(alerts));
-    assert.deepEqual(v.errors.map((e) => e.code), ["bad_alert"], JSON.stringify(alerts));
+    const codes = v.errors.map((e) => e.code);
+    assert.ok(codes.includes("bad_alert"), JSON.stringify(alerts));
+    assert.deepEqual(codes.filter((c) => c !== "bad_alert" && !c.startsWith("schema_")), [], JSON.stringify(alerts));
   }
 });
 

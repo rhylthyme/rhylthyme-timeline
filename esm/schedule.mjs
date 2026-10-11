@@ -5,6 +5,9 @@ import M from "../src/schedule/index.js";
 export default M;
 export const {
   validateProgram,
+  schemaFindings,
+  programSchema,
+  checkJsonSchema,
   instanceFindings,
   alertFindings,
   parseAlertOffset,

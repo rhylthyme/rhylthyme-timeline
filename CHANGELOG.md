@@ -3,6 +3,38 @@
 All notable changes to this package are documented here. The format follows
 Keep a Changelog; versions follow SemVer.
 
+## [Unreleased]
+
+### Added
+- `validateProgram` checks the JSON Schema too (#8). The 0.2.0-alpha and
+  0.3.0-alpha program schemas from rhylthyme-spec are bundled
+  (`src/schedule/schemas/`, byte-for-byte copies) and checked by a small
+  zero-dependency Draft 7 checker (`src/schedule/json-schema.js`) for the
+  keywords they use, with Python `jsonschema`'s semantics: `oneOf` means
+  exactly one, `integer` rejects 2.5 and `"2"`, `format` is not checked,
+  siblings of `$ref` are ignored. `schemaVersion` 0.3.x selects
+  0.3.0-alpha, anything else 0.2.0-alpha. Failures are errors coded
+  `schema_<keyword>` with a `where` path and a `fix`. Time strings are
+  read as seconds first, as the Python validator does; the authored
+  program is checked, then (when that passes) the expanded one.
+- `schemaFindings(program)`, `programSchema(schemaVersion)` and
+  `checkJsonSchema(value, schema)` in `./schedule`, with types.
+- `test/parity.test.js`: the issue #8 programs and schema mutations of
+  every example program (a required key dropped, a wrong type, a float for
+  an integer, an ambiguous `oneOf`, unknown keys) must get the same
+  verdict from JS and Python.
+
+### Changed
+- Programs that break the schema are now invalid in JS as they already
+  were in Python. Most visible: a program with no `resourceConstraints`,
+  `environment` or `environmentType` (`schema_anyOf`; add
+  `"resourceConstraints": []`), an indefinite step without
+  `defaultSeconds` (`schema_oneOf`), a missing track or step `name`
+  (`schema_required`, previously a warning only), and a string or
+  fractional `maxConcurrent` (`schema_type`).
+- `browser/schedule.js` grows by about 77 KB (14 KB gzipped) for the two
+  schemas and the checker.
+
 ## [2.0.0-beta.6] - unreleased
 
 ### Added
