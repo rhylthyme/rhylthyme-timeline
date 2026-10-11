@@ -1,19 +1,55 @@
 {
   "name": "@rhylthyme/timeline",
-  "version": "2.0.0-beta.5",
+  "version": "2.0.0-beta.6",
   "description": "Timing engine, static Gantt renderer and <rhylthyme-timeline> player Web Component for Rhylthyme programs: resolve step start/end times from triggers, render an SVG timeline with dependency arrows (web and publication looks, palettes, configurable legend), play it with manual gates and indefinite steps. Zero dependencies.",
   "main": "src/index.js",
+  "module": "esm/index.mjs",
+  "types": "types/index.d.ts",
+  "typesVersions": {
+    "*": {
+      "core": [
+        "types/index.d.ts"
+      ],
+      "element": [
+        "types/element.d.ts"
+      ],
+      "schedule": [
+        "types/schedule.d.ts"
+      ]
+    }
+  },
   "bin": {
     "rhylthyme-render": "bin/render.js"
   },
   "exports": {
-    ".": "./src/index.js",
-    "./core": "./src/index.js",
-    "./element": "./src/element.js",
-    "./player": "./player/build.js"
+    ".": {
+      "types": "./types/index.d.ts",
+      "import": "./esm/index.mjs",
+      "default": "./src/index.js"
+    },
+    "./core": {
+      "types": "./types/index.d.ts",
+      "import": "./esm/index.mjs",
+      "default": "./src/index.js"
+    },
+    "./element": {
+      "types": "./types/element.d.ts",
+      "default": "./src/element.js"
+    },
+    "./schedule": {
+      "types": "./types/schedule.d.ts",
+      "import": "./esm/schedule.mjs",
+      "default": "./src/schedule/index.js"
+    },
+    "./browser/schedule.js": "./browser/schedule.js",
+    "./player": "./player/build.js",
+    "./package.json": "./package.json"
   },
   "files": [
     "src/",
+    "esm/",
+    "types/",
+    "browser/",
     "bin/",
     "player/",
     "README.md",
@@ -21,8 +57,10 @@
     "LICENSE"
   ],
   "scripts": {
+    "build": "node tools/build-esm.js && node tools/build-browser.js",
+    "prepack": "npm run build",
     "check:mirrors": "test ! -f ../tools/check_mirrors.sh || sh ../tools/check_mirrors.sh",
-    "test": "npm run check:mirrors && node --test test/*.test.js"
+    "test": "npm run check:mirrors && npm run build && node --test test/*.test.js"
   },
   "keywords": [
     "rhylthyme",

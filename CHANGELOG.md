@@ -3,7 +3,31 @@
 All notable changes to this package are documented here. The format follows
 Keep a Changelog; versions follow SemVer.
 
-## [Unreleased]
+## [2.0.0-beta.6] - unreleased
+
+### Added
+- `@rhylthyme/timeline/schedule`: the program validator and schedule
+  analyzer from the MCP server (`validateProgram`, `analyzeSchedule`,
+  `formatValidation`, `formatAnalysis`, the instance and alert checks,
+  and the `galago`, `labmcp` and `history` helpers), moved here from
+  rhylthyme-server's `mcp-api/` with their tests. Still zero dependencies.
+  `browser/schedule.js` is the same module as one classic script
+  (`window.RhylthymeSchedule`), built by `npm run build`.
+- ES module entries (`esm/index.mjs`, `esm/schedule.mjs`) with every
+  function as a named export, wired through `exports` conditions.
+- Hand-written TypeScript types (`types/`): `Program` and its parts, the
+  engine and renderer, `./schedule`, and the element (tag map, typed
+  `rt-*` events). `tools/check-types.sh` compiles real use against the
+  packed tarball in CI.
+- `test/parity.test.js`: the JS and Python validators must agree on every
+  program in rhylthyme-examples and on each invalid file's code.
+
+### Fixed
+- `import '@rhylthyme/timeline/element'` in a bundler no longer throws
+  "load src/index.js (the engine) first": the element requires the engine
+  when it runs as a module instead of reading `window.Rhylthyme`.
+
+## [2.0.0-beta.5] - 2026-10-11
 
 ### Added
 - `renderTimelineSvg` looks. `style: 'web'` follows the interactive
