@@ -189,6 +189,14 @@ export const labmcp: {
   /** A copy of the program with planned durations for LabMCP steps that have none. */
   withEstimates<P extends Program>(program: P): P;
   stepEstimate(step: Step): { seconds: number; source: string } | null;
+  /** true when the step's instrument.toolType names a LabMCP server (labmcp-…). */
+  isLabmcpStep(step: unknown): boolean;
+  /**
+   * [code, problem] pairs for one call on a LabMCP server, checked against the
+   * server's tool schema and default limits; one instrument_catalog_not_loaded
+   * pair while no catalogue is registered.
+   */
+  callProblems(pkg: string, command: string, params: unknown): Array<[string, string]>;
   /**
    * Use this catalogue for LabMCP checks. The Node entry registers it; in a
    * browser build, import '@rhylthyme/timeline/schedule/labmcp-catalog'.

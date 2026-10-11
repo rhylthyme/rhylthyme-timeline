@@ -1,7 +1,7 @@
 // The LabMCP catalogue: registered by the Node entry, loaded on demand in a
 // browser build through its own subpath.
 import catalog from '@rhylthyme/timeline/schedule/labmcp-catalog';
-import { labmcp, validateProgram, type LabmcpCatalog } from '@rhylthyme/timeline/schedule';
+import { labmcp, validateProgram, type LabmcpCatalog, type Program } from '@rhylthyme/timeline/schedule';
 
 const loaded: boolean = labmcp.hasCatalog();
 const same: LabmcpCatalog = labmcp.registerCatalog(catalog);
@@ -13,4 +13,14 @@ const lazy: Promise<boolean> = import('@rhylthyme/timeline/schedule/labmcp-catal
 labmcp.CATALOG = null;
 // @ts-expect-error registerCatalog takes the catalogue
 labmcp.registerCatalog('labmcp-catalog.json');
-export const labmcpOut = [loaded, same, version, lazy];
+// The README's lazy-load example
+declare const program: Program;
+export async function validateLazily() {
+  if (program.tracks!.some((t) => t.steps!.some(labmcp.isLabmcpStep)) && !labmcp.hasCatalog()) {
+    await import('@rhylthyme/timeline/schedule/labmcp-catalog');
+  }
+  return validateProgram(program);
+}
+const isStep: boolean = labmcp.isLabmcpStep({ instrument: { toolType: 'labmcp-pump' } });
+const problems: Array<[string, string]> = labmcp.callProblems('labmcp-pump', 'dose', { volume: 1 });
+export const labmcpOut = [loaded, same, version, lazy, isStep, problems];
