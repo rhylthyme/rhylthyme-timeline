@@ -17,3 +17,44 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
       - run: npm test
+
+  types:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: sh tools/check-types.sh
+
+  # The JS validator (src/schedule) against the Python one (the rhylthyme
+  # package, from its main branch) on every program in rhylthyme-examples.
+  # The checkouts sit side by side the way the monorepo lays them out.
+  parity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: rhylthyme-timeline
+      - uses: actions/checkout@v4
+        with:
+          repository: rhylthyme/rhylthyme
+          path: rhylthyme
+      - uses: actions/checkout@v4
+        with:
+          repository: rhylthyme/rhylthyme-spec
+          path: rhylthyme-spec
+      - uses: actions/checkout@v4
+        with:
+          repository: rhylthyme/rhylthyme-examples
+          path: rhylthyme-examples
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -e ./rhylthyme-spec -e ./rhylthyme
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Parity (fails instead of skipping when Python is missing)
+        working-directory: rhylthyme-timeline
+        run: PYTHON=python RHYLTHYME_PARITY_REQUIRED=1 node --test test/parity.test.js

@@ -27,8 +27,8 @@ happened.
 ![rhylthyme-timeline element paused at 150 minutes: the roast is active and hatched, the potato peel waits in red for the cook to start it, Done and Start actions below](docs/element-player.png)
 
 ```html
-<script src="https://cdn.jsdelivr.net/npm/@rhylthyme/timeline@2.0.0-beta.5/src/index.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@rhylthyme/timeline@2.0.0-beta.5/src/element.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@rhylthyme/timeline@2.0.0-beta.6/src/index.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@rhylthyme/timeline@2.0.0-beta.6/src/element.js"></script>
 
 <rhylthyme-timeline src="thanksgiving.json" mode="player" speed="1" time-format="minutes"></rhylthyme-timeline>
 <script>
@@ -300,7 +300,7 @@ the hosted validator and analyzer from a backend), see
 In a page, without a build step:
 
 ```html
-<script src="https://cdn.jsdelivr.net/npm/@rhylthyme/timeline@2.0.0-beta.5/src/index.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@rhylthyme/timeline@2.0.0-beta.6/src/index.js"></script>
 <div id="timeline"></div>
 <script>
   Rhylthyme.renderTimeline(document.getElementById('timeline'), program);
@@ -308,11 +308,52 @@ In a page, without a build step:
 ```
 
 ```js
-// Node / bundlers
+// Node / bundlers, CommonJS
 const Rhylthyme = require('@rhylthyme/timeline');
 const timings = Rhylthyme.computeStepTimings(program);
 const svg = Rhylthyme.renderTimelineSvg(program);
+
+// ES modules: every function is a named export too
+import { computeStepTimings, renderTimelineSvg } from '@rhylthyme/timeline';
 ```
+
+The element registers itself on import, in a bundler as well as from a
+script tag: `import '@rhylthyme/timeline/element'`.
+
+TypeScript types ship with the package (`types/`): the `Program` shape,
+the engine and renderer, the element (`HTMLElementTagNameMap` and typed
+`rt-*` events) and `./schedule`.
+
+### Validate and analyze: `@rhylthyme/timeline/schedule`
+
+The validator and analyzer that `mcp.rhylthyme.com` runs, as a library:
+the same findings (each with a `fix` hint), critical path, resource
+conflicts and wall-clock plan, with no server and no dependencies.
+
+```js
+import { validateProgram, analyzeSchedule } from '@rhylthyme/timeline/schedule';
+
+const v = validateProgram(program);   // { valid, errors, warnings, info, stats }
+if (!v.valid) console.log(v.errors.map((e) => `${e.code}: ${e.message} (fix: ${e.fix})`));
+
+const a = analyzeSchedule(program, { finishAt: '2026-11-26T18:00:00-05:00' });
+// { makespanSeconds, criticalPath, resourceConflicts, steps: [{ stepId, startAt, ... }], ... }
+```
+
+In a page without a build step, `browser/schedule.js` is the same module
+as one script (about 470 KB, most of it the LabMCP instrument catalogue)
+that sets `window.RhylthymeSchedule`:
+
+```html
+<script src="https://cdn.jsdelivr.net/npm/@rhylthyme/timeline@2.0.0-beta.6/browser/schedule.js"></script>
+<script>
+  const { valid, errors } = RhylthymeSchedule.validateProgram(program);
+</script>
+```
+
+It agrees with the Python validator in the `rhylthyme` package:
+`test/parity.test.js` gives every program in rhylthyme-examples to both
+and requires the same verdict (CI runs it here and in `rhylthyme`).
 
 ## API
 

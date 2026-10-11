@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "noEmit": true,
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "target": "es2020",
+    "types": [],
+    "lib": [
+      "es2020"
+    ],
+    "skipLibCheck": false
+  },
+  "files": [
+    "usage.ts",
+    "usage-cjs.cts",
+    "usage-element.ts"
+  ]
+}
