@@ -4,6 +4,32 @@
 <rhylthyme-timeline id="el" mode="player" speed="1"></rhylthyme-timeline>
 <pre id="results"></pre>
 <script src="../src/index.js"></script>
+<script>
+// Properties set before element.js defines the element (a deferred or lazy
+// script): they land as own properties of plain elements and must still go
+// through the element's setters once it upgrades.
+window.PRE_UPGRADE = (function () {
+  const make = (attrs) => {
+    const e = document.createElement('rhylthyme-timeline');
+    Object.keys(attrs).forEach((k) => e.setAttribute(k, attrs[k]));
+    return e;
+  };
+  // Attached: upgrades when the element is defined. Attribute first, then
+  // property: the property's labels must be the ones shown and reported.
+  const attached = make({ labels: '{"stop":"AttrStop"}', mode: 'player' });
+  attached.labels = { stop: 'PropStop', resume: (x) => 'Weiter' + (x === undefined ? '' : x) };
+  attached.mode = 'static';
+  attached.style.display = 'none';
+  document.documentElement.appendChild(attached);
+  // Detached: upgraded by hand with customElements.upgrade.
+  const detached = make({ labels: '{"stop":"AttrStop"}' });
+  detached.labels = { stop: 'PropStop' };
+  // Property only, no attribute.
+  const propOnly = make({});
+  propOnly.labels = { start: 'Los' };
+  return { attached, detached, propOnly };
+})();
+</script>
 <script src="../src/element.js"></script>
 <script src="../examples/programs.js"></script>
 <script id="cookies">window.RHYLTHYME_COOKIES = {
@@ -749,6 +775,99 @@
     l7.locale = null;
     out.labels.loc.cleared = [l7.hasAttribute('locale'), l7.formatTime(0)];
     l7.remove();
+
+    // The labels attribute: JSON strings, declared before the element
+    // upgrades, then changed, broken, removed and mixed with the property.
+    const la = out.labels.attr = {};
+    const warnings = [];
+    const realWarn = console.warn;
+    console.warn = (...args) => { warnings.push(args.join(' ')); };
+    try {
+      const host = document.createElement('div');
+      document.body.appendChild(host);
+      host.innerHTML = '<rhylthyme-timeline mode="player" locale="de" labels=\'{"stop":"Arrêter","startStep":"Démarrer : {0}","speedOption":"{1} fois","pause":7}\'></rhylthyme-timeline>';
+      const a1 = host.firstElementChild;
+      la.upgraded = a1.shadowRoot !== null;
+      la.declarativeLocale = [a1.locale, a1.formatTime(125)];
+      let am = 0;
+      a1.setClock(() => am);
+      a1.program = JSON.parse(JSON.stringify(window.RHYLTHYME_EXAMPLES.thanksgiving_one_oven));
+      la.declStop = buttonInfo(a1, '.controls button[data-act="stop"]');
+      la.declSpeed = a1.shadowRoot.querySelector('select[data-set="speed"] option').textContent;
+      la.declGetter = [a1.labels.stop, a1.labels.startStep, a1.labels.pause, a1.labels.start];
+      a1.start();
+      for (let i = 0; i < 400 && !a1.shadowRoot.querySelector('button[data-step-start]'); i++) { am += 60000; a1.tick(); }
+      la.declStepStart = buttonInfo(a1, 'button[data-step-start]');
+      a1.pause();
+      la.warningsAfterDecl = warnings.length;
+      // Changing the attribute replaces the table.
+      a1.setAttribute('labels', '{"resume":"Reprendre"}');
+      la.changedResume = buttonInfo(a1, '.controls button[data-act="start"]');
+      la.changedStop = buttonInfo(a1, '.controls button[data-act="stop"]');
+      // Invalid JSON (and JSON that is not an object): one warning each,
+      // the labels in effect stay.
+      a1.setAttribute('labels', '{"resume": Reprendre');
+      la.invalidWarnings = warnings.length;
+      la.invalidKept = buttonInfo(a1, '.controls button[data-act="start"]');
+      a1.setAttribute('labels', '["stop"]');
+      la.arrayWarnings = warnings.length;
+      la.arrayKept = a1.labels.resume;
+      // The property set after the attribute wins, and the getter says so.
+      a1.labels = { resume: (x) => 'Weiter' + (x === undefined ? '' : x) };
+      la.propertyWins = buttonInfo(a1, '.controls button[data-act="start"]');
+      la.propertyAttrUntouched = a1.getAttribute('labels');
+      // Removing the attribute leaves labels the property supplied.
+      a1.removeAttribute('labels');
+      la.removeKeepsProperty = buttonInfo(a1, '.controls button[data-act="start"]');
+      // The attribute set after the property wins.
+      a1.setAttribute('labels', '{"resume":"Continuer"}');
+      la.attributeWins = [buttonInfo(a1, '.controls button[data-act="start"]'), a1.labels.resume];
+      // Removing it now clears what it supplied: back to English.
+      a1.removeAttribute('labels');
+      la.removed = [buttonInfo(a1, '.controls button[data-act="start"]'), a1.labels.resume];
+      // An empty attribute is no labels, without a warning.
+      a1.setAttribute('labels', '{"stop":"Arrêter"}');
+      a1.setAttribute('labels', '');
+      la.empty = [buttonInfo(a1, '.controls button[data-act="stop"]'), warnings.length];
+      // Writing the attribute again with the value it already has, after the
+      // property took over, still takes the table back: last setter wins.
+      a1.setAttribute('labels', '{"stop":"AttrStop"}');
+      a1.labels = { stop: 'PropStop' };
+      a1.setAttribute('labels', '{"stop":"AttrStop"}');
+      la.sameValueAfterProperty = [a1.labels.stop, buttonInfo(a1, '.controls button[data-act="stop"]')];
+      a1.removeAttribute('labels');
+      la.sameValueThenRemoved = a1.labels.stop;
+      // An invalid attribute before upgrade: English, one warning.
+      host.innerHTML = '<rhylthyme-timeline labels="not json"></rhylthyme-timeline>';
+      la.invalidDecl = [host.firstElementChild.labels.stop, warnings.length];
+      host.remove();
+    } finally {
+      console.warn = realWarn;
+    }
+    la.warnings = warnings;
+
+    // Properties set before the element was defined (see the script before
+    // element.js): the class's accessors are not hidden, and the property
+    // wins over an attribute that was also there at upgrade.
+    const pu = out.labels.preUpgrade = {};
+    const P = window.PRE_UPGRADE;
+    const prog = () => JSON.parse(JSON.stringify(window.RHYLTHYME_EXAMPLES.thanksgiving_one_oven));
+    pu.attachedOwn = [Object.prototype.hasOwnProperty.call(P.attached, 'labels'), Object.prototype.hasOwnProperty.call(P.attached, 'mode')];
+    pu.attachedMode = [P.attached.mode, P.attached.getAttribute('mode')];
+    P.attached.mode = 'player';
+    P.attached.program = prog();
+    pu.attachedLabels = [P.attached.labels.stop, P.attached.labels.start, buttonInfo(P.attached, '.controls button[data-act="stop"]')];
+    pu.attachedAttrKept = P.attached.getAttribute('labels');
+    // The attribute set again afterwards wins as usual.
+    P.attached.setAttribute('labels', '{"stop":"AttrStop"}');
+    pu.attachedAttrAfter = [P.attached.labels.stop, buttonInfo(P.attached, '.controls button[data-act="stop"]')];
+    P.attached.remove();
+    pu.detachedBefore = P.detached.shadowRoot === null;
+    customElements.upgrade(P.detached);
+    pu.detachedOwn = Object.prototype.hasOwnProperty.call(P.detached, 'labels');
+    pu.detachedLabels = [P.detached.labels.stop, P.detached._labels.stop];
+    customElements.upgrade(P.propOnly);
+    pu.propOnly = [Object.prototype.hasOwnProperty.call(P.propOnly, 'labels'), P.propOnly.labels.start, P.propOnly.labels.stop];
 
     // (d) programVersion parity: the same three programs are hashed in Node
     // with tools/hash-program.js. Base64 so multi-byte characters survive

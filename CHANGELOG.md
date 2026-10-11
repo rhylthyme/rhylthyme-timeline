@@ -6,6 +6,16 @@ Keep a Changelog; versions follow SemVer.
 ## [2.0.0-beta.7] - unreleased
 
 ### Added
+- `<rhylthyme-timeline labels='{"stop":"Arrêter","startStep":"Démarrer : {0}"}'>`:
+  the player's translations can be set from HTML as a JSON object of
+  strings (`{0}`, `{1}`… placeholders included), observed like the other
+  attributes. As with `data-factors` / `factors`, whichever of the
+  attribute and the `labels` property was set last supplies the whole
+  table, and the getter returns the table in effect. A value that is not
+  a JSON object is ignored with one `console.warn`, keeping the labels in
+  effect; removing the attribute clears the labels it supplied. Writing
+  the attribute again with the value it already has counts as setting it
+  (the same now holds for `data-factors`).
 ### Changed
 - `@rhylthyme/timeline/schedule` no longer bundles the 350 KB LabMCP
   instrument catalogue for browsers (#5). The Node entry (`require` and
@@ -69,6 +79,14 @@ Keep a Changelog; versions follow SemVer.
   `schema_oneOf` one.
 
 ### Fixed
+- Properties set on a `<rhylthyme-timeline>` before `element.js` defined
+  it (`program`, `labels`, `factors`, `predictions`, `mode`, `speed`,
+  `timeFormat`, `locale`, `startAt`) are now passed through the element's
+  setters when it upgrades. They used to stay as plain own properties
+  that hid the element's accessors, so `el.labels` (for one) returned the
+  raw object while the player showed something else. Where such a
+  property and its attribute (`src`, `labels`, `data-factors`,
+  `data-predictions`) were both present at upgrade, the property wins.
 - `analyzeSchedule(...).steps` (and `itinerary`) link the steps of a
   replicated track (`replicates` or legacy `batch_size` on the track) to
   their authored step through `instanceOf` / `instanceIndex`; they were

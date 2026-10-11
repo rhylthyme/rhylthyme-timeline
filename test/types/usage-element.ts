@@ -49,6 +49,10 @@ if (el) {
   };
   el.locale = 'fr';
   el.locale = null;
+  // The labels attribute takes the string-only form of the same table.
+  const frText: Partial<Record<keyof RhylthymeTimelineLabels, string>> = { stop: 'Arrêter', startStep: 'Démarrer : {0}' };
+  el.labels = frText;
+  el.setAttribute('labels', JSON.stringify(frText));
   const clockText: string = el.formatTime(90);
   void clockText;
   // @ts-expect-error chartSubtitle's first argument is a count
