@@ -3,7 +3,7 @@
 All notable changes to this package are documented here. The format follows
 Keep a Changelog; versions follow SemVer.
 
-## [Unreleased]
+## [2.0.0-beta.7] - unreleased
 
 ### Added
 ### Changed
@@ -40,7 +40,7 @@ Keep a Changelog; versions follow SemVer.
 - A `noProgram` function override receives `'program'` and `'src'`, not
   internal placeholders; templates still draw `{0}`/`{1}` as `<code>`.
 
-## [2.0.0-beta.6] - unreleased
+## [2.0.0-beta.6] - 2026-10-11
 
 ### Added
 - `@rhylthyme/timeline/schedule`: the program validator and schedule

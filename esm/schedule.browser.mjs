@@ -5,6 +5,9 @@ import M from "../src/schedule/browser.js";
 export default M;
 export const {
   validateProgram,
+  schemaFindings,
+  programSchema,
+  checkJsonSchema,
   instanceFindings,
   alertFindings,
   parseAlertOffset,
@@ -12,6 +15,7 @@ export const {
   alertDefaultMessage,
   expandReplicates,
   analyzeSchedule,
+  itinerary,
   withDurations,
   predictDurations,
   predictedSeconds,

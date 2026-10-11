@@ -27,8 +27,8 @@ happened.
 ![rhylthyme-timeline element paused at 150 minutes: the roast is active and hatched, the potato peel waits in red for the cook to start it, Done and Start actions below](docs/element-player.png)
 
 ```html
-<script src="https://cdn.jsdelivr.net/npm/@rhylthyme/timeline@2.0.0-beta.6/src/index.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@rhylthyme/timeline@2.0.0-beta.6/src/element.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@rhylthyme/timeline@2.0.0-beta.7/src/index.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@rhylthyme/timeline@2.0.0-beta.7/src/element.js"></script>
 
 <rhylthyme-timeline src="thanksgiving.json" mode="player" speed="1" time-format="minutes"></rhylthyme-timeline>
 <script>
@@ -406,7 +406,7 @@ the hosted validator and analyzer from a backend), see
 In a page, without a build step:
 
 ```html
-<script src="https://cdn.jsdelivr.net/npm/@rhylthyme/timeline@2.0.0-beta.6/src/index.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@rhylthyme/timeline@2.0.0-beta.7/src/index.js"></script>
 <div id="timeline"></div>
 <script>
   Rhylthyme.renderTimeline(document.getElementById('timeline'), program);
@@ -498,9 +498,9 @@ as one script that sets `window.RhylthymeSchedule`, and
 `browser/labmcp-catalog.js` adds the catalogue (before or after it):
 
 ```html
-<script src="https://cdn.jsdelivr.net/npm/@rhylthyme/timeline@2.0.0-beta.6/browser/schedule.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@rhylthyme/timeline@2.0.0-beta.7/browser/schedule.js"></script>
 <!-- only for programs with LabMCP instrument steps: -->
-<script src="https://cdn.jsdelivr.net/npm/@rhylthyme/timeline@2.0.0-beta.6/browser/labmcp-catalog.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@rhylthyme/timeline@2.0.0-beta.7/browser/labmcp-catalog.js"></script>
 <script>
   const { valid, errors } = RhylthymeSchedule.validateProgram(program);
 </script>
