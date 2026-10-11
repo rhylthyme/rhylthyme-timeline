@@ -17,7 +17,10 @@ Keep a Changelog; versions follow SemVer.
   catalogued, every catalogued code is in the source, each example makes
   `validateProgram` report its code with its severity, the codes reported
   on test fixtures, rhylthyme-examples and the parity mutations are all
-  catalogued, and (with Python) the Python column is right. The parity
+  catalogued, also with an instances error added to each (the path where
+  schema findings do not quiet the logic checks), every finding helper call
+  passes its code as a literal the scan reads, and (with Python) the Python
+  column is right, `--strict` included (`python.strict`). The parity
   test's program builders moved to `test/helpers/parity-programs.js` so
   both tests share them.
 - `itinerary(program, { startAt?, finishAt?, actual?, now? })` in the core

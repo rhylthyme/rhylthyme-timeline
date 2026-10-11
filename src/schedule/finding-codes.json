@@ -3,7 +3,7 @@
   "version": 1,
   "completion": "Each example's program is a fragment: its top-level keys replace those of baseProgram (a shallow merge), keys listed in omit are deleted, and the result is passed to validateProgram. With whole: true the program is passed as it is. bigint names a path whose number is passed as a BigInt. entry: \"browser\" means the browser entry without the LabMCP catalogue.",
   "baseProgram": {"programId":"example","name":"Example","schemaVersion":"0.2.0-alpha","tracks":[{"trackId":"main","name":"Main","steps":[{"stepId":"prep","name":"Prep","duration":{"type":"fixed","seconds":300},"startTrigger":{"type":"programStart"}},{"stepId":"cook","name":"Cook","duration":{"type":"fixed","seconds":600},"startTrigger":{"type":"afterStep","stepId":"prep"}}]}],"resourceConstraints":[]},
-  "python": "python.cli is the code `rhylthyme validate --json` (validate_program_file_structured, the program as written) reports for the example, python.library the code rhylthyme.validate_program_structured (replicates expanded first) reports; null when it reports nothing for it. python.severity is given when Python's severity differs; python.requires names the Python driver packages the examples need. logic_error, the library's code for a check it has no code for, is always an error.",
+  "python": "python.cli is the code `rhylthyme validate --json` (validate_program_file_structured, the program as written) reports for the example, python.library the code rhylthyme.validate_program_structured (replicates expanded first) reports; null when it reports nothing for it. python.strict, when present, is the code `rhylthyme validate --strict --json` (validate_program_file_structured with strict=True) reports, always as an error; without it --strict reports the same as python.cli. python.severity is given when Python's severity differs; python.requires names the Python driver packages the examples need. logic_error, the library's code for a check it has no code for, is always an error.",
   "areas": {
     "schema": {
       "title": "Schema",
@@ -451,7 +451,7 @@
       },
       "schemaKeyword": "false",
       "reachable": false,
-      "unreachableBecause": "No bundled program schema (0.2.0-alpha, 0.3.0-alpha) uses `false (a boolean `false` subschema)` where a failure is reported, so validateProgram cannot emit this code today. The checker supports it so that a schema update that starts using it keeps working; test/finding-codes.test.js fails when that happens, asking for an example here."
+      "unreachableBecause": "No bundled program schema (0.2.0-alpha, 0.3.0-alpha) uses a `false` subschema (a boolean schema) where a failure is reported, so validateProgram cannot emit this code today. The checker supports it so that a schema update that starts using it keeps working; test/finding-codes.test.js fails when that happens, asking for an example here."
     },
     "program_id_format": {
       "area": "structure",
@@ -984,15 +984,19 @@
         "error"
       ],
       "summary": "A resource constraint's maxConcurrent is not an integer >= 1.",
-      "explanation": "Meant for a maxConcurrent below 1 or not a number.",
-      "examples": [],
+      "explanation": "The schema reports a bad maxConcurrent itself (schema_minimum, schema_type, schema_required), and this check stays quiet where it has. A program with an instances or replicates error (an E_* code) is checked against the schema as written, and those schema findings do not quiet the checks that follow, so this code is reported next to the schema's.",
+      "examples": [
+        {
+          "severity": "error",
+          "program": {"schemaVersion":"0.3.0-alpha","tracks":[{"trackId":"main","name":"Main","steps":[{"stepId":"mix","name":"Mix","duration":{"type":"fixed","seconds":300},"startTrigger":{"type":"programStart"}},{"stepId":"cool","name":"Cool","duration":{"type":"fixed","seconds":300},"startTrigger":{"type":"afterStep","stepId":"mix","instances":"each"}}]}],"resourceConstraints":[{"task":"oven","maxConcurrent":0}]},
+          "note": "Also emits E_INSTANCES_ON_SINGLE, schema_minimum and unused_constraint."
+        }
+      ],
       "fix": "Set maxConcurrent to a whole number of at least 1.",
       "python": {
         "cli": null,
         "library": null
-      },
-      "reachable": false,
-      "unreachableBecause": "The schema requires maxConcurrent to be an integer >= 1 and reports it (schema_required, schema_type, schema_minimum); this check stays quiet wherever the schema has spoken. Dead code in validateProgram."
+      }
     },
     "task_not_constrained": {
       "area": "resources",
@@ -1016,7 +1020,8 @@
       "python": {
         "cli": null,
         "library": null,
-        "note": "Python checks it only with --strict (strict=True), as an error, whatever the program names."
+        "strict": "task_not_constrained",
+        "note": "That includes a program that names an environment or actors, where validateProgram reports a warning. The library (validate_program_structured) has no strict mode."
       }
     },
     "unused_constraint": {

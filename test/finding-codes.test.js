@@ -13,7 +13,15 @@
 //   corpus               every code validateProgram reports on the programs
 //                        in test/fixtures, rhylthyme-examples (programs/,
 //                        invalid/, gold/) and the parity test's mutations is
-//                        catalogued, with a declared severity.
+//                        catalogued, with a declared severity; and again with
+//                        an instances error added to each program and each
+//                        example, the path on which the schema's findings do
+//                        not quiet the checks that follow them.
+//
+// Every call to a finding helper (err, warn, note, shapeErr, push, add: any
+// const arrow function in src/schedule/*.js with a `code` parameter) must
+// pass its code as a string literal, or forward f.code, so the source scan
+// cannot miss a code built at run time.
 //
 // And when Python with `rhylthyme` is available, each code's python field
 // is checked against what `rhylthyme validate --json` and
@@ -39,8 +47,13 @@ const BUCKET = { error: 'errors', warning: 'warnings', info: 'info' };
 const REQUIRED = !!process.env.RHYLTHYME_PARITY_REQUIRED;
 
 // The browser entry, with no LabMCP catalogue registered (entry: "browser").
+// Built here when missing, so `node --test` works on a fresh checkout.
 function browserSchedule() {
   const file = path.join(ROOT, 'browser', 'schedule.js');
+  if (!fs.existsSync(file)) {
+    const r = spawnSync(process.execPath, [path.join(ROOT, 'tools', 'build-browser.js')], { encoding: 'utf8' });
+    assert.equal(r.status, 0, `tools/build-browser.js failed: ${r.stderr}`);
+  }
   assert.ok(fs.existsSync(file), 'run npm run build first');
   const sandbox = {};
   sandbox.self = sandbox;
@@ -99,6 +112,61 @@ function sourceCodes() {
   return { found, hits };
 }
 
+// The code argument of every call to a finding helper: a const arrow
+// function with a `code` parameter. Returns [{ file, line, helper, arg }].
+function skipString(text, i) {
+  const q = text[i];
+  for (let j = i + 1; j < text.length; j++) {
+    if (text[j] === '\\') { j++; continue; }
+    if (q === '`' && text[j] === '$' && text[j + 1] === '{') { j = skipExpr(text, j + 2, '}'); continue; }
+    if (text[j] === q) return j;
+  }
+  throw new Error(`unterminated string at ${i}`);
+}
+// From i, the index of the first top-level `stop` character.
+function skipExpr(text, i, stop) {
+  let depth = 0;
+  for (let j = i; j < text.length; j++) {
+    const c = text[j];
+    if (c === '"' || c === "'" || c === '`') { j = skipString(text, j); continue; }
+    if (depth === 0 && stop.includes(c)) return j;
+    if ('([{'.includes(c)) depth++;
+    else if (')]}'.includes(c)) depth--;
+  }
+  throw new Error(`no ${stop} after ${i}`);
+}
+function helperCalls(text, file = 'source') {
+  const helpers = {};
+  for (const m of text.matchAll(/\bconst (\w+) = \(([^)]*)\) =>/g)) {
+    const at = m[2].split(',').map((p) => p.trim()).indexOf('code');
+    if (at >= 0) helpers[m[1]] = at;
+  }
+  const calls = [];
+  for (const [name, at] of Object.entries(helpers)) {
+    for (const m of text.matchAll(new RegExp(`(?<![.\\w])${name}\\(`, 'g'))) {
+      let i = m.index + m[0].length;
+      let arg;
+      for (let n = 0; n <= at; n++) {
+        const end = skipExpr(text, i, ',)');
+        arg = text.slice(i, end).trim();
+        if (text[end] === ')' && n < at) { arg = undefined; break; }
+        i = end + 1;
+      }
+      const lineStart = text.lastIndexOf('\n', m.index) + 1;
+      const line = text.slice(lineStart, text.indexOf('\n', m.index) < 0 ? undefined : text.indexOf('\n', m.index));
+      calls.push({ file, line: text.slice(0, m.index).split('\n').length, helper: name, arg, source: line.trim() });
+    }
+  }
+  return { helpers, calls };
+}
+// A code argument the scan can read: a literal, f.code (a finding whose
+// producer is scanned), or `code` inside another helper's definition.
+function readableCode(call) {
+  if (call.arg === undefined) return false;
+  if (/^"[A-Za-z_]+"$/.test(call.arg) || call.arg === 'f.code') return true;
+  return call.arg === 'code' && /\bconst \w+ = \(([^)]*\bcode\b[^)]*)\) =>/.test(call.source);
+}
+
 // The keywords json-schema.js reports findings for (schema_<keyword>).
 function reportedKeywords() {
   const text = read('json-schema.js');
@@ -137,11 +205,23 @@ test('the catalogue is well formed', () => {
   assert.deepEqual(areas, ['schema', 'structure', 'timing', 'resources', 'instances', 'alerts', 'instruments']);
   assert.equal(S.validateProgram(findingCodes.baseProgram).valid, true);
   assert.deepEqual(reported(S.validateProgram(findingCodes.baseProgram)), [], 'the base program has no findings at all');
+  // Prose is rendered as Markdown: code spans pair up and do not start or
+  // end with a space (a sign of a backtick nested in a span).
+  const prose = (v, at) => {
+    if (typeof v === 'string') {
+      assert.equal((v.match(/`/g) || []).length % 2, 0, `${at}: unpaired backtick`);
+      for (const m of v.matchAll(/`([^`]*)`/g)) assert.ok(!/^\s|\s$/.test(m[1]), `${at}: code span \`${m[1]}\``);
+    } else if (v && typeof v === 'object') {
+      for (const [k, x] of Object.entries(v)) if (k !== 'program' && k !== 'baseProgram') prose(x, `${at}.${k}`);
+    }
+  };
+  prose(findingCodes, 'findingCodes');
   for (const [code, e] of Object.entries(CODES)) {
     assert.ok(areas.includes(e.area), `${code}: area ${e.area}`);
     assert.ok(Array.isArray(e.severity) && e.severity.length && e.severity.every((s) => SEVERITIES.includes(s)), `${code}: severity`);
     for (const k of ['summary', 'explanation', 'fix']) assert.ok(typeof e[k] === 'string' && e[k].length > 10, `${code}: ${k}`);
     assert.ok(e.python && 'cli' in e.python && 'library' in e.python, `${code}: python.cli and python.library`);
+    if ('strict' in e.python) assert.ok(typeof e.python.strict === 'string' && e.python.strict !== e.python.cli, `${code}: python.strict is a code other than python.cli`);
     if (code.startsWith('schema_')) assert.equal(e.schemaKeyword, code.slice('schema_'.length), `${code}: schemaKeyword`);
     if (e.reachable === false) {
       assert.ok(e.unreachableBecause && e.unreachableBecause.length > 20, `${code}: unreachableBecause`);
@@ -166,6 +246,28 @@ test('source -> catalogue: every code in src/schedule is catalogued', () => {
   assert.ok(kws.size > 15, [...kws].join(' '));
   const missingKw = [...kws].filter((k) => !CODES[`schema_${k}`]);
   assert.deepEqual(missingKw, [], 'add schema_<keyword> entries for these');
+});
+
+test('every finding helper call passes its code as a literal the scan reads', () => {
+  const all = SOURCES.flatMap((f) => {
+    const { helpers, calls } = helperCalls(read(f), f);
+    return calls.map((c) => Object.assign(c, { helpers }));
+  });
+  const names = new Set(all.map((c) => c.helper));
+  for (const h of ['err', 'warn', 'note', 'shapeErr', 'push', 'add']) assert.ok(names.has(h), `no calls to ${h} found: update helperCalls`);
+  assert.ok(all.length > 50, `${all.length} helper calls`);
+  const unreadable = all.filter((c) => !readableCode(c)).map((c) => `${c.file}:${c.line} ${c.helper}(${c.arg})`);
+  assert.deepEqual(unreadable, [], 'pass the code as a string literal so the source scan sees it');
+  // The guard itself catches a code built at run time.
+  const bad = helperCalls([
+    'const err = (code, message) => 1;',
+    'const warn = (code, message) => 1;',
+    'if (program.title === "x") err(program.title.length > 0 ? "brand_new_code" : "other_new_code", "new");',
+    'const lvl = "warning_level_code"; if (program.title === "y") warn(lvl, `new ${f(1, 2)}`);',
+    'err("fine_code", "ok");',
+  ].join('\n'));
+  assert.deepEqual(bad.calls.filter((c) => !readableCode(c)).map((c) => c.arg),
+    ['program.title.length > 0 ? "brand_new_code" : "other_new_code"', 'lvl']);
 });
 
 test('catalogue -> source: every catalogued code is one the source can emit', () => {
@@ -252,6 +354,45 @@ test('every code validateProgram reports on the program corpus is catalogued', (
   }
 });
 
+// A copy of a program with one more track whose step has an instances
+// error (E_INSTANCES_ON_SINGLE). With an instances error validateProgram
+// checks the schema on the program as written, and those findings do not
+// quiet the checks that follow, so codes that are silent elsewhere speak.
+function withInstanceError(program) {
+  if (!program || typeof program !== 'object' || Array.isArray(program) || !Array.isArray(program.tracks)) return null;
+  const copy = JSON.parse(JSON.stringify(program));
+  copy.tracks.push({ trackId: 'zz-instances', name: 'Instances', steps: [
+    { stepId: 'zz-mix', name: 'Mix', duration: { type: 'fixed', seconds: 60 }, startTrigger: { type: 'programStart' } },
+    { stepId: 'zz-cool', name: 'Cool', duration: { type: 'fixed', seconds: 60 }, startTrigger: { type: 'afterStep', stepId: 'zz-mix', instances: 'each' } },
+  ] });
+  return copy;
+}
+
+test('with an instances error added, every code reported is still catalogued and reachable', (t) => {
+  const programs = {};
+  for (const { example, key } of examples()) {
+    if (example.bigint || example.entry === 'browser') continue;
+    programs[`example ${key}`] = complete(example);
+  }
+  Object.assign(programs, corpus().programs);
+  let checked = 0;
+  for (const [key, program] of Object.entries(programs)) {
+    const p = withInstanceError(program);
+    if (!p) continue;
+    const got = reported(S.validateProgram(p));
+    // The added track's error, unless the program's own shape stops the checks first.
+    if (!got.some((f) => f.code === 'E_INSTANCES_ON_SINGLE')) continue;
+    for (const f of got) {
+      assert.ok(CODES[f.code], `${key} + instances error: ${f.code} is not catalogued`);
+      assert.ok(CODES[f.code].severity.includes(f.severity), `${key} + instances error: ${f.code} reported as ${f.severity}, catalogued as ${CODES[f.code].severity}`);
+      assert.notEqual(CODES[f.code].reachable, false, `${key} + instances error: ${f.code} is catalogued as unreachable`);
+    }
+    checked++;
+  }
+  t.diagnostic(`${checked} programs checked with an instances error added`);
+  assert.ok(checked > Object.keys(CODES).length, `${checked} programs`);
+});
+
 // ---------------------------------------------------------------------
 // Python
 // ---------------------------------------------------------------------
@@ -285,8 +426,10 @@ for key, program in json.load(sys.stdin).items():
         json.dump(program, fh)
     try:
         r["cli"] = codes(validate_program_file_structured(path, schema_path(program))["findings"])
+        r["strict"] = codes(validate_program_file_structured(path, schema_path(program), strict=True)["findings"])
     except Exception as e:
-        r["cli"] = []
+        r["cli"] = r.get("cli", [])
+        r["strict"] = []
         r["cliRaised"] = f"{type(e).__name__}: {e}"[:200]
     finally:
         os.unlink(path)
@@ -334,6 +477,14 @@ test('python.cli and python.library say what Python reports for each example', {
       }
       const sev = want === 'logic_error' ? 'error' : (entry.python.severity || example.severity);
       assert.ok(got.includes(`${want}:${sev}`), `${key}: Python ${api} should report ${want}:${sev}, got ${got.join(', ') || 'nothing'}${r[`${api}Raised`] ? ` (raised ${r[`${api}Raised`]})` : ''}`);
+    }
+    // --strict: python.strict as an error, or, without it, what the CLI
+    // reports for this code.
+    if (entry.python.strict) {
+      assert.ok(r.strict.includes(`${entry.python.strict}:error`), `${key}: Python --strict should report ${entry.python.strict}:error, got ${r.strict.join(', ') || 'nothing'}`);
+    } else {
+      const mine = (list) => list.filter((c) => c.startsWith(`${code}:`) || (entry.python.cli && c.startsWith(`${entry.python.cli}:`)));
+      assert.deepEqual(mine(r.strict), mine(r.cli), `${key}: Python --strict reports ${code} differently from the CLI: add python.strict`);
     }
     checked++;
   }

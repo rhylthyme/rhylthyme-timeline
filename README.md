@@ -622,10 +622,13 @@ for (const f of validateProgram(program).errors) {
 `test/finding-codes.test.js` keeps the catalogue complete both ways: every
 code in the source is in it, and every example in it makes `validateProgram`
 report its code with its severity. A few codes the source can emit but no
-program reaches today (`bad_trigger`, `bad_max_concurrent`, and
-`schema_<keyword>` for keywords the bundled schemas do not assert) are
-listed with `reachable: false` and the reason. The rendered reference is
-docs/development/finding-codes.md in rhylthyme-docs.
+program reaches today (`bad_trigger`, and `schema_<keyword>` for keywords
+the bundled schemas do not assert) are listed with `reachable: false` and
+the reason. The rendered reference is docs/development/finding-codes.md in
+rhylthyme-docs. These are the codes of this package's `validateProgram`;
+the hosted MCP server's `validate_program` (rhylthyme-mcp's
+`mcp-api/schedule.js`) still runs its own validator, whose codes differ
+(`missing_program_id` where this one reports `schema_required`, for one).
 
 ```js
 import { schemaFindings, programSchema, checkJsonSchema } from '@rhylthyme/timeline/schedule';

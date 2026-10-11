@@ -234,6 +234,8 @@ export interface FindingCodePython {
   cli: string | null;
   /** The code rhylthyme.validate_program_structured reports, or null. */
   library: string | null;
+  /** The code `rhylthyme validate --strict --json` reports (as an error), when it differs from cli. */
+  strict?: string;
   /** Python's severity, when it differs from the JS one. */
   severity?: FindingSeverity;
   /** Python packages besides rhylthyme the examples need (instrument drivers). */
