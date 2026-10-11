@@ -104,23 +104,43 @@ once" picture. Each has a fixed rule.
 
 - *Rule.* A run is dropped when the program is replaced (setting
   `program`, or a new `src` once it has loaded) or when the element is
-  removed from the document for good. If steps are running at that
-  moment, each gets one `rt-step-ended` with `by: 'dropped'` and `time`
-  equal to `currentTime` (the program-clock second the run was dropped
-  at), in program order, the same order `stop()` uses for its `abort`
-  ends. Any transitions already queued are delivered first. Then comes
-  the run's `rt-run-record` with outcome `abandoned`, and nothing else
-  fires for that run. The run record itself is unchanged: the dropped
-  steps keep an open interval (an `actual.start`, no end, no `endedBy`).
-- *Moves are not drops.* The element decides one microtask after it is
-  disconnected. If it is back in a document by then (`appendChild` to
-  another parent, `insertBefore`, or `remove()` and re-insert in the
-  same script), it was moved: the run goes on with its clock and no
-  events fire. An element removed for good keeps its `status` but fires
-  no more step events for that run; set a program or call `stop()` to
-  start over. Because of this, the `abandoned` run record of a removed
-  element arrives a microtask after `remove()`, not during it. A program
-  replacement drops the run at once, inside the setter.
+  removed from the document for good, while a run is under way: started
+  and not yet stopped or completed, or paused after a `seek()` that
+  began steps. An element that is idle (never started, stopped,
+  completed) has nothing to drop; removing it or replacing its program
+  fires nothing and its next `start()` is an ordinary fresh run. If
+  steps are running when a run is dropped, each gets one
+  `rt-step-ended` with `by: 'dropped'`, in program order, the same order
+  `stop()` uses for its `abort` ends. Its `time` is `currentTime` (the
+  program-clock second the run was dropped at), or the step's own begin
+  second if that is later, which happens after a backward `seek()`
+  while paused: an end is never earlier than its begin (`abort` ends are
+  clamped the same way). Any transitions already queued are delivered
+  first. Then comes the run's `rt-run-record` with outcome `abandoned`.
+  The run record itself is unchanged: the dropped steps keep an open
+  interval (an `actual.start`, no end, no `endedBy`).
+- *After the drop, the run is inert.* Nothing else fires for that run:
+  `start()`, `pause()`, `toggle()` and `seek()` do nothing, and
+  `startStep()` and `completeStep()` return `false`. The element keeps
+  the `status` it had (`running` or `paused`) and its clock stays still.
+  Two things move on from it: setting a program (a fresh element state),
+  or `stop()`, which rewinds and fires only `rt-stop` (no `abort` ends,
+  since the steps already ended `dropped`, and no second run record).
+  After that, `start()` is a fresh run.
+- *Moves are not drops.* The element decides in a microtask queued when
+  it is disconnected. If it is back in a document by then, it was
+  moved: the run goes on with its clock and no events fire. That covers
+  `appendChild` or `insertBefore` to another parent, and `remove()`
+  followed by a re-insert **in the same synchronous code**. Any `await`
+  between the two (even `await null` or a resolved promise), a
+  `setTimeout`, or a framework that re-inserts in a later render counts
+  as removal for good: the run is dropped as above and the re-inserted
+  element is left inert. Pausing first does not help (a paused run is
+  dropped too); to move an element across an `await`, re-insert it
+  before awaiting, or keep it in the document and hide it with CSS. Because of this, the `abandoned`
+  run record of a removed element arrives a microtask after `remove()`,
+  not during it. A program replacement drops the run at once, inside
+  the setter.
 - *Why.* Without it, a host that counts begins minus ends would be left
   with steps "in progress" forever. With it, begins and ends always
   pair, so in-progress counters and "what is running now" lists stay
@@ -144,8 +164,15 @@ once" picture. Each has a fixed rule.
   backward seek fires no step events, and seeking forward again fires
   only what has not fired yet. Every seek that changes the time fires
   one `rt-seek` with `{from, to}` in program-clock seconds, after the
-  step events it caused (even when `seek()` is called from a handler).
-  A seek to the current time, or while running (ignored), fires nothing.
+  step events it caused. A seek to the current time, a seek while
+  running (ignored), or a seek on a dropped run (ignored) fires nothing.
+- *Seeks from handlers.* A handler may call `seek()` while the events of
+  an earlier seek are being delivered. The inner seek's events (its step
+  events, then its own `rt-seek`) are queued behind the outer seek's
+  `rt-seek`, so the `rt-seek` events arrive in the order the seeks were
+  made and each one's `from` is the previous one's `to`. A handler that
+  reacts to `rt-step-ended` of the outer seek therefore sees the outer
+  `rt-seek` only after it has returned, followed by the inner one.
 - *Why.* The step events describe what happened in the run, and a seek
   does not undo what happened. Re-firing would turn every scrub of the
   playhead into duplicate entries.

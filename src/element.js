@@ -105,20 +105,29 @@
  *                         replaced, or the element removed for good, a microtask later)
  *
  * Delivery guarantees and policies (README: "Delivery guarantees and policies")
- *   Dropped runs: a run is dropped when the program is replaced (program property or
- *     src) or the element is removed from the document for good. Each step still
- *     running gets rt-step-ended {by: "dropped"} at currentTime, in program order (as
- *     stop()'s "abort" ends), then the "abandoned" rt-run-record, then nothing else for
- *     that run, so begins and ends always pair. The run record is unchanged: those
- *     steps stay open (no end, no endedBy). "dropped" is not "abort": nobody stopped
- *     the work, the page just stopped watching it. Removal is decided one microtask
- *     after disconnect: an element re-inserted before then (appendChild to another
- *     parent, remove() and insert in one script) has been moved and keeps its run and
- *     clock. An element removed for good keeps its status but fires no more step
- *     events for that run; set a program or call stop() to start over.
+ *   Dropped runs: a run under way (started and not stopped or completed, or paused
+ *     after a seek() that began steps) is dropped when the program is replaced
+ *     (program property or src) or the element is removed from the document for
+ *     good. An idle element (never started, stopped, completed) has nothing to drop:
+ *     nothing fires and its next start() is a fresh run. Each step still running gets
+ *     rt-step-ended {by: "dropped"} at currentTime (or at its own begin if that is
+ *     later, after a backward seek; abort ends are clamped the same way), in program
+ *     order (as stop()'s "abort" ends), then the "abandoned" rt-run-record, so begins
+ *     and ends always pair. The run record is unchanged: those steps stay open (no
+ *     end, no endedBy). "dropped" is not "abort": nobody stopped the work, the page
+ *     just stopped watching it. After the drop the run is inert: start(), pause(),
+ *     toggle() and seek() do nothing, startStep()/completeStep() return false, and
+ *     the element keeps its status with a still clock; stop() (fires only rt-stop)
+ *     or a new program moves on. Removal is decided in a microtask queued at
+ *     disconnect: an element re-inserted synchronously (appendChild to another
+ *     parent, or remove() and insert with no await in between) has been moved and
+ *     keeps its run and clock; any await, setTimeout or later render before the
+ *     re-insert counts as removal for good.
  *   Seeks: each step fires at most once per run, so a backward seek fires no step
  *     events and a forward seek never repeats one. rt-seek tells a host that mirrors
- *     the playhead to resync from stepStates; record-keeping hosts can ignore it.
+ *     the playhead to resync from stepStates; record-keeping hosts can ignore it. A
+ *     seek() from a handler queues its events behind the outer seek's rt-seek, so
+ *     rt-seek events arrive in call order and each from is the previous to.
  *   Re-entrancy: transitions found together are delivered as one ordered batch. A
  *     handler that calls stop() mid-batch takes effect after it: the rest of the
  *     batch, then the "abort" ends, then rt-stop. Events always agree with the run
@@ -1070,11 +1079,14 @@
     // ---- transport --------------------------------------------------------
     proto.start = function () {
       if (!this._program || this._status === 'running' || this.mode === 'static') return;
+      // A dropped run (element removed for good, then put back) is over:
+      // only stop() or a new program moves on from it.
+      if (this._status !== 'stopped' && this._transitions.dropped) return;
       if (this._status === 'stopped' || this._status === 'completed') {
         // A program that declares variance factors asks for them once, here,
         // instead of starting; the form's Start button calls back into start().
         if (this._needsFactorPrompt()) { this.askFactors(); return; }
-        if (this._status === 'completed') this._reset();
+        if (this._status === 'completed' || this._transitions.dropped) this._reset();
         this._executionStart = new Date();
         this._beginRun();
       } else if (this._status === 'paused') {
@@ -1089,7 +1101,7 @@
       this._emitTransitions();
     };
     proto.pause = function () {
-      if (this._status !== 'running') return;
+      if (this._status !== 'running' || this._transitions.dropped) return;
       this.tick();
       this._status = 'paused';
       this._stopTimer();
@@ -1109,18 +1121,21 @@
     };
     proto.toggle = function () { if (this._status === 'running') this.pause(); else this.start(); };
     proto.seek = function (seconds) {
-      if (this._status === 'running') return;
+      if (this._status === 'running' || this._transitions.dropped) return;
       var from = this._time, to = Math.max(0, +seconds || 0);
       this._time = to;
       if (this._status === 'stopped' && this._time > 0) this._status = 'paused';
-      this._settle();
+      // The transitions the seek finds are queued, not dispatched, until its
+      // rt-seek is queued right behind them: a handler then always sees
+      // rt-seek after the step events it caused, and a seek() called from a
+      // handler queues its own events behind this seek's rt-seek, so from/to
+      // chain in order.
+      var was = this._draining;
+      this._draining = true;
+      try { this._settle(); } finally { this._draining = was; }
       this.render();
-      // Queued behind the transitions the seek fired, so a handler always
-      // sees rt-seek after them, even when seek() was called from a handler.
-      if (to !== from) {
-        this._transitionQueue.push({ name: 'rt-seek', detail: { from: from, to: to } });
-        this._drainTransitions();
-      }
+      if (to !== from) this._transitionQueue.push({ name: 'rt-seek', detail: { from: from, to: to } });
+      this._drainTransitions();
     };
 
     proto._reset = function () {
@@ -1217,7 +1232,7 @@
     // ---- executor actions -------------------------------------------------
     proto.startStep = function (id) {
       var step = this._steps[id];
-      if (!step || (this._actual[id] && this._actual[id].start !== undefined)) return false;
+      if (!step || this._transitions.dropped || (this._actual[id] && this._actual[id].start !== undefined)) return false;
       var now = this._time;
       this._actual[id] = { start: now };
       this._transitions.beganBy[id] = 'person';
@@ -1240,7 +1255,7 @@
     };
     proto.completeStep = function (id) {
       var step = this._steps[id];
-      if (!step) return false;
+      if (!step || this._transitions.dropped) return false;
       var a = this._actual[id] || {};
       if (a.end !== undefined) return false;
       var start = a.start !== undefined ? a.start : this._timings()[id].start;
@@ -1360,6 +1375,11 @@
     proto._dropRun = function () {
       var tr = this._transitions;
       if (tr.dropped) return;
+      // Nothing to drop: no run under way (never started, stopped, completed,
+      // already recorded) and no step left open. Marking these would freeze
+      // the element's next run.
+      var open0 = this._order.some(function (id) { return tr.began[id] !== undefined && !tr.ended[id]; });
+      if (!this._runActive() && !open0 && !this._transitionQueue.length) return;
       this._emitTransitions();
       this._drainTransitions(true);
       if (this._transitions !== tr || tr.dropped) return; // a handler stopped or replaced the run

@@ -631,6 +631,92 @@ test('seek() fires rt-seek {from, to} after the step events it causes, never a s
     assert.deepStrictEqual(P.seekWhileRunning, [], 'seek() is ignored while running');
   });
 
+test('seek() from a handler: rt-seek events arrive in call order, from chaining to',
+  { skip: chrome ? false : 'no Chrome binary found (set CHROME_BIN)' }, async () => {
+    const out = await harnessOutput();
+    assert.deepStrictEqual(out.errors, []);
+    assert.deepStrictEqual(out.policies.nestedSeek, [
+      ['rt-step-began', 'A', 0, 'plan'],
+      ['rt-step-began', 'B', 0, 'plan'],
+      ['rt-step-ended', 'B', 50, 'timer'],  // its handler calls seek(70)
+      ['rt-step-began', 'C', 50, 'plan'],
+      ['rt-seek', 0, 60],
+      ['rt-seek', 60, 70],
+    ]);
+  });
+
+test('an idle element has no run to drop: removed, put back and started, it runs',
+  { skip: chrome ? false : 'no Chrome binary found (set CHROME_BIN)' }, async () => {
+    const out = await harnessOutput();
+    assert.deepStrictEqual(out.errors, []);
+    const P = out.policies;
+    const run = [
+      ['rt-start', 0],
+      ['rt-step-began', 'A', 0, 'plan'],
+      ['rt-step-began', 'B', 0, 'plan'],
+      ['rt-step-ended', 'B', 50, 'timer'],
+      ['rt-step-began', 'C', 50, 'plan'],
+    ];
+    for (const k of ['idleNeverStarted', 'idleStopped']) {
+      assert.deepStrictEqual(P[k].removed, [], k + ': removal fires nothing');
+      assert.deepStrictEqual(P[k].run, run, k + ': the next start() is a normal run');
+      assert.strictEqual(P[k].time, 60, k + ': the clock moves');
+    }
+    // Removed mid-run, then the program replaced while detached: the setter
+    // drops the run at once; the deferred removal check finds nothing left,
+    // so the new program's run is not frozen.
+    assert.deepStrictEqual(P.idleReplacedWhileDetached.log, [
+      ['rt-step-ended', 'A', 10, 'dropped'],
+      ['rt-step-ended', 'B', 10, 'dropped'],
+      ['rt-run-record', 'abandoned'],
+      ['rt-load'],
+    ].concat(run));
+    assert.strictEqual(P.idleReplacedWhileDetached.time, 60);
+  });
+
+test('a dropped run is inert until stop(); a dropped end is never before its begin',
+  { skip: chrome ? false : 'no Chrome binary found (set CHROME_BIN)' }, async () => {
+    const out = await harnessOutput();
+    assert.deepStrictEqual(out.errors, []);
+    const P = out.policies;
+    // Dropped while running, put back: completeStep / startStep refuse,
+    // start / pause / toggle / tick fire nothing and the clock stays still.
+    assert.deepStrictEqual(P.inertRunning, {
+      calls: { completeA: false, completeC: false, startB: false },
+      log: [], status: 'running', time: 60,
+    });
+    assert.deepStrictEqual(P.inertStop, [['rt-stop']], 'stop(): no abort ends, no second record');
+    assert.deepStrictEqual(P.inertFresh.log, [
+      ['rt-start', 0],
+      ['rt-step-began', 'A', 0, 'plan'],
+      ['rt-step-began', 'B', 0, 'plan'],
+      ['rt-step-ended', 'B', 50, 'timer'],
+      ['rt-step-began', 'C', 50, 'plan'],
+    ]);
+    assert.strictEqual(P.inertFresh.time, 60);
+    // Dropped while paused: seek() and start() are ignored too (no rt-seek).
+    assert.deepStrictEqual(P.inertPaused, { log: [], status: 'paused', time: 10 });
+
+    // Paused at 60, sought back to 20, program replaced: A (began 0) ends at
+    // 20, C (began 50) at its own begin, not before it.
+    assert.deepStrictEqual(P.droppedAfterSeekBack, [
+      ['rt-step-ended', 'A', 20, 'dropped'],
+      ['rt-step-ended', 'C', 50, 'dropped'],
+      ['rt-run-record', 'abandoned'],
+      ['rt-load'],
+    ]);
+
+    // An await between remove() and the re-insert is a removal for good.
+    assert.deepStrictEqual(P.awaitThenReinsert, {
+      log: [
+        ['rt-step-ended', 'A', 10, 'dropped'],
+        ['rt-step-ended', 'B', 10, 'dropped'],
+        ['rt-run-record', 'abandoned'],
+      ],
+      status: 'running', time: 10, timer: false,
+    });
+  });
+
 // ---------------------------------------------------------------------
 // Translatable labels and accessible buttons (issue #7)
 // ---------------------------------------------------------------------

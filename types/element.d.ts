@@ -14,10 +14,14 @@ export type StepBeganBy = 'person' | 'plan';
  *
  * `dropped`: the run was dropped while the step ran — the program was replaced
  * (`program` property or `src`) or the element was removed from the document for
- * good (re-inserted within the same microtask, it was moved and keeps its run).
- * Each step still running ends `dropped` at `currentTime`, in program order, then
- * the `abandoned` run record follows and nothing else fires for that run, so
- * every began has its ended. It is not `abort`: nobody stopped the work, and the
+ * good (re-inserted synchronously, with no `await` in between, it was moved and
+ * keeps its run). Only a run under way is dropped; an idle element fires nothing.
+ * Each step still running ends `dropped` at `currentTime` (or at its own begin if
+ * that is later, after a backward seek), in program order, then the `abandoned`
+ * run record follows and nothing else fires for that run, so every began has its
+ * ended. The dropped run is inert: start(), pause(), seek() do nothing and
+ * startStep()/completeStep() return false until stop() (only rt-stop) or a new
+ * program. It is not `abort`: nobody stopped the work, and the
  * run record still leaves the step open (no end, no endedBy). A framework
  * re-render that swaps the program produces these; filter `by !== 'dropped'` to
  * see only real ends.
@@ -56,7 +60,8 @@ export interface RhylthymeTimelineEventMap {
   'rt-step-ended': CustomEvent<StepTransitionDetail<StepEndedBy>>;
   /**
    * seek() changed the time; fired once per such seek, after the step transitions a
-   * forward seek fires. A backward seek fires no step events (each step fires at most
+   * forward seek fires. A seek() from a handler queues behind the outer seek's
+   * rt-seek, so these arrive in call order and each `from` is the previous `to`. A backward seek fires no step events (each step fires at most
    * once per run), so a host that mirrors the playhead resyncs from `stepStates` here;
    * a record-keeping host can ignore it.
    */
@@ -189,9 +194,11 @@ export interface RhylthymeTimelineElement extends HTMLElement {
   pause(): void;
   stop(): void;
   toggle(): void;
-  /** While paused (ignored while running). Fires rt-seek when the time changes. */
+  /** While paused (ignored while running, and on a dropped run). Fires rt-seek when the time changes. */
   seek(seconds: number): void;
+  /** false when the step is unknown or already started, or the run was dropped. */
   startStep(stepId: string): boolean;
+  /** false when the step is unknown, already done, under its minSeconds, or the run was dropped. */
   completeStep(stepId: string): boolean;
   tick(): void;
   /** Open the variance-factor form; false when the program declares no factors. */

@@ -32,18 +32,26 @@ Keep a Changelog; versions follow SemVer.
   `start()` after `stop()` is a fresh run. `rt-step-start` and
   `rt-step-complete` are unchanged. Typed in `RhylthymeTimelineEventMap`
   (`StepBeganBy`, `StepEndedBy`, `StepTransitionDetail`). (#6)
-- `<rhylthyme-timeline>`: `by: 'dropped'` on `rt-step-ended`. When a run is
-  dropped while steps are running (the program replaced through `program`
-  or `src`, or the element removed from the document for good), each of
-  them ends `dropped` at `currentTime`, in program order, before the
-  `abandoned` run record; nothing else fires for that run. Begins and ends
-  therefore always pair. The run record is unchanged (those steps stay
+- `<rhylthyme-timeline>`: `by: 'dropped'` on `rt-step-ended`. When a run
+  under way is dropped while steps are running (the program replaced
+  through `program` or `src`, or the element removed from the document for
+  good), each of them ends `dropped` at `currentTime` (clamped to the
+  step's own begin after a backward seek, as `abort` ends are), in program
+  order, before the `abandoned` run record. Begins and ends therefore
+  always pair. Nothing else fires for that run: it is inert (`start()`,
+  `pause()`, `seek()` do nothing; `startStep()` / `completeStep()` return
+  `false`) until `stop()`, which fires only `rt-stop`, or a new program.
+  An idle element (never started, stopped, completed) has no run to drop:
+  removing it or replacing its program fires nothing, and its next
+  `start()` is a normal run. The run record is unchanged (those steps stay
   open). `dropped` is not `abort`: filter it out to see only real ends; a
   framework re-render that swaps the program produces it. Added to
   `StepEndedBy`. (#6)
 - `<rhylthyme-timeline>`: an `rt-seek` event, `detail {from, to}` in
   program-clock seconds, once per `seek()` that changes the time, after the
-  step events a forward seek fires. A backward seek still fires no step
+  step events a forward seek fires; a `seek()` from a handler queues
+  behind the outer seek's `rt-seek`, so they arrive in call order. A
+  backward seek still fires no step
   events (each step fires at most once per run); a host that mirrors the
   playhead resyncs from `stepStates` on `rt-seek`, a record-keeping host can
   ignore it. Typed as `SeekDetail` in `RhylthymeTimelineEventMap`. (#6)
@@ -104,9 +112,11 @@ Keep a Changelog; versions follow SemVer.
 
 ### Changed
 - `<rhylthyme-timeline>`: removing the element no longer drops its run at
-  once. The decision waits one microtask: an element re-inserted before
-  then (`appendChild` to another parent, `remove()` and re-insert in the
-  same script) has been moved, keeps its run, and its clock resumes;
+  once. The decision runs in a microtask queued at disconnect: an element
+  re-inserted synchronously (`appendChild` to another parent, or
+  `remove()` and re-insert with no `await` in between) has been moved,
+  keeps its run, and its clock resumes; any `await`, `setTimeout` or later
+  render before the re-insert counts as removal for good;
   previously any disconnect abandoned the run and left the moved element
   showing "running" with no clock. As a result, the `abandoned` run record
   of an element removed mid-run arrives a microtask after `remove()`

@@ -792,6 +792,149 @@ window.PRE_UPGRADE = (function () {
     s2.stop();
     s2.remove();
 
+    // (g) an idle element has no run to drop: removed for good (never
+    //     started; stopped after a run; program replaced while detached),
+    //     put back, started, it runs normally.
+    const idleCase = async (prep) => {
+      let mI = 0;
+      const e = makeEl(DROP);
+      e.setClock(() => mI);
+      const log = watchAll(e);
+      await prep(e, () => { mI += 10000; e.tick(); });
+      log.length = 0;
+      e.remove();
+      await microtask();
+      const removed = log.slice();
+      document.body.appendChild(e);
+      e.start();
+      mI += 60000; e.tick();
+      const res = { removed: removed, run: noTicks(log).slice(removed.length), status: e.status, time: e.currentTime };
+      e.stop();
+      e.remove();
+      return res;
+    };
+    P3.idleNeverStarted = await idleCase(async () => {});
+    P3.idleStopped = await idleCase(async (e, adv) => { e.start(); adv(); e.stop(); });
+    {
+      let mI = 0;
+      const e = makeEl(DROP);
+      e.setClock(() => mI);
+      const log = watchAll(e);
+      e.start();
+      mI += 10000; e.tick();
+      log.length = 0;
+      e.remove();
+      e.program = JSON.parse(JSON.stringify(DROP));  // drops the run, at once
+      await microtask();                             // nothing left to drop
+      document.body.appendChild(e);
+      e.start();
+      mI += 60000; e.tick();
+      P3.idleReplacedWhileDetached = { log: noTicks(log), status: e.status, time: e.currentTime };
+      e.stop();
+      e.remove();
+    }
+
+    // (h) a dropped run is inert once put back: no method fires anything
+    //     for it until stop() (rt-stop only); then start() is a fresh run.
+    {
+      let mI = 0;
+      const e = makeEl(DROP);
+      e.setClock(() => mI);
+      const log = watchAll(e);
+      for (const ev of ['rt-step-start', 'rt-step-complete', 'rt-pause']) {
+        e.addEventListener(ev, (x) => log.push([ev, x.detail.stepId, x.detail.time]));
+      }
+      e.start();
+      mI += 60000; e.tick();
+      e.remove();
+      await microtask();
+      document.body.appendChild(e);
+      log.length = 0;
+      const calls = {
+        completeA: e.completeStep('A'),
+        completeC: e.completeStep('C'),
+        startB: e.startStep('B'),
+      };
+      e.start(); e.pause(); e.toggle();
+      mI += 10000; e.tick();
+      P3.inertRunning = { calls: calls, log: log.slice(), status: e.status, time: e.currentTime };
+      e.stop();
+      P3.inertStop = log.slice(P3.inertRunning.log.length);
+      log.length = 0;
+      e.start();
+      mI += 60000; e.tick();
+      P3.inertFresh = { log: noTicks(log), status: e.status, time: e.currentTime };
+      e.stop();
+      e.remove();
+      // Dropped while paused: seek() and start() are ignored as well.
+      let mJ = 0;
+      const f = makeEl(DROP);
+      f.setClock(() => mJ);
+      const logF = watchAll(f);
+      f.start();
+      mJ += 10000; f.tick();
+      f.pause();
+      f.remove();
+      await microtask();
+      document.body.appendChild(f);
+      logF.length = 0;
+      f.seek(500);
+      f.start();
+      mJ += 10000; f.tick();
+      P3.inertPaused = { log: logF.slice(), status: f.status, time: f.currentTime };
+      f.stop();
+      f.remove();
+    }
+
+    // (i) a dropped end is never before its own begin: paused at 60, sought
+    //     back to 20, program replaced. C began at 50, so it ends at 50.
+    {
+      let mI = 0;
+      const e = makeEl(DROP);
+      e.setClock(() => mI);
+      const log = watchAll(e);
+      e.start();
+      mI += 60000; e.tick();
+      e.pause();
+      e.seek(20);
+      log.length = 0;
+      e.program = JSON.parse(JSON.stringify(OTHER));
+      P3.droppedAfterSeekBack = log.slice();
+      e.remove();
+    }
+
+    // (j) an await between remove() and the re-insert is a removal for
+    //     good: the run is dropped and the re-inserted element is inert.
+    {
+      let mI = 0;
+      const e = makeEl(DROP);
+      e.setClock(() => mI);
+      const log = watchAll(e);
+      e.start();
+      mI += 10000; e.tick();
+      log.length = 0;
+      e.remove();
+      await microtask();
+      document.body.appendChild(e);
+      mI += 10000; e.tick();
+      P3.awaitThenReinsert = { log: log.slice(), status: e.status, time: e.currentTime, timer: e._timer !== null };
+      e.stop();
+      e.remove();
+    }
+
+    // (k) seek() from a handler during a seek: rt-seek events in call
+    //     order, each from equal to the previous to.
+    {
+      const e = makeEl(DROP);
+      const log = watchAll(e);
+      let once = false;
+      e.addEventListener('rt-step-ended', () => { if (!once) { once = true; e.seek(70); } });
+      e.seek(60);
+      P3.nestedSeek = log.slice();
+      e.stop();
+      e.remove();
+    }
+
     // ---- translatable labels and accessible buttons (issue #7) ---------
     out.labels = {};
     const buttonInfo = (e, sel) => {
