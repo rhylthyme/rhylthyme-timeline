@@ -9,13 +9,15 @@
 // Two entry points:
 //
 //   validateProgram(program)  -> { valid, errors[], warnings[], info[], stats }
-//       The JSON Schema (rhylthyme-spec's, bundled; json-schema.js, codes
-//       schema_<keyword>), then structural + logic checks mirroring
-//       rhylthyme.validate_program
+//       Replicates are expanded first, as rhylthyme.validate_program does;
+//       then the JSON Schema (rhylthyme-spec's, bundled; json-schema.js,
+//       codes schema_<keyword>) on the expanded program, with paths moved
+//       back to the authored one, and the structural + logic checks
 //       (duplicate ids, dangling refs, cycles, within-track overlaps,
 //       tasks without resource constraints, choice references, bad
 //       durations, schema 0.3.0 `instances` codes, galago instrument
-//       commands via galago.js). Each finding carries
+//       commands via galago.js). A problem the schema reports is not
+//       reported again by a logic check. Each finding carries
 //       a `fix` hint so the model can repair the program without
 //       guessing. `valid` depends on errors only; `info` holds advisory
 //       notes such as I_IMPLICIT_BARRIER.
@@ -46,7 +48,6 @@ const SINGLE_TRIGGER_TYPES = new Set([
   "programStart", "programStartOffset", "afterStep", "afterStepWithBuffer",
   "manual", "onAbort", "previousStepComplete",
 ]);
-const DURATION_TYPES = new Set(["fixed", "variable", "indefinite"]);
 
 function _isObj(v) { return v !== null && typeof v === "object" && !Array.isArray(v); }
 
@@ -265,10 +266,10 @@ function instanceFindings(program) {
 //
 // Twin of the rhylthyme package's alert_checks.py: the same codes, run on the
 // unexpanded program so each authored step is reported once. Alert
-// offsets are signed ("-2m" = two minutes before the anchor).
+// offsets are signed ("-2m" = two minutes before the anchor). The shape of
+// an alert is the JSON Schema's to check (schema_* findings).
 // ---------------------------------------------------------------------
 
-const ALERT_KEYS = new Set(["event", "offsetSeconds", "message", "level"]);
 const ALERT_NUMBER = "\\d+(?:\\.\\d+)?";
 const ALERT_OFFSET_RE = new RegExp(
   `^[+-]?\\s*(?:${ALERT_NUMBER}|(?:${ALERT_NUMBER}\\s*(?:hours?|hrs?|h|minutes?|mins?|m|seconds?|secs?|s)\\s*)+)$`, "i");
@@ -310,27 +311,14 @@ function alertFindings(program) {
     (Array.isArray(t.steps) ? t.steps : []).forEach((step) => {
       if (!_isObj(step) || step.alerts === undefined) return;
       const where = `step:${step.stepId}`;
-      if (!Array.isArray(step.alerts) || !step.alerts.length) {
-        push("error", "bad_alert", `Step "${step.stepId}" alerts must be a non-empty array.`, where,
-          "Give alerts as [{\"event\": \"end\", \"offsetSeconds\": \"-2m\"}], or remove the key.");
-        return;
-      }
+      // Alerts of the wrong shape (not a non-empty list, an unknown event,
+      // key or level, an empty or over-long message) are schema_* findings.
+      if (!Array.isArray(step.alerts)) return;
       const trig = _isObj(step.startTrigger) ? step.startTrigger : {};
       const indefinite = _isObj(step.duration) && step.duration.type === "indefinite";
       step.alerts.forEach((a, i) => {
         const label = `Alert ${i} on step "${step.stepId}"`;
-        if (!_isObj(a)) { push("error", "bad_alert", `${label} is not an object.`, where, "Each alert is {event, offsetSeconds?, message?, level?}."); return; }
-        const extra = Object.keys(a).filter((k) => !ALERT_KEYS.has(k));
-        if (a.event !== "start" && a.event !== "end") {
-          push("error", "bad_alert", `${label} needs event "start" or "end".`, where, "Set event to \"start\" or \"end\" of this step.");
-        }
-        if (extra.length) push("error", "bad_alert", `${label} has unknown key(s) ${extra.join(", ")}.`, where, "Alerts take only event, offsetSeconds, message and level.");
-        if (a.level !== undefined && a.level !== "notice" && a.level !== "alarm") {
-          push("error", "bad_alert", `${label} level must be "notice" or "alarm".`, where, "Use level \"notice\" (default) or \"alarm\".");
-        }
-        if (a.message !== undefined && (typeof a.message !== "string" || !a.message.length || a.message.length > 200)) {
-          push("error", "bad_alert", `${label} message must be 1-200 characters of text.`, where, "Shorten the message, or omit it for a default (\"Ends in 2 min\").");
-        }
+        if (!_isObj(a)) return;
         const off = parseAlertOffset(a.offsetSeconds);
         if (off === null) {
           push("error", "E_ALERT_BAD_OFFSET", `${label} has offsetSeconds ${JSON.stringify(a.offsetSeconds)}, which is not a number of seconds or a time string.`, where,
@@ -385,6 +373,125 @@ function projectedAlerts(step, timing) {
 }
 
 // ---------------------------------------------------------------------
+// Expansion for validation
+// ---------------------------------------------------------------------
+
+// True when the expander would have to make up values from missing ones:
+// a track with no trackId, a replicated track or step with no name or ids,
+// a replicate count that is not a number. Python's expander raises on
+// these (so the Python validator rejects the program); JS's would invent
+// "undefined-r1". Such a program is schema-checked as written, which
+// names the missing key.
+function _unexpandable(program) {
+  const tracks = program.tracks;
+  if (tracks === undefined) return false;
+  if (!Array.isArray(tracks)) return true;
+  const badRep = (rep) => rep && (!_isObj(rep) || (rep.count !== undefined && typeof rep.count !== "number" && typeof rep.count !== "boolean"));
+  const count = (rep) => (_isObj(rep) && typeof rep.count === "number" ? rep.count : 1);
+  return tracks.some((t) => {
+    if (!_isObj(t) || t.trackId === undefined) return true;
+    if (t.steps !== undefined && !Array.isArray(t.steps)) return true;
+    const steps = t.steps || [];
+    if (steps.some((s) => !_isObj(s))) return true;
+    if (badRep(t.replicates)) return true;
+    const n = t.replicates ? count(t.replicates) : (typeof t.batch_size === "number" ? t.batch_size : 1);
+    if (n > 1) {
+      if (t.name === undefined || steps.some((s) => s.stepId === undefined)) return true;
+      const rep = t.replicates || {};
+      const delay = rep.delay !== undefined ? rep.delay : (t.stagger !== undefined ? t.stagger : t.stagger_seconds);
+      if (!steps.length && (rep.mode === "serial" || ((rep.mode === "stagger" || !t.replicates) && parseSeconds(delay || 0) > 0))) return true;
+    }
+    return steps.some((s) => {
+      if (badRep(s.replicates)) return true;
+      if (count(s.replicates) > 1 && (s.stepId === undefined || s.name === undefined)) return true;
+      return s.stepId === undefined && _atoms(s.startTrigger).some((a) => Object.prototype.hasOwnProperty.call(a, "instances"));
+    });
+  });
+}
+
+// The program the validator checks: replicates expanded and, as Python's
+// expander does for every program, tracks without steps left out.
+function _expandForValidation(program) {
+  let out = expandReplicates(program);
+  if (Array.isArray(out.tracks) && out.tracks.some((t) => _isObj(t) && !(Array.isArray(t.steps) && t.steps.length))) {
+    out = Object.assign({}, out, { tracks: out.tracks.filter((t) => !_isObj(t) || (Array.isArray(t.steps) && t.steps.length)) });
+  }
+  return out;
+}
+
+// Schema findings on the expanded program, with paths moved back to the
+// authored program: the expander inserts sub-tracks, copies replicated
+// tracks and steps (ids "<id>-r<n>") and leaves out empty tracks, so an
+// expanded "tracks[3].steps[0]" may be the authored "tracks[1].steps[2]".
+// A finding on a copy points at the track or step it was copied from, says
+// which copy in its message, and is reported once for all the copies.
+function _authoredPaths(findings, expanded, authored) {
+  if (expanded === authored || !findings.length) return findings;
+  const aTracks = Array.isArray(authored.tracks) ? authored.tracks : [];
+  const eTracks = Array.isArray(expanded.tracks) ? expanded.tracks : [];
+  const strip = (id) => (typeof id === "string" ? id.replace(/-r\d+$/, "") : id);
+  const trackIndex = (id) => {
+    for (let cur = id, prev; cur !== prev; prev = cur, cur = strip(cur)) {
+      const i = aTracks.findIndex((t) => _isObj(t) && t.trackId === cur);
+      if (i >= 0) return i;
+    }
+    return -1;
+  };
+  const stepIndex = (ti, id) => {
+    for (let cur = id, prev; cur !== prev; prev = cur, cur = strip(cur)) {
+      const order = ti >= 0 ? [ti].concat(aTracks.map((_, i) => i).filter((i) => i !== ti)) : aTracks.map((_, i) => i);
+      for (const i of order) {
+        const steps = _isObj(aTracks[i]) && Array.isArray(aTracks[i].steps) ? aTracks[i].steps : [];
+        const j = steps.findIndex((s) => _isObj(s) && s.stepId === cur);
+        if (j >= 0) return [i, j];
+      }
+    }
+    return null;
+  };
+  const esc = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const seen = new Set();
+  const out = [];
+  findings.forEach((f) => {
+    const m = /^tracks\[(\d+)\](?:\.steps\[(\d+)\])?/.exec(f.where || "");
+    if (!m) { out.push(f); return; }
+    const t = eTracks[Number(m[1])];
+    const s = m[2] !== undefined && _isObj(t) && Array.isArray(t.steps) ? t.steps[Number(m[2])] : undefined;
+    let to = null, copy = null;
+    if (_isObj(t)) {
+      const ti = trackIndex(t.parentTrackId !== undefined ? t.parentTrackId : t.trackId);
+      const trackCopy = t.parentTrackId !== undefined || (ti >= 0 && aTracks[ti].trackId !== t.trackId);
+      if (m[2] === undefined) {
+        if (ti >= 0) { to = `tracks[${ti}]`; if (trackCopy) copy = `track ${JSON.stringify(aTracks[ti].trackId)}, in its copy ${JSON.stringify(t.trackId)}`; }
+      } else if (_isObj(s)) {
+        const at = stepIndex(ti, s.instanceOf !== undefined ? s.instanceOf : s.stepId);
+        if (at) {
+          to = `tracks[${at[0]}].steps[${at[1]}]`;
+          const source = aTracks[at[0]].steps[at[1]].stepId;
+          if (trackCopy || s.instanceOf !== undefined || source !== s.stepId) copy = `step ${JSON.stringify(source)}, in its copy ${JSON.stringify(s.stepId)}`;
+        }
+      }
+    }
+    if (to === null) {
+      out.push(Object.assign({}, f, { fix: `${f.fix} (${m[0]} is a path in the program after replicates are expanded.)` }));
+      return;
+    }
+    const from = new RegExp(`${esc(m[0])}(?![\\d])`, "g");
+    let message = f.message.replace(from, to);
+    let fix = f.fix ? f.fix.replace(from, to) : f.fix;
+    if (copy) {
+      const label = / \((?:step|track) "[^"]*"\)/;
+      message = label.test(message) ? message.replace(label, ` (${copy})`) : `${message} (${copy[0].toUpperCase()}${copy.slice(1)}.)`;
+      fix = `${fix} The path is the authored ${m[2] === undefined ? "track" : "step"} that replicates copies.`;
+    }
+    const key = `${f.code}|${to}|${message.replace(/, in its copy "[^"]*"/, "")}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push(Object.assign({}, f, { where: f.where.replace(m[0], to), message, fix }));
+  });
+  return out;
+}
+
+// ---------------------------------------------------------------------
 // validateProgram
 // ---------------------------------------------------------------------
 
@@ -415,49 +522,62 @@ function validateProgram(program) {
     if (f.severity === "error") err(f.code, f.message, f.where, f.fix);
     else warn(f.code, f.message, f.where, f.fix);
   });
-  // JSON Schema (rhylthyme-spec's, bundled): the authored program first,
-  // so paths point at what was written and a replicated step without a
-  // name is caught before expansion invents one; then, when that passes,
-  // the expanded program, which is where the Python validator checks it.
-  const authoredSchema = JsonSchema.schemaFindings(program);
+  // Expand replicates first and check the JSON Schema (rhylthyme-spec's,
+  // bundled) on the expanded program, as the Python validator does, so
+  // ids, overlaps and timings are checked on the program that will run and
+  // an authored shape the expander resolves (a replicated step with no
+  // name gets "Name (1 of 3)") is accepted on both sides. A program
+  // expansion cannot run on (instance errors, a track with no trackId,
+  // a replicated step with no stepId: Python's expander raises on them), or
+  // whose expansion fails, is checked as written instead.
   const schemaErrors = (list) => list.forEach((f) => err(f.code, f.message, f.where, f.fix));
-  schemaErrors(authoredSchema);
-  // Expand replicates next, as the Python validator does, so ids,
-  // overlaps and timings are checked on the program that will run. An
-  // expansion the expander cannot express is reported, not thrown; the
+  const authored = program;
+  if (instanceErrors || _unexpandable(program)) {
+    const asWritten = JsonSchema.schemaFindings(program);
+    schemaErrors(asWritten);
+    if (!instanceErrors && asWritten.length) return { valid: false, errors, warnings, info, stats: null };
+  }
+  // An expansion the expander cannot express is reported, not thrown; the
   // expander's own raises are only a backstop behind the checks above.
   let expanded;
   try {
-    expanded = expandReplicates(program);
+    expanded = _expandForValidation(program);
   } catch (e) {
     if (!instanceErrors) {
       err("expansion_failed", `Could not expand replicates: ${e && e.message ? e.message : e}`, "program",
         "Check `replicates` and `instances` on the steps named in the message.");
+      schemaErrors(JsonSchema.schemaFindings(program));
     }
     return { valid: false, errors, warnings, info, stats: null };
   }
-  if (!authoredSchema.length && !instanceErrors) schemaErrors(JsonSchema.schemaFindings(expanded));
+  const schemaRaw = instanceErrors ? [] : JsonSchema.schemaFindings(expanded);
+  schemaErrors(_authoredPaths(schemaRaw, expanded, authored));
   program = expanded;
+  // Where the schema already reported a problem (on the expanded program,
+  // whose paths the checks below share), the checks below stay quiet about
+  // it, so each problem is reported once.
+  const schemaAt = (prefix) => schemaRaw.some((f) => f.where === prefix || f.where.startsWith(`${prefix}.`) || f.where.startsWith(`${prefix}[`));
 
-  // Top-level fields.
-  if (!program.programId || typeof program.programId !== "string") {
-    err("missing_program_id", "programId is required.", "program", "Add a kebab-case programId, e.g. \"thanksgiving-dinner\".");
-  } else if (!/^[a-z0-9][a-z0-9-_]*$/i.test(program.programId)) {
+  // Top-level fields. A missing programId, name or tracks is a schema_*
+  // finding.
+  if (typeof program.programId === "string" && !/^[a-z0-9][a-z0-9-_]*$/i.test(program.programId)) {
     warn("program_id_format", `programId "${program.programId}" is not kebab-case.`, "program.programId", "Use lowercase letters, digits and dashes.");
-  }
-  if (!program.name || typeof program.name !== "string") {
-    err("missing_name", "name is required.", "program", "Add a human-readable name.");
   }
   if (!program.schemaVersion) {
     warn("missing_schema_version", "schemaVersion is missing; viewer assumes \"0.1.0\".", "program", "Set schemaVersion to \"0.1.0\" (\"0.2.0-alpha\" if you use choice branching, \"0.3.0-alpha\" if you use `instances` on triggers).");
   }
+  // A track with no steps is left out of the expanded program (Python's
+  // expander drops it too), so it is a warning, not a schema finding.
+  (Array.isArray(authored.tracks) ? authored.tracks : []).forEach((track, ti) => {
+    if (_isObj(track) && !(Array.isArray(track.steps) && track.steps.length) && !track.templateId) {
+      warn("empty_track", `Track "${track.name || track.trackId || ti}" has no steps.`, `tracks[${ti}]`, "Remove the track or add steps; until then it is left out.");
+    }
+  });
   const tracks = Array.isArray(program.tracks) ? program.tracks : null;
-  if (!tracks || !tracks.length) {
-    err("no_tracks", "Program needs at least one track with steps.", "program.tracks", "Add tracks: one per parallel line of work (dish, station, instrument, performer).");
-    return { valid: false, errors, warnings, info, stats: null };
-  }
+  if (!tracks || !tracks.length) return { valid: false, errors, warnings, info, stats: null };
 
-  // Collect ids.
+  // Collect ids. Tracks, steps and ids of the wrong shape are schema_*
+  // findings; the logic checks skip them.
   const stepById = {};
   const stepTrack = {};
   const trackIds = {};
@@ -465,20 +585,15 @@ function validateProgram(program) {
   let stepCount = 0;
   tracks.forEach((track, ti) => {
     const tWhere = `tracks[${ti}]`;
-    if (!_isObj(track)) { err("bad_track", "Track is not an object.", tWhere); return; }
-    if (!track.trackId) err("missing_track_id", "trackId is required.", tWhere, "Add a unique trackId.");
-    else if (trackIds[track.trackId]) err("duplicate_track_id", `Duplicate trackId "${track.trackId}".`, tWhere, "Make every trackId unique.");
-    else trackIds[track.trackId] = true;
-    if (!track.name) warn("missing_track_name", "Track has no name; the viewer will show a generic label.", tWhere, "Add a short display name.");
-    const steps = Array.isArray(track.steps) ? track.steps : [];
-    if (!steps.length && !track.templateId) {
-      warn("empty_track", `Track "${track.name || track.trackId || ti}" has no steps.`, tWhere, "Remove the track or add steps.");
+    if (!_isObj(track)) return;
+    if (typeof track.trackId === "string") {
+      if (trackIds[track.trackId]) err("duplicate_track_id", `Duplicate trackId "${track.trackId}".`, tWhere, "Make every trackId unique.");
+      else trackIds[track.trackId] = true;
     }
-    steps.forEach((step, si) => {
-      const sWhere = `${tWhere}.steps[${si}]`;
+    const steps = Array.isArray(track.steps) ? track.steps : [];
+    steps.forEach((step) => {
       stepCount++;
-      if (!_isObj(step)) { err("bad_step", "Step is not an object.", sWhere); return; }
-      if (!step.stepId) { err("missing_step_id", "stepId is required.", sWhere, "Add a unique stepId."); return; }
+      if (!_isObj(step) || typeof step.stepId !== "string") return;
       idCount[step.stepId] = (idCount[step.stepId] || 0) + 1;
       stepById[step.stepId] = step;
       stepTrack[step.stepId] = track.trackId;
@@ -494,18 +609,20 @@ function validateProgram(program) {
     const s = stepById[id];
     if (_isObj(s.choice) && Array.isArray(s.choice.options)) {
       choiceOptions[id] = new Set(s.choice.options.map((o) => o && o.choiceId).filter(Boolean));
-      if (s.choice.options.length < 2) err("choice_too_few_options", `Choice on step "${id}" needs at least 2 options.`, `step:${id}`);
     }
   });
 
   const tasksUsed = new Set();
   const hasVariable = [];
+  // Steps whose startTrigger the schema rejected: timed as if they started
+  // with the program, so an overlap would only repeat that finding.
+  const badTrigger = new Set();
   tracks.forEach((track, ti) => {
     const steps = Array.isArray(track.steps) ? track.steps : [];
     steps.forEach((step, si) => {
-      if (!_isObj(step) || !step.stepId) return;
+      if (!_isObj(step) || typeof step.stepId !== "string") return;
       const where = `step:${step.stepId}`;
-      if (!step.name) warn("missing_step_name", `Step "${step.stepId}" has no name.`, where, "Add a short imperative name (\"Sear the chicken\").");
+      const path = `tracks[${ti}].steps[${si}]`;
 
       // Duration. An instrument step may leave it to the instrument.
       const d = step.duration;
@@ -520,63 +637,54 @@ function validateProgram(program) {
       } else if (d === undefined || d === null) {
         err("missing_duration", `Step "${step.stepId}" has no duration.`, where, "Add duration: {type:\"fixed\", seconds:N} (or \"5m\").");
       } else if (_isObj(d)) {
-        if (d.type && !DURATION_TYPES.has(d.type)) {
-          err("bad_duration_type", `Step "${step.stepId}" duration.type "${d.type}" is not fixed|variable|indefinite.`, where);
-        }
+        // An unknown type, a fixed duration without seconds, a variable one
+        // without bounds and an indefinite one without defaultSeconds are
+        // schema_oneOf findings; a duration that is not an object, schema_type.
         const type = d.type || (d.seconds !== undefined ? "fixed" : (d.maxSeconds !== undefined ? "variable" : "indefinite"));
         if (type === "fixed") {
-          if (d.seconds === undefined || d.seconds === null) {
-            err("fixed_without_seconds", `Step "${step.stepId}" is fixed but has no seconds.`, where, "Add seconds (number or \"5m\").");
-          } else if (!(parseSeconds(d.seconds) > 0) && String(d.seconds).trim() !== "0") {
+          if (d.seconds !== undefined && d.seconds !== null && !(parseSeconds(d.seconds) > 0) && String(d.seconds).trim() !== "0" && !schemaAt(`${path}.duration`)) {
             err("unparseable_duration", `Step "${step.stepId}" duration.seconds "${d.seconds}" is not a positive number or time string.`, where, "Use a number of seconds or a string like \"5m\", \"1h30m\".");
           }
         } else if (type === "variable") {
           const min = parseSeconds(d.minSeconds), max = parseSeconds(d.maxSeconds);
-          if (d.minSeconds === undefined || d.maxSeconds === undefined) {
-            err("variable_without_bounds", `Step "${step.stepId}" is variable but lacks minSeconds/maxSeconds.`, where, "Add minSeconds, maxSeconds and (recommended) defaultSeconds.");
-          } else if (min > max) {
+          if (d.minSeconds !== undefined && d.maxSeconds !== undefined && min > max) {
             err("variable_min_gt_max", `Step "${step.stepId}" minSeconds (${min}) > maxSeconds (${max}).`, where);
           }
           if (d.defaultSeconds === undefined) {
             warn("variable_without_default", `Step "${step.stepId}" is variable with no defaultSeconds; planning uses maxSeconds.`, where, "Add defaultSeconds so previews reflect the expected time.");
           }
           hasVariable.push(step.stepId);
-        } else if (type === "indefinite" && d.defaultSeconds === undefined) {
-          warn("indefinite_without_default", `Step "${step.stepId}" is indefinite with no defaultSeconds; it renders as zero-length.`, where, "Add defaultSeconds for a realistic preview.");
         }
-      } else if (!(parseSeconds(d) > 0)) {
-        err("unparseable_duration", `Step "${step.stepId}" duration "${d}" could not be parsed.`, where, "Use {type:\"fixed\", seconds:N}.");
       }
 
-      // Trigger.
+      // Trigger. A missing one is a schema_required finding; the shape
+      // checks below speak only where the schema found nothing to say.
       const trig = step.startTrigger;
-      if (!_isObj(trig)) {
-        err("missing_start_trigger", `Step "${step.stepId}" has no startTrigger.`, where,
-          si === 0 ? "First step of a track usually uses {type:\"programStart\"}."
-                   : "Chain it with {type:\"afterStep\", stepId:\"<previous step in this track>\"}.");
-      } else {
+      const trigOk = !schemaAt(`${path}.startTrigger`);
+      if (!trigOk || !_isObj(trig)) badTrigger.add(step.stepId);
+      const shapeErr = (code, message, fix) => { if (trigOk) err(code, message, where, fix); };
+      if (_isObj(trig)) {
         if (trig.logic && !Array.isArray(trig.triggers)) {
-          err("compound_without_triggers", `Step "${step.stepId}" compound trigger has logic but no triggers[].`, where);
+          shapeErr("compound_without_triggers", `Step "${step.stepId}" compound trigger has logic but no triggers[].`);
         }
         if (trig.logic && trig.logic !== "all" && trig.logic !== "any") {
-          err("bad_trigger_logic", `Step "${step.stepId}" trigger logic must be "all" or "any".`, where);
+          shapeErr("bad_trigger_logic", `Step "${step.stepId}" trigger logic must be "all" or "any".`);
         }
         _flattenTriggers(trig).forEach((t) => {
-          if (!_isObj(t)) { err("bad_trigger", `Step "${step.stepId}" has a malformed trigger.`, where); return; }
+          if (!_isObj(t)) { shapeErr("bad_trigger", `Step "${step.stepId}" has a malformed trigger.`); return; }
           const type = t.type || "programStart";
           if (!SINGLE_TRIGGER_TYPES.has(type)) {
-            err("unknown_trigger_type", `Step "${step.stepId}" trigger type "${type}" is unknown.`, where,
-              "Use programStart, programStartOffset, afterStep, afterStepWithBuffer, manual or onAbort.");
+            shapeErr("unknown_trigger_type", `Step "${step.stepId}" trigger type "${type}" is unknown.`, "Use programStart, programStartOffset, afterStep, afterStepWithBuffer, manual or onAbort.");
           }
           if (type === "afterStep" || type === "afterStepWithBuffer" || type === "onAbort") {
-            if (!t.stepId) err("trigger_without_step_id", `Step "${step.stepId}" ${type} trigger has no stepId.`, where, "Point it at the step it waits for.");
+            if (!t.stepId) shapeErr("trigger_without_step_id", `Step "${step.stepId}" ${type} trigger has no stepId.`, "Point it at the step it waits for.");
             else if (!stepById[t.stepId]) err("dangling_step_ref", `Step "${step.stepId}" waits for "${t.stepId}", which does not exist.`, where, "Fix the stepId to match an existing step (ids are case-sensitive).");
             else if (t.stepId === step.stepId) err("self_reference", `Step "${step.stepId}" waits for itself.`, where);
             if (type === "afterStepWithBuffer" && t.bufferSeconds === undefined) {
-              err("buffer_without_seconds", `Step "${step.stepId}" afterStepWithBuffer needs bufferSeconds.`, where);
+              shapeErr("buffer_without_seconds", `Step "${step.stepId}" afterStepWithBuffer needs bufferSeconds.`);
             }
             if (t.event && t.event !== "start" && t.event !== "end") {
-              err("bad_trigger_event", `Step "${step.stepId}" trigger event must be "start" or "end".`, where);
+              shapeErr("bad_trigger_event", `Step "${step.stepId}" trigger event must be "start" or "end".`);
             }
             const off = parseSeconds(t.offsetSeconds);
             if (off < 0) {
@@ -593,7 +701,7 @@ function validateProgram(program) {
             }
           }
           if (type === "programStartOffset" && t.offsetSeconds === undefined) {
-            err("offset_without_seconds", `Step "${step.stepId}" programStartOffset needs offsetSeconds.`, where);
+            shapeErr("offset_without_seconds", `Step "${step.stepId}" programStartOffset needs offsetSeconds.`);
           }
         });
       }
@@ -607,10 +715,12 @@ function validateProgram(program) {
   const constraintTasks = new Set();
   constraints.forEach((rc, i) => {
     const where = `resourceConstraints[${i}]`;
-    if (!_isObj(rc) || !rc.task) { err("bad_resource_constraint", "Resource constraint needs a task name.", where); return; }
+    // A constraint of the wrong shape is a schema_* finding.
+    const rcOk = !schemaAt(where);
+    if (!_isObj(rc) || !rc.task) { if (rcOk) err("bad_resource_constraint", "Resource constraint needs a task name.", where); return; }
     if (constraintTasks.has(rc.task)) warn("duplicate_constraint", `Resource constraint for "${rc.task}" is listed twice.`, where);
     constraintTasks.add(rc.task);
-    if (!(Number(rc.maxConcurrent) >= 1)) err("bad_max_concurrent", `Resource "${rc.task}" maxConcurrent must be an integer >= 1.`, where);
+    if (!(Number(rc.maxConcurrent) >= 1) && rcOk) err("bad_max_concurrent", `Resource "${rc.task}" maxConcurrent must be an integer >= 1.`, where);
   });
   const usesEnvironment = !!program.environment;
   tasksUsed.forEach((t) => {
@@ -657,6 +767,7 @@ function validateProgram(program) {
       if (a.choiceId || b.choiceId) {
         if (!(a.choiceId && b.choiceId && a.choiceId === b.choiceId)) continue;
       }
+      if (badTrigger.has(a.id) || badTrigger.has(b.id)) continue;
       if (a.end > b.start) {
         err("track_overlap",
           `Track "${track.name || track.trackId}": "${a.name}" (ends ${a.end}s) overlaps "${b.name}" (starts ${b.start}s) by ${a.end - b.start}s.`,

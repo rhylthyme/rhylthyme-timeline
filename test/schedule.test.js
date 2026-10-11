@@ -102,11 +102,18 @@ test("validateProgram reports each class of error with a fix hint", () => {
   const v = S.validateProgram(bad);
   assert.equal(v.valid, false);
   const codes = new Set(v.errors.map((e) => e.code));
-  for (const c of ["missing_name", "duplicate_step_id", "dangling_step_ref", "task_not_constrained",
-                   "dependency_cycle", "fixed_without_seconds", "unknown_trigger_type",
-                   "variable_min_gt_max", "choice_ref_no_choice", "track_overlap"]) {
+  for (const c of ["duplicate_step_id", "dangling_step_ref", "task_not_constrained",
+                   "dependency_cycle", "variable_min_gt_max", "choice_ref_no_choice", "track_overlap"]) {
     assert.ok(codes.has(c), `expected error code ${c}; got ${Array.from(codes).join(",")}`);
   }
+  // A fixed duration without seconds and an unknown trigger type are the
+  // schema's to report, once each, at the step's path.
+  assert.deepEqual(v.errors.filter((e) => e.code.startsWith("schema_")).map((e) => [e.code, e.where]), [
+    ["schema_oneOf", "tracks[0].steps[5].startTrigger"],
+    ["schema_oneOf", "tracks[0].steps[5].duration"],
+  ]);
+  assert.match(v.errors.find((e) => e.where === "tracks[0].steps[5].startTrigger").fix, /"programStart", "programStartOffset", "manual", "onAbort"/);
+  assert.match(v.errors.find((e) => e.where === "tracks[0].steps[5].duration").fix, /Add "seconds".*time string such as "5m"/);
   assert.ok(v.warnings.some((w) => w.code === "unused_constraint"));
   assert.ok(v.warnings.some((w) => w.code === "program_id_format"));
   v.errors.forEach((e) => assert.ok(e.message && e.code));
@@ -853,16 +860,16 @@ test("unprojectable alerts warn with the contract codes; bad offsets are errors"
   assert.deepEqual(v.errors.map((e) => [e.code, e.where]), [["E_ALERT_BAD_OFFSET", "step:bake"]]);
 });
 
-test("malformed alerts are reported by the alert checks and by the schema", () => {
+test("malformed alerts are reported once, by the schema", () => {
   for (const alerts of [[], "soon", [{ event: "middle" }], [{ event: "end", level: "siren" }],
     [{ event: "end", sound: "chime" }], [{ event: "start", message: "" }], [{ event: "start", message: "x".repeat(201) }]]) {
     const p = alertProgram();
     p.tracks[0].steps[0].alerts = alerts;
     const v = S.validateProgram(p);
     assert.equal(v.valid, false, JSON.stringify(alerts));
-    const codes = v.errors.map((e) => e.code);
-    assert.ok(codes.includes("bad_alert"), JSON.stringify(alerts));
-    assert.deepEqual(codes.filter((c) => c !== "bad_alert" && !c.startsWith("schema_")), [], JSON.stringify(alerts));
+    assert.equal(v.errors.length, 1, JSON.stringify(v.errors));
+    assert.match(v.errors[0].code, /^schema_/, JSON.stringify(alerts));
+    assert.match(v.errors[0].where, /^tracks\[0\]\.steps\[0\]\.alerts/);
   }
 });
 
