@@ -350,7 +350,10 @@ is an error with the code `schema_<keyword>` (`schema_required`,
 `where` path such as `tracks[0].steps[1].duration` and a `fix`. Two rules
 the logic checks never enforced come from the schema: a program needs
 `resourceConstraints` (an empty list is fine), an `environment` or an
-`environmentType`, and an indefinite step needs `defaultSeconds`.
+`environmentType`, and an indefinite step needs `defaultSeconds`. A value that
+cannot be written as JSON (a circular reference, a BigInt) gets the single
+error `not_json` instead of a schema check. Patterns are read as Python's
+`re.search` reads them (`$` also matches before a final newline).
 
 ```js
 import { schemaFindings, programSchema, checkJsonSchema } from '@rhylthyme/timeline/schedule';

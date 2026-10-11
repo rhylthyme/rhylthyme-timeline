@@ -164,8 +164,9 @@ export interface SchemaError {
  * The program checked against the bundled rhylthyme-spec schema its
  * schemaVersion selects (0.3.x: 0.3.0-alpha, otherwise 0.2.0-alpha), with
  * time strings read as seconds first, as the Python validator does. Each
- * failure is a finding with code `schema_<keyword>`. validateProgram
- * includes these in `errors`.
+ * failure is a finding with code `schema_<keyword>`; a value that cannot
+ * be written as JSON (a cycle, a BigInt) is one finding, `not_json`.
+ * validateProgram includes these in `errors`.
  */
 export function schemaFindings(program: Program): Finding[];
 /** The bundled program schema (Draft 7 JSON) that a schemaVersion selects. */

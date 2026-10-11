@@ -92,7 +92,9 @@ function _equal(a, b) {
 function _strLen(s) { return Array.from(s).length; }
 
 function _show(v) {
-  const s = JSON.stringify(v);
+  if (typeof v === "bigint") return `${v}n`;
+  let s;
+  try { s = JSON.stringify(v); } catch (e) { s = undefined; } // a cycle, a nested BigInt
   return s === undefined ? String(v) : s.length > 60 ? `${s.slice(0, 57)}...` : s;
 }
 
@@ -116,9 +118,43 @@ function _resolve(root, ref) {
   return node;
 }
 
+// A schema pattern as Python's re (str pattern, no flags) reads it, in JS
+// syntax for the "u" flag. Outside a character class, `$` also matches
+// just before a final newline ("abc\n" matches "^abc$"), \A and \Z are
+// the string's start and end; \d and \D are Unicode digits (category Nd)
+// in both. \w, \s and \b stay ASCII in JS (no bundled pattern uses them).
+function _pyPattern(pattern) {
+  let out = "", inClass = false;
+  for (let i = 0; i < pattern.length; i++) {
+    const c = pattern[i];
+    if (c === "\\" && i + 1 < pattern.length) {
+      const n = pattern[++i];
+      if (n === "d") out += "\\p{Nd}";
+      else if (n === "D") out += "\\P{Nd}";
+      else if (!inClass && n === "A") out += "^";
+      else if (!inClass && n === "Z") out += "$";
+      else out += c + n;
+    } else if (inClass) {
+      if (c === "]") inClass = false;
+      out += c;
+    } else if (c === "[") {
+      inClass = true;
+      out += c;
+      // A "]" (or "^]") right after "[" is a literal, as in Python.
+      if (pattern[i + 1] === "^") out += pattern[++i];
+      if (pattern[i + 1] === "]") { out += "\\]"; i++; }
+    } else if (c === "$") {
+      out += "(?=\\n?$)";
+    } else {
+      out += c;
+    }
+  }
+  return out;
+}
+
 const _regexCache = new Map();
 function _regex(pattern) {
-  if (!_regexCache.has(pattern)) _regexCache.set(pattern, new RegExp(pattern, "u"));
+  if (!_regexCache.has(pattern)) _regexCache.set(pattern, new RegExp(_pyPattern(pattern), "u"));
   return _regexCache.get(pattern);
 }
 
@@ -377,7 +413,19 @@ function normalizeTimeFields(data) {
 // Validator findings for `program` against the schema its schemaVersion
 // selects: [{ code: "schema_<keyword>", message, where, fix }]. Time
 // strings are converted to seconds first, as the Python validator does.
+// A value that is not JSON (a cycle, a BigInt) cannot be checked against
+// a schema; it is one finding, not_json, instead of a thrown error.
 function schemaFindings(program) {
+  try {
+    JSON.stringify(program);
+  } catch (e) {
+    return [{
+      code: "not_json",
+      message: `The program cannot be written as JSON (${e && e.message ? e.message : e}), so the schema was not checked.`,
+      where: "program",
+      fix: "Pass plain JSON data: no circular references, BigInt values or other non-JSON types.",
+    }];
+  }
   const schema = programSchema(_isObj(program) ? program.schemaVersion : undefined);
   return checkJsonSchema(normalizeTimeFields(program), schema).map((e) => ({
     code: `schema_${e.keyword}`,

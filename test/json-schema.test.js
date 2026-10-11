@@ -28,7 +28,12 @@ test('the checker implements every keyword the bundled schemas use', () => {
   assert.equal(J.programSchema('0.3.0-alpha').$schema, 'http://json-schema.org/draft-07/schema#');
 });
 
-test('the bundled schemas are byte-for-byte copies of rhylthyme-spec', { skip: !fs.existsSync(SPEC) && 'no rhylthyme-spec checkout' }, () => {
+// CI's parity job checks out rhylthyme-spec and sets this, so the copy
+// check fails there instead of skipping.
+const noSpec = !fs.existsSync(SPEC) && `no rhylthyme-spec checkout at ${SPEC}`;
+if (noSpec && process.env.RHYLTHYME_PARITY_REQUIRED) throw new Error(noSpec);
+
+test('the bundled schemas are byte-for-byte copies of rhylthyme-spec', { skip: noSpec }, () => {
   for (const v of J.SCHEMA_VERSIONS) {
     const name = `program_schema_${v}.json`;
     assert.ok(fs.readFileSync(path.join(__dirname, '..', 'src', 'schedule', 'schemas', name)).equals(fs.readFileSync(path.join(SPEC, name))), name);
@@ -192,4 +197,37 @@ test('formatValidation lists schema findings with their fixes', () => {
   const text = S.formatValidation(S.validateProgram(p));
   assert.match(text, /\*\*schema_type\*\* resourceConstraints\[0\]\.maxConcurrent is "1"/);
   assert.match(text, /↳ Write 1 as a number/);
+});
+
+test('pattern reads $, \\A, \\Z and \\d the way Python re.search does', () => {
+  const key = { pattern: '^[A-Za-z][A-Za-z0-9_-]*$' };
+  // Python's $ also matches before one final newline, not two, not mid-string.
+  assert.deepEqual(J.checkJsonSchema('weight\n', key), []);
+  assert.equal(J.checkJsonSchema('weight\n\n', key).length, 1);
+  assert.equal(J.checkJsonSchema('we\night', key).length, 1);
+  // A $ in a character class or escaped is a literal dollar.
+  assert.deepEqual(J.checkJsonSchema('a$', { pattern: '^a[$]\\Z' }), []);
+  assert.deepEqual(J.checkJsonSchema('a$', { pattern: '^a\\$' }), []);
+  // \Z is the very end; \A the start.
+  assert.equal(J.checkJsonSchema('ab\n', { pattern: '\\Aab\\Z' }).length, 1);
+  assert.deepEqual(J.checkJsonSchema('ab', { pattern: '\\Aab\\Z' }), []);
+  // \d is any Unicode digit, inside a class too; []] is a literal ].
+  assert.deepEqual(J.checkJsonSchema('\u0663', { pattern: '^\\d$' }), []);
+  assert.deepEqual(J.checkJsonSchema('\u0663', { pattern: '^[\\d]$' }), []);
+  assert.deepEqual(J.checkJsonSchema(']', { pattern: '^[]]$' }), []);
+
+  const p = program({ metadata: { varianceFactors: [{ key: 'weight\n', type: 'number' }] } });
+  assert.deepEqual(codes(p), []);
+});
+
+test('a value that is not JSON is a finding, not a thrown error', () => {
+  const cyc = { programId: 'p', name: 'n', tracks: [], resourceConstraints: [] };
+  cyc.self = cyc;
+  const r = S.validateProgram(cyc);
+  assert.equal(r.valid, false);
+  assert.ok(r.errors.some((e) => e.code === 'not_json'));
+  assert.ok(S.validateProgram(program({ actors: 2n })).errors.some((e) => e.code === 'not_json'));
+  assert.deepEqual(J.schemaFindings(program({ actors: 2n })).map((f) => f.code), ['not_json']);
+  // checkJsonSchema itself names a BigInt rather than throwing.
+  assert.match(J.checkJsonSchema(2n, { type: 'integer' })[0].message, /2n/);
 });
