@@ -51,7 +51,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: pip install -e ./rhylthyme-spec -e ./rhylthyme
+      # The instrument drivers let the finding-codes check run its instrument examples.
+      - run: pip install -e ./rhylthyme-spec -e "./rhylthyme[galago,labmcp]"
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -63,3 +64,9 @@ jobs:
       - name: Bundled schemas match rhylthyme-spec
         working-directory: rhylthyme-timeline
         run: RHYLTHYME_PARITY_REQUIRED=1 node --test test/json-schema.test.js
+      # Every finding code is catalogued (src/schedule/finding-codes.json),
+      # every catalogue example produces its code, and the catalogue's Python
+      # column matches what the Python validator reports.
+      - name: Finding-codes catalogue is complete
+        working-directory: rhylthyme-timeline
+        run: npm run build && PYTHON=python RHYLTHYME_PARITY_REQUIRED=1 node --test test/finding-codes.test.js
