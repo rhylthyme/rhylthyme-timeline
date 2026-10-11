@@ -508,6 +508,15 @@ test('rt-step-began and rt-step-ended fire once per step per run, in time order'
     }
     assert.deepStrictEqual(k.find((e) => e[0] === 'rt-step-ended' && e[1] === 'V'), ['rt-step-ended', 'V', 40, 'person']);
 
+    // startStep() on a stopped player starts a run, then the step.
+    assert.deepStrictEqual(T.startStepStopped, [true, 'running']);
+    assert.deepStrictEqual(T.startStepStoppedLog.slice(0, 4), [
+      ['rt-start', null, 0, null],
+      ['rt-step-start', 'G', 0, null],
+      ['rt-step-began', 'G', 0, 'person'],
+      ['rt-step-ended', 'G', 10, 'timer'],
+    ]);
+
     // seek(): forward fires what it passes over, backward fires nothing, and
     // seeking forward again fires only what is new.
     assert.deepStrictEqual(T.seekForward, [

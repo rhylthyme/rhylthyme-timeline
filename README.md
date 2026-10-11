@@ -272,7 +272,8 @@ the text alone. The status element keeps the untranslated state in
 How the player treats step kinds, matching the rhylthyme.com runner:
 
 - **Manual gates** (`startTrigger.type: "manual"`) and **negative-offset
-  hand-offs** wait for `startStep()`. Until then they float forward with
+  hand-offs** wait for `startStep()`. On a stopped player `startStep()` starts a
+  run first, so the step begins on a moving clock. Until then they float forward with
   the cursor (shown as a red dashed bar with a *Start* button), and
   everything downstream moves with them.
 - **Indefinite steps** run until `completeStep()` (*Done* button).

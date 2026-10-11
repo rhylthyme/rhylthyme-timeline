@@ -656,6 +656,17 @@ window.PRE_UPGRADE = (function () {
     out.transitions.completeInHandler = onlySteps(logK);
     k1.remove();
 
+    // (viii) startStep() on a stopped player starts a run first, so the
+    //        step begins on a moving clock and fires rt-step-began.
+    let mG = 0;
+    const g1 = makeEl(tprog([[{ stepId: 'G', name: 'G', task: 'x', duration: { type: 'fixed', seconds: 10 }, startTrigger: { type: 'manual' } }]]));
+    g1.setClock(() => mG);
+    const logG = watch(g1);
+    out.transitions.startStepStopped = [g1.startStep('G'), g1.status];
+    mG += 20000; g1.tick();
+    out.transitions.startStepStoppedLog = logG.filter((x) => x[0] !== 'rt-tick');
+    g1.remove();
+
     // (vii) delivery policies: dropped runs, rt-seek, stop() from a handler.
     const P3 = out.policies = {};
     const watchAll = (e) => {

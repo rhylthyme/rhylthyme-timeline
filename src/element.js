@@ -1232,7 +1232,16 @@
     // ---- executor actions -------------------------------------------------
     proto.startStep = function (id) {
       var step = this._steps[id];
-      if (!step || this._transitions.dropped || (this._actual[id] && this._actual[id].start !== undefined)) return false;
+      if (!step) return false;
+      // A stopped player has no run to start the step in: start one first, as
+      // its Start button would, unless the variance-factor form opens instead
+      // (or the player is static). Without this the step went active on a
+      // clock that never moved, and no rt-step-began fired.
+      if (this._status === 'stopped') {
+        this.start();
+        if (this._status !== 'running') return false;
+      }
+      if (this._transitions.dropped || (this._actual[id] && this._actual[id].start !== undefined)) return false;
       var now = this._time;
       this._actual[id] = { start: now };
       this._transitions.beganBy[id] = 'person';

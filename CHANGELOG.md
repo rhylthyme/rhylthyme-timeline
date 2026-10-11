@@ -184,6 +184,11 @@ Keep a Changelog; versions follow SemVer.
   `schema_oneOf` one.
 
 ### Fixed
+- `startStep(id)` (and a gate's *Start* button) on a stopped player now
+  starts a run first, as the transport's Start would. Before, the step
+  went active on a clock that never moved and no `rt-step-began` fired.
+  If the program declares variance factors, the form opens instead and
+  `startStep` returns `false`.
 - `analyzeSchedule(...).steps` (and `itinerary`) link the steps of a
   replicated track (`replicates` or legacy `batch_size` on the track) to
   their authored step through `instanceOf` / `instanceIndex`; they were
