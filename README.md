@@ -59,7 +59,7 @@ Read-only: `currentTime`, `status`, `timings`, `stepStates`. Read/write:
 bubble and cross the shadow boundary): `rt-load`, `rt-start`, `rt-pause`,
 `rt-stop`, `rt-tick`, `rt-step-start`, `rt-step-complete`, `rt-complete`.
 
-**Translating the player.** Every string it shows is a key of one
+**Translating the player.** Every piece of text the player writes itself (not the program's own names) is a key of one
 table; set `labels` to a partial object and the keys you leave out stay
 English. Use a string, with `{0}`, `{1}`… for arguments, or a function:
 
@@ -78,10 +78,27 @@ The keys are typed as `RhylthymeTimelineLabels` in
 `stop`, `speed`, `speedOption`), status (`statusStopped`, `statusRunning`,
 `statusPaused`, `statusCompleted`), step actions (`startStep`, `doneStep`,
 `instance`, `groupProgress`, `actionsHint`), the empty state (`loading`,
-`noProgram`, `loadError`) and the variance-factor form (`factorsTitle`,
+`noProgram`, `loadError`), the variance-factor form (`factorsTitle`,
 `factorsHint`, `factorSkip`, `factorsStart`, `factorNotNumber`,
-`factorNotInteger`, `factorNotOneOf`). Text is escaped, never parsed as
-HTML. The glyphs (▶ ❚❚ ■ ✓) are not part of the text: they are drawn
+`factorNotInteger`, `factorNotOneOf`) and the chart: its subtitle
+(`chartSubtitle(tracks, total, totalSeconds)`) and legend terms
+(`legendDependency`, `legendNegativeOffset`, `legendIndefinite`,
+`legendVariable`, `legendManual`, `legendBarrier`, `legendBarrierAny`,
+`legendInFlight`). Chart keys reach the renderer only when you set them,
+so the English chart is unchanged; translating a legend term draws the
+renderer's configurable legend, which lists the step kinds the program
+uses. Program content (track and step names) and the small brand mark
+are not labels. Text is escaped, never parsed as HTML. In the
+`noProgram` template `{0}` and `{1}` are drawn as `<code>program</code>`
+and `<code>src</code>`; a function receives `'program'` and `'src'` and
+its text is shown as is. Setting `labels` while the variance-factor form
+is open keeps what was typed and any error on screen, re-worded.
+
+Times are fixed-format ASCII (`mm:ss`, `HH:MM:SS`, `45s`) unless you set
+the `locale` attribute (or property): `locale="fr"` formats the clock,
+durations and the speed options with `Intl` in that locale, and an
+empty value or `"auto"` uses the browser's. `formatTime(seconds)`
+returns the clock text, and you can replace it on an instance. The glyphs (▶ ❚❚ ■ ✓) are not part of the text: they are drawn
 beside it with `aria-hidden="true"`, and each button's `aria-label` is
 the text alone. The status element keeps the untranslated state in
 `data-status` for styling.

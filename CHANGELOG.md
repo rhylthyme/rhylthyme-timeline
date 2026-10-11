@@ -18,6 +18,19 @@ Keep a Changelog; versions follow SemVer.
   `aria-hidden` spans and every transport, step and factor-form button
   carries an `aria-label` with its text. The status element gains a
   `data-status` attribute holding the untranslated state.
+- The chart inside the player is translatable too: `chartSubtitle` and
+  the `legend*` keys are passed to the renderer when set (English
+  output unchanged).
+- A `locale` attribute/property (opt-in): the clock, durations and speed
+  options are formatted with `Intl` in that locale (`""`/`"auto"`: the
+  browser's). Without it, times keep their fixed formats.
+
+### Fixed (review of #7)
+- Setting `labels` while the variance-factor form is open no longer
+  erases what was typed or hides the error shown; the error is re-worded
+  in the new labels.
+- A `noProgram` function override receives `'program'` and `'src'`, not
+  internal placeholders; templates still draw `{0}`/`{1}` as `<code>`.
 
 ## [2.0.0-beta.6] - unreleased
 

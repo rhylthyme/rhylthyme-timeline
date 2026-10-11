@@ -30,6 +30,18 @@ if (el) {
   el.labels = { startStep: (name: number) => String(name) };
   // @ts-expect-error unknown label key
   el.labels = { begin: 'Go' };
+  el.labels = {
+    chartSubtitle: (tracks, total, seconds) => `${tracks} pistes · ${total} (${seconds.toFixed(0)} s)`,
+    legendDependency: 'dépendance',
+    noProgram: (property, attribute) => `Aucun programme : ${property} / ${attribute}`,
+    speedOption: (factor, formatted) => `${formatted} ×`,
+  };
+  el.locale = 'fr';
+  el.locale = null;
+  const clockText: string = el.formatTime(90);
+  void clockText;
+  // @ts-expect-error chartSubtitle's first argument is a count
+  el.labels = { chartSubtitle: (tracks: string) => tracks };
   // @ts-expect-error startStep takes a step id
   el.startStep(1);
 }

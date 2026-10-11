@@ -16,6 +16,9 @@
  *   speed        playback multiplier (default 1)
  *   time-format  "minutes" (mm:ss, default) | "seconds" | "hours" (h:mm:ss) | "clock" (HH:MM wall time)
  *   start-at     ISO 8601 wall-clock time the program starts; used by time-format="clock"
+ *   locale       opt-in: format the clock, durations and speed options with Intl in this
+ *                BCP 47 locale ("fr", "de-CH"); empty or "auto" means the browser's.
+ *                Absent (the default), times use the fixed formats above
  *   theme        "light" (default) | "dark" | "cookbook"; or set the --rt-* custom properties
  *   view         "timeline" (only view in this release)
  *   data-factors preset answers to the program's declared variance factors, either JSON
@@ -135,7 +138,8 @@
     resume: 'Resume',
     stop: 'Stop',
     speed: 'Speed',
-    speedOption: function (factor) { return factor + '×'; },
+    // factor is the number; formatted is it in the `locale` (or as is).
+    speedOption: function (factor, formatted) { return formatted + '×'; },
     statusStopped: 'stopped',
     statusRunning: 'running',
     statusPaused: 'paused',
@@ -146,8 +150,10 @@
     groupProgress: function (name, count, done) { return name + ' ×' + count + ' — ' + done + ' done'; },
     actionsHint: 'Red-dashed bars wait for you to start them; hatched bars run until you mark them done.',
     loading: 'Loading…',
-    // {0} and {1} are drawn as <code>program</code> and <code>src</code>.
-    noProgram: function (property, attribute) { return 'No program loaded. Set the ' + property + ' property or a ' + attribute + ' URL.'; },
+    // A template's {0} and {1} are drawn as <code>program</code> and
+    // <code>src</code>; a function receives 'program' and 'src' and its
+    // text is shown as plain (escaped) text.
+    noProgram: 'No program loaded. Set the {0} property or a {1} URL.',
     loadError: function (url, message) { return 'Could not load ' + url + ': ' + message; },
     factorsTitle: 'Before you start',
     factorsHint: 'This program asks what is different about this run, so the times it records can be compared with others. Leave anything blank to skip it.',
@@ -155,7 +161,25 @@
     factorsStart: 'Start',
     factorNotNumber: function (text) { return "'" + text + "' is not a number"; },
     factorNotInteger: function (text) { return "'" + text + "' is not an integer"; },
-    factorNotOneOf: function (text, values) { return "'" + text + "' is not one of " + values; }
+    factorNotOneOf: function (text, values) { return "'" + text + "' is not one of " + values; },
+    // Text inside the chart. These are passed to the renderer only when
+    // overridden, so the English chart stays byte for byte what it was.
+    // chartSubtitle(tracks, total, totalSeconds): total is e.g. "3h55".
+    chartSubtitle: function (tracks, total) { return tracks + ' tracks · ' + total + ' total'; },
+    legendDependency: 'dependency',
+    legendNegativeOffset: 'negative offset',
+    legendIndefinite: 'indefinite',
+    legendVariable: 'variable',
+    legendManual: 'manual',
+    legendBarrier: 'barrier (all instances)',
+    legendBarrierAny: 'barrier (any instance)',
+    legendInFlight: 'in-flight limit'
+  };
+  // Label key -> the renderer's legend item key.
+  var LEGEND_KEYS = {
+    legendDependency: 'dependency', legendNegativeOffset: 'negative-offset', legendIndefinite: 'indefinite',
+    legendVariable: 'variable', legendManual: 'manual', legendBarrier: 'barrier',
+    legendBarrierAny: 'barrier-any', legendInFlight: 'in-flight'
   };
   function message(labels, key, args) {
     var own = labels && Object.prototype.hasOwnProperty.call(labels, key) ? labels[key] : undefined;
@@ -179,12 +203,25 @@
   function glyphButton(attrs, glyph, text) {
     return '<button ' + attrs + ' aria-label="' + esc(text) + '"><span class="glyph" aria-hidden="true">' + glyph + '</span> ' + esc(text) + '</button>';
   }
-  // noProgram's arguments are drawn as <code>; the text around them is escaped.
-  var CODE_SLOTS = ['\u0001code0\u0001', '\u0001code1\u0001'];
-  function withCode(text, names) {
-    var html = esc(text);
-    CODE_SLOTS.forEach(function (slot, i) { html = html.split(slot).join('<code>' + esc(names[i]) + '</code>'); });
-    return html;
+  // The empty state. A template (the default, or a string override) draws
+  // {0} and {1} as <code>program</code> and <code>src</code> around escaped
+  // text; a function gets the plain words and its text is escaped as is.
+  var NO_PROGRAM_ARGS = ['program', 'src'];
+  function noProgramHtml(labels) {
+    var own = labels && Object.prototype.hasOwnProperty.call(labels, 'noProgram') ? labels.noProgram : undefined;
+    if (typeof own === 'function') {
+      try {
+        var text = own.apply(null, NO_PROGRAM_ARGS);
+        if (text !== undefined && text !== null) return esc(String(text));
+      } catch (e) { /* a broken override falls back to English */ }
+      own = undefined;
+    }
+    var template = typeof own === 'string' ? own : MESSAGES.noProgram;
+    return template.split(/(\{\d+\})/).map(function (part) {
+      var m = /^\{(\d+)\}$/.exec(part);
+      if (m && +m[1] < NO_PROGRAM_ARGS.length) return '<code>' + esc(NO_PROGRAM_ARGS[+m[1]]) + '</code>';
+      return esc(part);
+    }).join('');
   }
 
   // ---- canonical program hash --------------------------------------------
@@ -322,6 +359,14 @@
     return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
   function pad2(n) { return (n < 10 ? '0' : '') + n; }
+  // The renderer's compact duration ("45m", "3h", "3h55").
+  function shortDuration(s) {
+    var m = Math.round((s || 0) / 60);
+    if (!isFinite(m) || m < 0) m = 0;
+    if (m < 60) return m + 'm';
+    var h = Math.floor(m / 60), r = m % 60;
+    return r === 0 ? h + 'h' : h + 'h' + r;
+  }
   function r3(n) { return Math.round(n * 1000) / 1000; }
   function isoUtc(ms, seconds) {
     var iso = new Date(ms).toISOString();
@@ -492,7 +537,7 @@
   }
 
   class RhylthymeTimeline extends HTMLElement {
-    static get observedAttributes() { return ['src', 'mode', 'speed', 'time-format', 'start-at', 'theme', 'view', 'data-factors', 'no-factor-prompt', 'data-predictions']; }
+    static get observedAttributes() { return ['src', 'mode', 'speed', 'time-format', 'start-at', 'theme', 'view', 'data-factors', 'no-factor-prompt', 'data-predictions', 'locale']; }
     constructor() {
       super();
       this._program = null;
@@ -646,6 +691,10 @@
       get: function () { return this.getAttribute('time-format') || 'minutes'; },
       set: function (v) { this.setAttribute('time-format', v); }
     });
+    Object.defineProperty(proto, 'locale', {
+      get: function () { return this.getAttribute('locale'); },
+      set: function (v) { if (v === null || v === undefined || v === false) this.removeAttribute('locale'); else this.setAttribute('locale', v === true ? '' : String(v)); }
+    });
     Object.defineProperty(proto, 'startAt', {
       get: function () { var v = this.getAttribute('start-at'); if (!v) return null; var d = new Date(v); return isNaN(d.getTime()) ? null : d; },
       set: function (v) { if (v) this.setAttribute('start-at', v instanceof Date ? v.toISOString() : String(v)); else this.removeAttribute('start-at'); }
@@ -666,7 +715,7 @@
           });
         }
         this._labels = own;
-        this._renderFactorForm();
+        this._relabelFactorForm();
         this.render();
       }
     });
@@ -800,6 +849,32 @@
       html.push(glyphButton('data-act="factors-start"', '▶', this._msg('factorsStart')));
       host.innerHTML = html.join('');
       host.hidden = false;
+    };
+    // Re-draw an open form in the current labels without losing what the
+    // executor has typed but not yet submitted, or the errors on screen
+    // (re-worded in the new language). A host that switches language
+    // mid-form must not turn a typed answer into a silently skipped one.
+    proto._relabelFactorForm = function () {
+      var host = this._factorsHost;
+      if (!host || host.hidden || !this._factorsOpen) { this._renderFactorForm(); return; }
+      var typed = {}, shown = {};
+      Array.prototype.forEach.call(host.querySelectorAll('[data-factor]'), function (field) {
+        typed[field.getAttribute('data-factor')] = field.value == null ? '' : String(field.value);
+      });
+      Array.prototype.forEach.call(host.querySelectorAll('[data-factor-error]'), function (slot) {
+        if (!slot.hidden) shown[slot.getAttribute('data-factor-error')] = true;
+      });
+      this._renderFactorForm();
+      var byKey = {}, self = this;
+      this.declaredFactors.forEach(function (f) { byKey[f.key] = f; });
+      Object.keys(typed).forEach(function (key) {
+        var field = host.querySelector('[data-factor="' + key + '"]');
+        if (field) field.value = typed[key];
+        if (!shown[key] || !byKey[key] || typed[key].trim() === '') return;
+        var slot = host.querySelector('[data-factor-error="' + key + '"]');
+        var res = coerceFactor(byKey[key], typed[key].trim());
+        if (slot && !res[0]) { slot.textContent = res[3] ? self._msg(res[3], res[4]) : res[2]; slot.hidden = false; }
+      });
     };
     // The form's Start button: validate what was typed, record it, run.
     proto._submitFactors = function () {
@@ -1276,40 +1351,94 @@
     };
 
     // ---- rendering --------------------------------------------------------
+    // Intl formatters for the `locale` attribute, or null when it is absent
+    // (the default: fixed ASCII formats) or names no locale Intl accepts.
+    proto._intl = function () {
+      if (!this.hasAttribute('locale') || typeof Intl === 'undefined') return null;
+      var tag = this.getAttribute('locale');
+      tag = (tag === '' || tag === 'auto') ? undefined : tag;
+      var cache = this._intlCache;
+      if (cache && cache.tag === tag) return cache.fmt;
+      var fmt = null;
+      try {
+        fmt = {
+          number: new Intl.NumberFormat(tag),
+          two: new Intl.NumberFormat(tag, { minimumIntegerDigits: 2, useGrouping: false }),
+          int: new Intl.NumberFormat(tag, { useGrouping: false }),
+          clock: new Intl.DateTimeFormat(tag, { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+          seconds: null
+        };
+        try { fmt.seconds = new Intl.NumberFormat(tag, { style: 'unit', unit: 'second', unitDisplay: 'narrow', useGrouping: false }); } catch (e) { /* older engines */ }
+      } catch (e) { fmt = null; }
+      this._intlCache = { tag: tag, fmt: fmt };
+      return fmt;
+    };
     proto.formatTime = function (seconds) {
-      var s = Math.max(0, Math.floor(seconds)), f = this.timeFormat;
-      if (f === 'seconds') return s + 's';
-      if (f === 'hours') return Math.floor(s / 3600) + ':' + pad2(Math.floor(s / 60) % 60) + ':' + pad2(s % 60);
+      var s = Math.max(0, Math.floor(seconds)), f = this.timeFormat, intl = this._intl();
+      var two = intl ? function (n) { return intl.two.format(n); } : pad2;
+      var int = intl ? function (n) { return intl.int.format(n); } : String;
+      if (f === 'seconds') return intl && intl.seconds ? intl.seconds.format(s) : int(s) + 's';
+      if (f === 'hours') return int(Math.floor(s / 3600)) + ':' + two(Math.floor(s / 60) % 60) + ':' + two(s % 60);
       if (f === 'clock') {
         var base = this.startAt || this._executionStart || new Date();
         var d = new Date(base.getTime() + s * 1000);
+        if (intl) return intl.clock.format(d);
         return pad2(d.getHours()) + ':' + pad2(d.getMinutes()) + ':' + pad2(d.getSeconds());
       }
-      return pad2(Math.floor(s / 60)) + ':' + pad2(s % 60);
+      return two(Math.floor(s / 60)) + ':' + two(s % 60);
+    };
+
+    // Translated chart text. Only overridden keys are handed to the
+    // renderer, so an untranslated chart is unchanged byte for byte. A
+    // translated legend term switches the chart to the renderer's
+    // configurable legend, which lists the step kinds the program uses.
+    proto._chartText = function (svgOpts, T, now) {
+      var own = this._labels || {};
+      if (own.chartSubtitle !== undefined) {
+        // The renderer's own total: latest end (variable steps at their
+        // maximum), stretched to the cursor while playing.
+        var end = 0, steps = this._steps;
+        Object.keys(T).forEach(function (id) {
+          var e = T[id].end, d = steps[id] && steps[id].duration;
+          if (d && d.type === 'variable' && d.maxSeconds !== undefined) e = Math.max(e, T[id].start + R.parseSeconds(d.maxSeconds));
+          end = Math.max(end, e);
+        });
+        if (now !== null) end = Math.max(end, now);
+        if (end <= 0) end = 1;
+        var tracks = (this._expanded.tracks || []).length;
+        svgOpts.subtitle = this._msg('chartSubtitle', [tracks, shortDuration(end), end]);
+      }
+      var legendLabels = null;
+      Object.keys(LEGEND_KEYS).forEach(function (k) {
+        if (own[k] === undefined) return;
+        legendLabels = legendLabels || {};
+        legendLabels[LEGEND_KEYS[k]] = this._msg(k);
+      }, this);
+      if (legendLabels) svgOpts.legend = { labels: legendLabels };
     };
 
     proto.render = function () {
       if (!this._wrap) return;
       if (!this._expanded) {
-        this._wrap.innerHTML = '<div class="empty">' + (this.hasAttribute('src') ? esc(this._msg('loading')) : withCode(this._msg('noProgram', CODE_SLOTS), ['program', 'src'])) + '</div>';
+        this._wrap.innerHTML = '<div class="empty">' + (this.hasAttribute('src') ? esc(this._msg('loading')) : noProgramHtml(this._labels)) + '</div>';
         return;
       }
       var player = this.mode === 'player';
       var T = this._timings();
       var states = player ? this._states(T) : {};
       var width = Math.max(820, this.clientWidth || 0);
-      var svg = R.renderTimelineSvg(this._expanded, {
-        timings: T, now: player ? this._time : undefined, states: states, width: width
-      });
+      var svgOpts = { timings: T, now: player ? this._time : undefined, states: states, width: width };
+      this._chartText(svgOpts, T, player ? this._time : null);
+      var svg = R.renderTimelineSvg(this._expanded, svgOpts);
       var html = [];
       if (player) {
-        var st = this._status, running = st === 'running';
+        var st = this._status, running = st === 'running', intl = this._intl();
         html.push('<div class="controls" part="controls">');
         html.push(glyphButton('class="' + (running ? '' : 'primary') + '" data-act="' + (running ? 'pause' : 'start') + '"',
           running ? '❚❚' : '▶', this._msg(running ? 'pause' : (st === 'paused' ? 'resume' : 'start'))));
         html.push(glyphButton('class="stop" data-act="stop"' + (st === 'stopped' ? ' disabled' : ''), '■', this._msg('stop')));
         html.push('<label>' + esc(this._msg('speed')) + ' <select data-set="speed">' + [0.5, 1, 2, 5, 10, 30, 60].map(function (v) {
-          return '<option value="' + v + '"' + (v === this.speed ? ' selected' : '') + '>' + esc(this._msg('speedOption', [v])) + '</option>';
+          return '<option value="' + v + '"' + (v === this.speed ? ' selected' : '') + '>' + esc(this._msg('speedOption', [v, intl ? intl.number.format(v) : String(v)])) + '</option>';
         }, this).join('') + '</select></label>');
         html.push('<div class="clock"><span class="time" part="time">' + esc(this.formatTime(this._time)) + '</span><span class="status" part="status" data-status="' + esc(st) + '">' + esc(this._msg(STATUS_KEYS[st] || 'statusStopped')) + '</span></div>');
         html.push('</div>');

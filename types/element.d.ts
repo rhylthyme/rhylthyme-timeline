@@ -38,8 +38,8 @@ export interface RhylthymeTimelineLabels {
   resume: LabelText;
   stop: LabelText;
   speed: LabelText;
-  /** One playback-speed option, e.g. `2` -> "2×". */
-  speedOption: LabelFn<[factor: number]>;
+  /** One playback-speed option, e.g. `2` -> "2×"; `formatted` is the factor in the `locale` (else as is). */
+  speedOption: LabelFn<[factor: number, formatted: string]>;
   statusStopped: LabelText;
   statusRunning: LabelText;
   statusPaused: LabelText;
@@ -54,8 +54,12 @@ export interface RhylthymeTimelineLabels {
   groupProgress: LabelFn<[name: string, count: number, done: number]>;
   actionsHint: LabelText;
   loading: LabelText;
-  /** The empty state; the arguments are drawn as `<code>program</code>` and `<code>src</code>`. */
-  noProgram: LabelFn<[property: string, attribute: string]>;
+  /**
+   * The empty state. In a template, `{0}` and `{1}` are drawn as
+   * `<code>program</code>` and `<code>src</code>`; a function receives
+   * `'program'` and `'src'` and its text is shown escaped, without markup.
+   */
+  noProgram: LabelFn<[property: 'program', attribute: 'src']>;
   loadError: LabelFn<[url: string, message: string]>;
   factorsTitle: LabelText;
   factorsHint: LabelText;
@@ -66,6 +70,23 @@ export interface RhylthymeTimelineLabels {
   factorNotInteger: LabelFn<[text: string]>;
   /** `values` is the allowed values joined with ", ". */
   factorNotOneOf: LabelFn<[text: string, values: string]>;
+  /**
+   * The chart's subtitle, "5 tracks · 3h55 total". `total` is the compact
+   * duration; `totalSeconds` the same in seconds, to format it yourself.
+   */
+  chartSubtitle: LabelFn<[tracks: number, total: string, totalSeconds: number]>;
+  /**
+   * Legend terms. Overriding any of them draws the renderer's configurable
+   * legend (the step kinds the program uses) instead of the fixed key.
+   */
+  legendDependency: LabelText;
+  legendNegativeOffset: LabelText;
+  legendIndefinite: LabelText;
+  legendVariable: LabelText;
+  legendManual: LabelText;
+  legendBarrier: LabelText;
+  legendBarrierAny: LabelText;
+  legendInFlight: LabelText;
 }
 
 export interface RhylthymeTimelineElement extends HTMLElement {
@@ -99,6 +120,14 @@ export interface RhylthymeTimelineElement extends HTMLElement {
   speed: number;
   timeFormat: 'minutes' | 'seconds' | 'hours' | 'clock' | (string & {});
   startAt: Date | null;
+  /**
+   * Reflects the `locale` attribute. Set (a BCP 47 tag, or `''`/`'auto'` for
+   * the browser's), the clock, durations and speed options are formatted
+   * with Intl; null (the default) keeps the fixed formats.
+   */
+  locale: string | null;
+  /** The clock text for a program time in seconds, in `timeFormat` (and `locale`). */
+  formatTime(seconds: number): string;
   start(): void;
   pause(): void;
   stop(): void;

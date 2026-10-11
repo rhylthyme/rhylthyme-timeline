@@ -562,7 +562,65 @@
     out.labels.emptyDefault = l4.shadowRoot.querySelector('.empty').innerHTML;
     l4.labels = { noProgram: 'Aucun programme : propriété {0} ou URL {1}.' };
     out.labels.emptyFr = l4.shadowRoot.querySelector('.empty').innerHTML;
+    // A function gets the plain words, never internal placeholders.
+    l4.labels = { noProgram: (p, a) => 'Kein Programm: ' + String(p).toUpperCase() + ' / ' + a + ' <b>' };
+    out.labels.emptyFn = l4.shadowRoot.querySelector('.empty').innerHTML;
     l4.remove();
+    // Changing labels while the factor form is open keeps what was typed
+    // and the error on screen (re-worded).
+    const l5 = makeEl(withFactors());
+    l5.start();
+    const kg = () => l5.shadowRoot.querySelector('.factors [data-factor="turkeyKg"]');
+    const kgError = () => l5.shadowRoot.querySelector('.factors [data-factor-error="turkeyKg"]');
+    kg().value = '6.5';
+    l5.shadowRoot.querySelector('.factors select[data-factor="oven"]').value = 'gas';
+    l5.labels = { factorsTitle: 'Avant' };
+    out.labels.typedKept = [kg().value, l5.shadowRoot.querySelector('.factors select[data-factor="oven"]').value,
+      l5.shadowRoot.querySelector('.factors h3').textContent];
+    kg().value = 'heavy';
+    l5.shadowRoot.querySelector('.factors button[data-act="factors-start"]').click();
+    out.labels.errorBefore = [kgError().textContent, kgError().hidden];
+    l5.labels = { factorNotNumber: 'pas un nombre : {0}' };
+    out.labels.errorAfter = [kg().value, kgError().textContent, kgError().hidden, l5.status];
+    l5.remove();
+    // Chart text: unchanged by default, translated keys reach the renderer.
+    const chartTexts = (e) => Array.prototype.map.call(e.shadowRoot.querySelectorAll('.chart svg text'), (t) => t.textContent);
+    const l6 = makeEl(window.RHYLTHYME_EXAMPLES.thanksgiving_one_oven);
+    out.labels.chartDefault = chartTexts(l6);
+    const reference = document.createElement('div');
+    reference.innerHTML = Rhylthyme.renderTimelineSvg(
+      l6._expanded, { timings: l6.timings, now: 0, states: l6.stepStates, width: Math.max(820, l6.clientWidth || 0) });
+    out.labels.chartDefaultSame = l6.shadowRoot.querySelector('.chart').innerHTML === reference.innerHTML;
+    l6.labels = { chartSubtitle: (tracks, total, seconds) => tracks + ' pistes · ' + total + ' · ' + seconds + ' s',
+      legendDependency: 'dépendance', legendManual: 'manuel' };
+    out.labels.chartFr = chartTexts(l6);
+    l6.remove();
+    // Opt-in locale formatting.
+    const l7 = makeEl(window.RHYLTHYME_EXAMPLES.thanksgiving_one_oven);
+    l7.timeFormat = 'seconds';
+    out.labels.loc = { plainSeconds: l7.formatTime(45) };
+    l7.timeFormat = 'minutes';
+    out.labels.loc.plainMinutes = l7.formatTime(125);
+    out.labels.loc.plainSpeed = l7.shadowRoot.querySelector('select[data-set="speed"] option').textContent;
+    l7.locale = 'de';
+    out.labels.loc.attr = l7.getAttribute('locale');
+    out.labels.loc.deMinutes = l7.formatTime(125);
+    out.labels.loc.deSpeed = l7.shadowRoot.querySelector('select[data-set="speed"] option').textContent;
+    l7.timeFormat = 'seconds';
+    out.labels.loc.deSeconds = l7.formatTime(45);
+    out.labels.loc.intlSeconds = new Intl.NumberFormat('de', { style: 'unit', unit: 'second', unitDisplay: 'narrow' }).format(45);
+    l7.locale = 'ar-EG';
+    l7.timeFormat = 'minutes';
+    out.labels.loc.arMinutes = l7.formatTime(125);
+    l7.locale = 'en-US';
+    l7.timeFormat = 'clock';
+    l7.startAt = '2026-01-01T13:05:09';
+    out.labels.loc.enClock = l7.formatTime(0);
+    l7.locale = 'not a locale!!';
+    out.labels.loc.badClock = l7.formatTime(0);
+    l7.locale = null;
+    out.labels.loc.cleared = [l7.hasAttribute('locale'), l7.formatTime(0)];
+    l7.remove();
 
     // (d) programVersion parity: the same three programs are hashed in Node
     // with tools/hash-program.js. Base64 so multi-byte characters survive

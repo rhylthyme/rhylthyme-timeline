@@ -428,4 +428,38 @@ test('the player translates its text through the labels property',
     assert.strictEqual(l.formSkip, '— passer —');
     assert.strictEqual(l.formError, "« lourd » n'est pas un nombre");
     assert.strictEqual(l.emptyFr, 'Aucun programme : propriété <code>program</code> ou URL <code>src</code>.');
+    assert.strictEqual(l.emptyFn, 'Kein Programm: PROGRAM / src &lt;b&gt;',
+      'a noProgram function gets the plain words and its text is escaped');
+
+    // Relabelling an open factor form keeps the typed answers and errors.
+    assert.deepStrictEqual(l.typedKept, ['6.5', 'gas', 'Avant']);
+    assert.deepStrictEqual(l.errorBefore, ["'heavy' is not a number", false]);
+    assert.deepStrictEqual(l.errorAfter, ['heavy', 'pas un nombre : heavy', false, 'stopped']);
+
+    // The chart: English unchanged, translated keys drawn.
+    assert.strictEqual(l.chartDefaultSame, true, 'untranslated chart is the renderer default byte for byte');
+    assert.ok(l.chartDefault.some((t) => /^\d+ tracks · \S+ total$/.test(t)));
+    assert.ok(l.chartDefault.includes('dependency'));
+    assert.ok(l.chartFr.some((t) => /^\d+ pistes · \S+ · \d+ s$/.test(t)), JSON.stringify(l.chartFr));
+    const enSub = l.chartDefault.find((t) => / tracks · /.test(t)).match(/^(\d+) tracks · (\S+) total$/);
+    const frSub = l.chartFr.find((t) => / pistes · /.test(t)).match(/^(\d+) pistes · (\S+) · /);
+    assert.deepStrictEqual(frSub.slice(1), enSub.slice(1), 'same track count and total as the renderer');
+    assert.ok(l.chartFr.includes('dépendance'));
+    assert.ok(l.chartFr.includes('manuel'));
+    assert.ok(!l.chartFr.includes('dependency'));
+    assert.ok(!l.chartFr.some((t) => / tracks · /.test(t)));
+
+    // Locale formatting is opt-in.
+    const loc = l.loc;
+    assert.strictEqual(loc.plainSeconds, '45s');
+    assert.strictEqual(loc.plainMinutes, '02:05');
+    assert.strictEqual(loc.plainSpeed, '0.5×');
+    assert.strictEqual(loc.attr, 'de');
+    assert.strictEqual(loc.deMinutes, '02:05');
+    assert.strictEqual(loc.deSpeed, '0,5×');
+    assert.strictEqual(loc.deSeconds, loc.intlSeconds);
+    assert.notStrictEqual(loc.arMinutes, '02:05', 'native digits in ar-EG');
+    assert.match(loc.enClock, /^01:05:09\sPM$/);
+    assert.strictEqual(loc.badClock, '13:05:09', 'an invalid locale falls back to the fixed format');
+    assert.deepStrictEqual(loc.cleared, [false, '13:05:09']);
   });
