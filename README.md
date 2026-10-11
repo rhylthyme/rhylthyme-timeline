@@ -55,8 +55,9 @@ pickers, event log). `?at=9000&theme=dark` positions it for screenshots.
 
 Methods: `start()`, `pause()`, `stop()`, `toggle()`, `seek(seconds)` (while
 paused), `startStep(id)`, `completeStep(id)`, `tick()`, `setClock(fn)`.
-Read-only: `currentTime`, `status`, `timings`, `stepStates`. Events (all
-bubble and cross the shadow boundary):
+Read-only: `currentTime`, `status`, `timings`, `stepStates`. Read/write:
+`labels` (translations, below). Events (all bubble and cross the shadow
+boundary):
 
 | Event | `detail` | Fires |
 |---|---|---|
@@ -93,6 +94,50 @@ and nothing fires twice in a run. `stop()` ends the run, so the next
 `start()` fires every step again. A run that is dropped (program replaced,
 element removed) fires no `rt-step-ended` for the steps still running,
 matching the run record, which leaves them open.
+
+**Translating the player.** Every piece of text the player writes itself (not the program's own names) is a key of one
+table; set `labels` to a partial object and the keys you leave out stay
+English. Use a string, with `{0}`, `{1}`… for arguments, or a function:
+
+```js
+el.labels = {
+  start: 'Démarrer', pause: 'Pause', resume: 'Reprendre', stop: 'Arrêter',
+  speed: 'Vitesse', statusRunning: 'en cours',
+  startStep: (name) => `Démarrer : ${name}`,
+  doneStep: 'Terminé : {0}',
+};
+console.log(Object.keys(el.labels)); // the full key list, with the text in effect
+```
+
+The keys are typed as `RhylthymeTimelineLabels` in
+`@rhylthyme/timeline/element`: transport (`start`, `pause`, `resume`,
+`stop`, `speed`, `speedOption`), status (`statusStopped`, `statusRunning`,
+`statusPaused`, `statusCompleted`), step actions (`startStep`, `doneStep`,
+`instance`, `groupProgress`, `actionsHint`), the empty state (`loading`,
+`noProgram`, `loadError`), the variance-factor form (`factorsTitle`,
+`factorsHint`, `factorSkip`, `factorsStart`, `factorNotNumber`,
+`factorNotInteger`, `factorNotOneOf`) and the chart: its subtitle
+(`chartSubtitle(tracks, total, totalSeconds)`) and legend terms
+(`legendDependency`, `legendNegativeOffset`, `legendIndefinite`,
+`legendVariable`, `legendManual`, `legendBarrier`, `legendBarrierAny`,
+`legendInFlight`). Chart keys reach the renderer only when you set them,
+so the English chart is unchanged; translating a legend term draws the
+renderer's configurable legend, which lists the step kinds the program
+uses. Program content (track and step names) and the small brand mark
+are not labels. Text is escaped, never parsed as HTML. In the
+`noProgram` template `{0}` and `{1}` are drawn as `<code>program</code>`
+and `<code>src</code>`; a function receives `'program'` and `'src'` and
+its text is shown as is. Setting `labels` while the variance-factor form
+is open keeps what was typed and any error on screen, re-worded.
+
+Times are fixed-format ASCII (`mm:ss`, `HH:MM:SS`, `45s`) unless you set
+the `locale` attribute (or property): `locale="fr"` formats the clock,
+durations and the speed options with `Intl` in that locale, and an
+empty value or `"auto"` uses the browser's. `formatTime(seconds)`
+returns the clock text, and you can replace it on an instance. The glyphs (▶ ❚❚ ■ ✓) are not part of the text: they are drawn
+beside it with `aria-hidden="true"`, and each button's `aria-label` is
+the text alone. The status element keeps the untranslated state in
+`data-status` for styling.
 
 How the player treats step kinds, matching the rhylthyme.com runner:
 

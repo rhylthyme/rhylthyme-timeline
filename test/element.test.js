@@ -521,3 +521,86 @@ test('rt-step-began and rt-step-ended fire once per step per run, in time order'
       ['rt-step-began', 'cool-r1', 1620, 'plan'],
     ]);
   });
+
+// ---------------------------------------------------------------------
+// Translatable labels and accessible buttons (issue #7)
+// ---------------------------------------------------------------------
+
+test('the player translates its text through the labels property',
+  { skip: chrome ? false : 'no Chrome binary found (set CHROME_BIN)' }, async () => {
+    const out = await harnessOutput();
+    assert.deepStrictEqual(out.errors, []);
+    const l = out.labels;
+
+    // English stays exactly as before; the glyph is aria-hidden and the
+    // button's aria-label is the text alone.
+    assert.deepStrictEqual(l.defaultStart, ['▶ Start', 'Start', '▶']);
+    assert.deepStrictEqual(l.defaultStop, ['■ Stop', 'Stop', '■']);
+    assert.deepStrictEqual(l.defaultPause, ['❚❚ Pause', 'Pause', '❚❚']);
+    assert.deepStrictEqual(l.defaultResume, ['▶ Resume', 'Resume', '▶']);
+    assert.strictEqual(l.defaultStatus, 'stopped');
+    assert.match(l.defaultStepStart[0], /^▶ Start: \S/);
+    assert.strictEqual(l.defaultStepStart[1], l.defaultStepStart[0].slice(2));
+    assert.strictEqual(l.defaultStepStart[2], '▶');
+    assert.match(l.defaultStepDone[0], /^✓ Done: \S/);
+    assert.strictEqual(l.defaultStepDone[2], '✓');
+    assert.deepStrictEqual(l.defaultFormStart, ['▶ Start', 'Start', '▶']);
+    assert.strictEqual(l.emptyDefault,
+      'No program loaded. Set the <code>program</code> property or a <code>src</code> URL.');
+    assert.ok(l.defaultKeys >= 20, 'labels getter returns the whole table');
+
+    // Overrides: plain strings, {0} placeholders and functions.
+    assert.deepStrictEqual(l.frResume, ['▶ Reprendre', 'Reprendre', '▶']);
+    assert.deepStrictEqual(l.frStop, ['■ Arrêter', 'Arrêter', '■']);
+    assert.match(l.frStepStart[0], /^▶ Démarrer : \S/);
+    assert.strictEqual(l.frStepStart[1], l.frStepStart[0].slice(2));
+    assert.match(l.frStepDone[0], /^✓ Terminé : \S/);
+    assert.strictEqual(l.frSpeed, 'Vitesse ');
+    assert.deepStrictEqual(l.frStatus, ['en pause', 'paused']);
+    assert.strictEqual(l.frHintEscaped, '<b>not markup</b>', 'label text is escaped, never parsed as HTML');
+    assert.deepStrictEqual(l.ignoredKeys, [true, true], 'unknown keys and non-string values are ignored');
+    assert.deepStrictEqual(l.untranslatedPause, ['❚❚ Pause', 'Pause', '❚❚'], 'keys left out stay English');
+    assert.strictEqual(l.throwingFallsBack, true);
+    assert.deepStrictEqual(l.cleared, ['❚❚ Pause', 'Pause', '❚❚']);
+
+    // The variance-factor form.
+    assert.strictEqual(l.formTitle, 'Avant de commencer');
+    assert.deepStrictEqual(l.formStart, ['▶ Commencer', 'Commencer', '▶']);
+    assert.strictEqual(l.formSkip, '— passer —');
+    assert.strictEqual(l.formError, "« lourd » n'est pas un nombre");
+    assert.strictEqual(l.emptyFr, 'Aucun programme : propriété <code>program</code> ou URL <code>src</code>.');
+    assert.strictEqual(l.emptyFn, 'Kein Programm: PROGRAM / src &lt;b&gt;',
+      'a noProgram function gets the plain words and its text is escaped');
+
+    // Relabelling an open factor form keeps the typed answers and errors.
+    assert.deepStrictEqual(l.typedKept, ['6.5', 'gas', 'Avant']);
+    assert.deepStrictEqual(l.errorBefore, ["'heavy' is not a number", false]);
+    assert.deepStrictEqual(l.errorAfter, ['heavy', 'pas un nombre : heavy', false, 'stopped']);
+
+    // The chart: English unchanged, translated keys drawn.
+    assert.strictEqual(l.chartDefaultSame, true, 'untranslated chart is the renderer default byte for byte');
+    assert.ok(l.chartDefault.some((t) => /^\d+ tracks · \S+ total$/.test(t)));
+    assert.ok(l.chartDefault.includes('dependency'));
+    assert.ok(l.chartFr.some((t) => /^\d+ pistes · \S+ · \d+ s$/.test(t)), JSON.stringify(l.chartFr));
+    const enSub = l.chartDefault.find((t) => / tracks · /.test(t)).match(/^(\d+) tracks · (\S+) total$/);
+    const frSub = l.chartFr.find((t) => / pistes · /.test(t)).match(/^(\d+) pistes · (\S+) · /);
+    assert.deepStrictEqual(frSub.slice(1), enSub.slice(1), 'same track count and total as the renderer');
+    assert.ok(l.chartFr.includes('dépendance'));
+    assert.ok(l.chartFr.includes('manuel'));
+    assert.ok(!l.chartFr.includes('dependency'));
+    assert.ok(!l.chartFr.some((t) => / tracks · /.test(t)));
+
+    // Locale formatting is opt-in.
+    const loc = l.loc;
+    assert.strictEqual(loc.plainSeconds, '45s');
+    assert.strictEqual(loc.plainMinutes, '02:05');
+    assert.strictEqual(loc.plainSpeed, '0.5×');
+    assert.strictEqual(loc.attr, 'de');
+    assert.strictEqual(loc.deMinutes, '02:05');
+    assert.strictEqual(loc.deSpeed, '0,5×');
+    assert.strictEqual(loc.deSeconds, loc.intlSeconds);
+    assert.notStrictEqual(loc.arMinutes, '02:05', 'native digits in ar-EG');
+    assert.match(loc.enClock, /^01:05:09\sPM$/);
+    assert.strictEqual(loc.badClock, '13:05:09', 'an invalid locale falls back to the fixed format');
+    assert.deepStrictEqual(loc.cleared, [false, '13:05:09']);
+  });

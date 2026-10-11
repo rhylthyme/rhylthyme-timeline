@@ -25,6 +25,11 @@ Keep a Changelog; versions follow SemVer.
   `null`. `expandReplicates` itself is unchanged.
 - An epoch-ms anchor of `0` (`startAt` / `finishAt`) is no longer ignored by
   `itinerary` or `analyzeSchedule`.
+- Setting `labels` while the variance-factor form is open no longer
+  erases what was typed or hides the error shown; the error is re-worded
+  in the new labels.
+- A `noProgram` function override receives `'program'` and `'src'`, not
+  internal placeholders; templates still draw `{0}`/`{1}` as `<code>`.
 
 ## [2.0.0-beta.6] - unreleased
 

@@ -623,6 +623,133 @@
     out.transitions.completeInHandler = onlySteps(logK);
     k1.remove();
 
+    // ---- translatable labels and accessible buttons (issue #7) ---------
+    out.labels = {};
+    const buttonInfo = (e, sel) => {
+      const b = e.shadowRoot.querySelector(sel);
+      if (!b) return null;
+      const glyph = b.querySelector('[aria-hidden="true"]');
+      return [b.textContent, b.getAttribute('aria-label'), glyph ? glyph.textContent : null];
+    };
+    let lm = 0;
+    const l1 = makeEl(window.RHYLTHYME_EXAMPLES.thanksgiving_one_oven);
+    l1.setClock(() => lm);
+    out.labels.defaultStart = buttonInfo(l1, '.controls button[data-act="start"]');
+    out.labels.defaultStop = buttonInfo(l1, '.controls button[data-act="stop"]');
+    out.labels.defaultStatus = l1.shadowRoot.querySelector('.status').textContent;
+    out.labels.defaultKeys = Object.keys(l1.labels).length;
+    l1.start();
+    for (let i = 0; i < 400 && !l1.shadowRoot.querySelector('button[data-step-start]'); i++) { lm += 60000; l1.tick(); }
+    out.labels.defaultPause = buttonInfo(l1, '.controls button[data-act="pause"]');
+    out.labels.defaultStepStart = buttonInfo(l1, 'button[data-step-start]');
+    out.labels.defaultStepDone = buttonInfo(l1, 'button[data-step-done]');
+    l1.pause();
+    out.labels.defaultResume = buttonInfo(l1, '.controls button[data-act="start"]');
+    // Partial French overrides: strings, a {0} placeholder and functions.
+    l1.labels = {
+      resume: 'Reprendre', stop: 'Arrêter', speed: 'Vitesse', statusPaused: 'en pause',
+      startStep: (name) => `Démarrer : ${name}`, doneStep: 'Terminé : {0}',
+      actionsHint: '<b>not markup</b>', bogusKey: 'ignored', pause: 42,
+    };
+    out.labels.frResume = buttonInfo(l1, '.controls button[data-act="start"]');
+    out.labels.frStop = buttonInfo(l1, '.controls button[data-act="stop"]');
+    out.labels.frStepStart = buttonInfo(l1, 'button[data-step-start]');
+    out.labels.frStepDone = buttonInfo(l1, 'button[data-step-done]');
+    out.labels.frSpeed = l1.shadowRoot.querySelector('.controls label').firstChild.textContent;
+    out.labels.frStatus = [l1.shadowRoot.querySelector('.status').textContent, l1.shadowRoot.querySelector('.status').getAttribute('data-status')];
+    out.labels.frHintEscaped = l1.shadowRoot.querySelector('.actions .hint').textContent;
+    out.labels.ignoredKeys = [l1.labels.bogusKey === undefined, l1.labels.pause === 'Pause'];
+    l1.start();
+    out.labels.untranslatedPause = buttonInfo(l1, '.controls button[data-act="pause"]');
+    // A function override that throws falls back to English.
+    l1.labels = { startStep: () => { throw new Error('boom'); } };
+    out.labels.throwingFallsBack = buttonInfo(l1, 'button[data-step-start]')[0].indexOf('▶ Start: ') === 0;
+    // null clears every override.
+    l1.labels = null;
+    out.labels.cleared = buttonInfo(l1, '.controls button[data-act="pause"]');
+    l1.remove();
+    // The factor form.
+    const l2 = makeEl(withFactors());
+    l2.labels = { factorsTitle: 'Avant de commencer', factorsStart: 'Commencer', factorSkip: '— passer —',
+      factorNotNumber: (text) => `« ${text} » n'est pas un nombre` };
+    l2.start();
+    out.labels.formTitle = l2.shadowRoot.querySelector('.factors h3').textContent;
+    out.labels.formStart = buttonInfo(l2, '.factors button[data-act="factors-start"]');
+    out.labels.formSkip = l2.shadowRoot.querySelector('.factors select[data-factor="oven"] option').textContent;
+    l2.shadowRoot.querySelector('.factors [data-factor="turkeyKg"]').value = 'lourd';
+    l2.shadowRoot.querySelector('.factors button[data-act="factors-start"]').click();
+    out.labels.formError = l2.shadowRoot.querySelector('.factors [data-factor-error="turkeyKg"]:not([hidden])').textContent;
+    l2.remove();
+    const l3 = makeEl(withFactors());
+    l3.start();
+    out.labels.defaultFormStart = buttonInfo(l3, '.factors button[data-act="factors-start"]');
+    l3.remove();
+    // The empty state keeps its <code> markup around the translated text.
+    const l4 = document.createElement('rhylthyme-timeline');
+    document.body.appendChild(l4);
+    out.labels.emptyDefault = l4.shadowRoot.querySelector('.empty').innerHTML;
+    l4.labels = { noProgram: 'Aucun programme : propriété {0} ou URL {1}.' };
+    out.labels.emptyFr = l4.shadowRoot.querySelector('.empty').innerHTML;
+    // A function gets the plain words, never internal placeholders.
+    l4.labels = { noProgram: (p, a) => 'Kein Programm: ' + String(p).toUpperCase() + ' / ' + a + ' <b>' };
+    out.labels.emptyFn = l4.shadowRoot.querySelector('.empty').innerHTML;
+    l4.remove();
+    // Changing labels while the factor form is open keeps what was typed
+    // and the error on screen (re-worded).
+    const l5 = makeEl(withFactors());
+    l5.start();
+    const kg = () => l5.shadowRoot.querySelector('.factors [data-factor="turkeyKg"]');
+    const kgError = () => l5.shadowRoot.querySelector('.factors [data-factor-error="turkeyKg"]');
+    kg().value = '6.5';
+    l5.shadowRoot.querySelector('.factors select[data-factor="oven"]').value = 'gas';
+    l5.labels = { factorsTitle: 'Avant' };
+    out.labels.typedKept = [kg().value, l5.shadowRoot.querySelector('.factors select[data-factor="oven"]').value,
+      l5.shadowRoot.querySelector('.factors h3').textContent];
+    kg().value = 'heavy';
+    l5.shadowRoot.querySelector('.factors button[data-act="factors-start"]').click();
+    out.labels.errorBefore = [kgError().textContent, kgError().hidden];
+    l5.labels = { factorNotNumber: 'pas un nombre : {0}' };
+    out.labels.errorAfter = [kg().value, kgError().textContent, kgError().hidden, l5.status];
+    l5.remove();
+    // Chart text: unchanged by default, translated keys reach the renderer.
+    const chartTexts = (e) => Array.prototype.map.call(e.shadowRoot.querySelectorAll('.chart svg text'), (t) => t.textContent);
+    const l6 = makeEl(window.RHYLTHYME_EXAMPLES.thanksgiving_one_oven);
+    out.labels.chartDefault = chartTexts(l6);
+    const reference = document.createElement('div');
+    reference.innerHTML = Rhylthyme.renderTimelineSvg(
+      l6._expanded, { timings: l6.timings, now: 0, states: l6.stepStates, width: Math.max(820, l6.clientWidth || 0) });
+    out.labels.chartDefaultSame = l6.shadowRoot.querySelector('.chart').innerHTML === reference.innerHTML;
+    l6.labels = { chartSubtitle: (tracks, total, seconds) => tracks + ' pistes · ' + total + ' · ' + seconds + ' s',
+      legendDependency: 'dépendance', legendManual: 'manuel' };
+    out.labels.chartFr = chartTexts(l6);
+    l6.remove();
+    // Opt-in locale formatting.
+    const l7 = makeEl(window.RHYLTHYME_EXAMPLES.thanksgiving_one_oven);
+    l7.timeFormat = 'seconds';
+    out.labels.loc = { plainSeconds: l7.formatTime(45) };
+    l7.timeFormat = 'minutes';
+    out.labels.loc.plainMinutes = l7.formatTime(125);
+    out.labels.loc.plainSpeed = l7.shadowRoot.querySelector('select[data-set="speed"] option').textContent;
+    l7.locale = 'de';
+    out.labels.loc.attr = l7.getAttribute('locale');
+    out.labels.loc.deMinutes = l7.formatTime(125);
+    out.labels.loc.deSpeed = l7.shadowRoot.querySelector('select[data-set="speed"] option').textContent;
+    l7.timeFormat = 'seconds';
+    out.labels.loc.deSeconds = l7.formatTime(45);
+    out.labels.loc.intlSeconds = new Intl.NumberFormat('de', { style: 'unit', unit: 'second', unitDisplay: 'narrow' }).format(45);
+    l7.locale = 'ar-EG';
+    l7.timeFormat = 'minutes';
+    out.labels.loc.arMinutes = l7.formatTime(125);
+    l7.locale = 'en-US';
+    l7.timeFormat = 'clock';
+    l7.startAt = '2026-01-01T13:05:09';
+    out.labels.loc.enClock = l7.formatTime(0);
+    l7.locale = 'not a locale!!';
+    out.labels.loc.badClock = l7.formatTime(0);
+    l7.locale = null;
+    out.labels.loc.cleared = [l7.hasAttribute('locale'), l7.formatTime(0)];
+    l7.remove();
+
     // (d) programVersion parity: the same three programs are hashed in Node
     // with tools/hash-program.js. Base64 so multi-byte characters survive
     // the DOM dump unharmed.

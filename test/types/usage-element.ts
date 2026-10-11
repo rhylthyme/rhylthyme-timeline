@@ -1,5 +1,6 @@
 // The element's types: the tag map, the typed events and the methods.
 import '@rhylthyme/timeline/element';
+import type { RhylthymeTimelineLabels } from '@rhylthyme/timeline/element';
 
 const el = document.querySelector('rhylthyme-timeline');
 el?.addEventListener('rt-step-start', (e) => { const id: string = e.detail.stepId; void id; });
@@ -25,6 +26,33 @@ if (el) {
   const skipped: string[] = [];
   el.addEventListener('rt-factors', (e) => { skipped.push(...e.detail.skipped); });
   if (el.askFactors()) el.reconcileClock();
+  // Translations: partial, strings or functions with typed arguments.
+  const fr: Partial<RhylthymeTimelineLabels> = {
+    start: 'Démarrer',
+    startStep: (name) => `Démarrer : ${name}`,
+    doneStep: 'Terminé : {0}',
+    groupProgress: (name, count, done) => `${name} ×${count} — ${done} terminé(s)`,
+  };
+  el.labels = fr;
+  el.labels = null;
+  const startText: RhylthymeTimelineLabels['start'] = el.labels.start;
+  void startText;
+  // @ts-expect-error startStep's argument is the step name, a string
+  el.labels = { startStep: (name: number) => String(name) };
+  // @ts-expect-error unknown label key
+  el.labels = { begin: 'Go' };
+  el.labels = {
+    chartSubtitle: (tracks, total, seconds) => `${tracks} pistes · ${total} (${seconds.toFixed(0)} s)`,
+    legendDependency: 'dépendance',
+    noProgram: (property, attribute) => `Aucun programme : ${property} / ${attribute}`,
+    speedOption: (factor, formatted) => `${formatted} ×`,
+  };
+  el.locale = 'fr';
+  el.locale = null;
+  const clockText: string = el.formatTime(90);
+  void clockText;
+  // @ts-expect-error chartSubtitle's first argument is a count
+  el.labels = { chartSubtitle: (tracks: string) => tracks };
   // @ts-expect-error startStep takes a step id
   el.startStep(1);
 }
