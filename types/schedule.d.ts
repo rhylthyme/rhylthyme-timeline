@@ -2,7 +2,7 @@
 // mcp.rhylthyme.com runs.
 
 import type { Program, Step, Seconds, Alert } from './program';
-import type { StepTiming, Timings } from './index';
+import type { StepTiming, Timings, ItineraryEntry, ItineraryOptions } from './index';
 
 export type { Program } from './program';
 
@@ -52,7 +52,7 @@ export interface AnalyzedStep {
   name: string;
   trackId: string;
   parentTrackId: string | null;
-  /** The authored step a replicate instance came from. */
+  /** The authored step a replicate instance (of a step or of its track) came from. */
   instanceOf: string | null;
   instanceIndex: number | null;
   task: string | null;
@@ -142,6 +142,8 @@ export interface AnalyzeOptions {
 
 export function validateProgram(program: Program): ValidationResult;
 export function analyzeSchedule(program: Program, opts?: AnalyzeOptions): Analysis;
+/** The core itinerary() after the LabMCP estimates analyzeSchedule applies: its entries agree with analyzeSchedule(...).steps. */
+export function itinerary(program: Program, opts?: ItineraryOptions): ItineraryEntry[];
 /** Markdown summaries, as the MCP tools return them. */
 export function formatValidation(result: ValidationResult): string;
 export function formatAnalysis(analysis: Analysis): string;

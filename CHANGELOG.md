@@ -3,6 +3,31 @@
 All notable changes to this package are documented here. The format follows
 Keep a Changelog; versions follow SemVer.
 
+## [Unreleased]
+
+### Added
+- `itinerary(program, { startAt?, finishAt?, actual?, now? })` in the core
+  engine: every expanded step in plan order with `name`, `trackName`,
+  `instanceOf` / `instanceIndex`, seconds, `needsStart` / `needsFinish`,
+  `task`, and ISO `startAt` / `endAt` when anchored (the same anchoring as
+  `analyzeSchedule`). Lets an app list the plan without loading
+  `./schedule` (#4). Types `ItineraryOptions` and `ItineraryEntry`;
+  `test/itinerary.test.js` checks it against `analyzeSchedule(...).steps`
+  on every rhylthyme-examples and gold program. The core has no LabMCP
+  catalogue, so a LabMCP step with no duration gets the generic instrument
+  estimate there.
+- `itinerary` in `@rhylthyme/timeline/schedule`: the core `itinerary` after
+  the LabMCP catalogue estimates, so it agrees with `analyzeSchedule` on
+  every program.
+
+### Fixed
+- `analyzeSchedule(...).steps` (and `itinerary`) link the steps of a
+  replicated track (`replicates` or legacy `batch_size` on the track) to
+  their authored step through `instanceOf` / `instanceIndex`; they were
+  `null`. `expandReplicates` itself is unchanged.
+- An epoch-ms anchor of `0` (`startAt` / `finishAt`) is no longer ignored by
+  `itinerary` or `analyzeSchedule`.
+
 ## [2.0.0-beta.6] - unreleased
 
 ### Added
