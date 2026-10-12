@@ -45,7 +45,8 @@ Axis and labels
       --no-grid  --no-arrows  --no-marks
 
 Legend
-      --legend POS         bottom (default) | top | right | none
+      --legend POS         Draw the key (off by default): bottom | top | right;
+                           any other --legend-* option draws it at the bottom
       --legend-items LIST  Comma-separated keys, shown as listed:
                            tracks, tasks, dependency, negative-offset,
                            indefinite, variable, manual, barrier, barrier-any,

@@ -87,6 +87,7 @@ export interface RenderOptions {
   colorBy?: 'track' | 'task';
   /** Colours by track id, track name or task. */
   colors?: Record<string, string>;
+  /** The key to arrows and marks. Off by default: `true` or options draw it. */
   legend?: boolean | LegendOptions;
   arrows?: boolean;
   marks?: boolean;

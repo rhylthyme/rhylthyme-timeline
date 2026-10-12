@@ -1034,7 +1034,8 @@ window.PRE_UPGRADE = (function () {
     l5.labels = { factorNotNumber: 'pas un nombre : {0}' };
     out.labels.errorAfter = [kg().value, kgError().textContent, kgError().hidden, l5.status];
     l5.remove();
-    // Chart text: unchanged by default, translated keys reach the renderer.
+    // Chart text: unchanged by default (no key), the legend attribute draws
+    // the key, and translated keys reach the renderer.
     const chartTexts = (e) => Array.prototype.map.call(e.shadowRoot.querySelectorAll('.chart svg text'), (t) => t.textContent);
     const l6 = makeEl(window.RHYLTHYME_EXAMPLES.thanksgiving_one_oven);
     out.labels.chartDefault = chartTexts(l6);
@@ -1042,8 +1043,13 @@ window.PRE_UPGRADE = (function () {
     reference.innerHTML = Rhylthyme.renderTimelineSvg(
       l6._expanded, { timings: l6.timings, now: 0, states: l6.stepStates, width: Math.max(820, l6.clientWidth || 0) });
     out.labels.chartDefaultSame = l6.shadowRoot.querySelector('.chart').innerHTML === reference.innerHTML;
+    l6.setAttribute('legend', '');
+    out.labels.chartKeyed = chartTexts(l6);
+    l6.removeAttribute('legend');
     l6.labels = { chartSubtitle: (tracks, total, seconds) => tracks + ' pistes · ' + total + ' · ' + seconds + ' s',
       legendDependency: 'dépendance', legendManual: 'manuel' };
+    out.labels.chartFrUnkeyed = chartTexts(l6);
+    l6.setAttribute('legend', '');
     out.labels.chartFr = chartTexts(l6);
     l6.remove();
     // Opt-in locale formatting.

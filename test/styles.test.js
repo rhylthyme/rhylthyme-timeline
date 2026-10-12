@@ -74,7 +74,7 @@ test('light bars get dark ink, dark bars white', () => {
 
 test('colorBy "task" colours by resource and keys the legend with capacities', () => {
   const p = cookies();
-  const svg = R.renderTimelineSvg(p, { style: 'publication', colorBy: 'task' });
+  const svg = R.renderTimelineSvg(p, { style: 'publication', colorBy: 'task', legend: true });
   const expanded = R.expandReplicates(p);
   const tasks = [];
   expanded.tracks.forEach((t) => t.steps.forEach((s) => { if (s.task && !tasks.includes(s.task)) tasks.push(s.task); }));
@@ -86,20 +86,20 @@ test('colorBy "task" colours by resource and keys the legend with capacities', (
   for (const rc of p.resourceConstraints) assert.ok(labels.includes(`${rc.task} (max ${rc.maxConcurrent})`), rc.task);
   assert.equal(legendKeys(svg).filter((k) => k === 'task').length, tasks.length);
   // In the classic look too, without moving anything else out of place.
-  assert.ok(legendKeys(R.renderTimelineSvg(p, { colorBy: 'task' })).includes('task'));
+  assert.ok(legendKeys(R.renderTimelineSvg(p, { colorBy: 'task', legend: true })).includes('task'));
 });
 
 test('the automatic legend lists only what the drawing contains', () => {
-  const t = legendKeys(R.renderTimelineSvg(thanksgiving(), { style: 'web' }));
+  const t = legendKeys(R.renderTimelineSvg(thanksgiving(), { style: 'web', legend: true }));
   assert.deepEqual(t, ['dependency', 'negative-offset', 'indefinite', 'variable', 'manual']);
-  const c = legendKeys(R.renderTimelineSvg(cookies(), { style: 'web' }));
+  const c = legendKeys(R.renderTimelineSvg(cookies(), { style: 'web', legend: true }));
   assert.deepEqual(c, ['dependency', 'barrier', 'in-flight']);
-  const noArrows = legendKeys(R.renderTimelineSvg(cookies(), { style: 'web', arrows: false }));
+  const noArrows = legendKeys(R.renderTimelineSvg(cookies(), { style: 'web', arrows: false, legend: true }));
   assert.deepEqual(noArrows, []);
   const plain = { name: 'Plain', tracks: [{ trackId: 'a', name: 'A', steps: [{ stepId: 's', name: 'S', duration: { type: 'fixed', seconds: 60 }, startTrigger: { type: 'programStart' } }] }] };
-  const svg = R.renderTimelineSvg(plain, { style: 'web' });
+  const svg = R.renderTimelineSvg(plain, { style: 'web', legend: true });
   assert.ok(!svg.includes('rt-legend'), 'nothing to explain, no legend');
-  assert.ok(size(svg).h < size(R.renderTimelineSvg(thanksgiving(), { style: 'web' })).h);
+  assert.ok(size(svg).h < size(R.renderTimelineSvg(thanksgiving(), { style: 'web', legend: true })).h);
 });
 
 test('legend items, labels, title, position and frame are configurable', () => {
@@ -122,7 +122,7 @@ test('legend items, labels, title, position and frame are configurable', () => {
   assert.ok(legendY < firstRowY, 'top legend sits above the rows');
 
   const cols = R.renderTimelineSvg(p, { style: 'web', legend: { columns: 2 } });
-  assert.ok(size(cols).h > size(R.renderTimelineSvg(p, { style: 'web' })).h, 'two columns wrap onto more rows');
+  assert.ok(size(cols).h > size(R.renderTimelineSvg(p, { style: 'web', legend: true })).h, 'two columns wrap onto more rows');
   assert.ok(!R.renderTimelineSvg(p, { style: 'web', legend: false }).includes('rt-legend'));
   assert.ok(!R.renderTimelineSvg(p, { style: 'web', legend: { show: false } }).includes('rt-legend'));
 });
@@ -184,7 +184,7 @@ test('fontScale grows type and rows; background can be dropped', () => {
 
 test('planned-vs-actual works in the new looks, with its legend keys', () => {
   const run = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'runs', 'thanksgiving_one_oven.run.json'), 'utf8'));
-  const svg = R.renderTimelineSvg(thanksgiving(), { style: 'publication', run });
+  const svg = R.renderTimelineSvg(thanksgiving(), { style: 'publication', run, legend: true });
   assert.ok(svg.includes('rt-baseline') && svg.includes('data-deviation='));
   for (const k of ['planned', 'late', 'early', 'on-time']) assert.ok(legendKeys(svg).includes(k), k);
 });
