@@ -51,6 +51,7 @@ pickers, event log). `?at=9000&theme=dark` positions it for screenshots.
 | `time-format` | `minutes` (`mm:ss`), `seconds`, `hours` (`h:mm:ss`), `clock` (wall time from `start-at` or the moment Start was pressed) |
 | `start-at` | ISO 8601 start time for `clock` format |
 | `theme` | `light`, `dark`, `cookbook`; or override `--rt-bg`, `--rt-fg`, `--rt-accent`, `--rt-border`, `--rt-panel`, `--rt-muted` |
+| `legend` | present: draw the key to the chart's arrows and marks (dependency, negative offset, indefinite, variable, manual) under the chart. Hidden by default |
 | `view` | `timeline` (itinerary and DAG views are planned) |
 
 Methods: `start()`, `pause()`, `stop()`, `toggle()`, `seek(seconds)` (while
@@ -251,9 +252,10 @@ The keys are typed as `RhylthymeTimelineLabels` in
 (`legendDependency`, `legendNegativeOffset`, `legendIndefinite`,
 `legendVariable`, `legendManual`, `legendBarrier`, `legendBarrierAny`,
 `legendInFlight`). Chart keys reach the renderer only when you set them,
-so the English chart is unchanged; translating a legend term draws the
-renderer's configurable legend, which lists the step kinds the program
-uses. Program content (track and step names) and the small brand mark
+so the English chart is unchanged. The key itself is hidden unless the
+element has the `legend` attribute; with it, translating a legend term
+draws the renderer's configurable legend, which lists the step kinds the
+program uses. Program content (track and step names) and the small brand mark
 are not labels. Text is escaped, never parsed as HTML. In the
 `noProgram` template `{0}` and `{1}` are drawn as `<code>program</code>`
 and `<code>src</code>`; a function receives `'program'` and `'src'` and
@@ -442,7 +444,7 @@ const svg = Rhylthyme.renderTimelineSvg(program, {
 | `palette` | `vivid`, `muted`, `tableau`, `google`, `pastel`, `d3`, `cookbook` (the interactive timeline's palettes, value for value), `okabe-ito` (colour-blind safe), `grayscale`, `classic`, or an array | per style |
 | `colorBy` | `track`, `task` | `track` |
 | `colors` | `{ key: hex }` keyed by track id, track name or task | none |
-| `legend` | `false`, or `{ position, items, labels, title, columns, frame, onlyUsed, capacity, fontSize }` | automatic |
+| `legend` | `true` (the style's key), or `{ position, items, labels, title, columns, frame, onlyUsed, capacity, fontSize }` | off |
 | `legend.items` | any of `tracks`, `tasks`, `dependency`, `negative-offset`, `indefinite`, `variable`, `manual`, `barrier`, `barrier-any`, `in-flight`, `planned`, `late`, `early`, `on-time` | the keys the drawing uses; `tasks` first when `colorBy: 'task'` (with each resource's `maxConcurrent`) |
 | `title`, `subtitle` | string, or `false` to omit | program name, "N tracks · total" |
 | `brand` | boolean | on, except `publication` |
@@ -456,8 +458,11 @@ const svg = Rhylthyme.renderTimelineSvg(program, {
 | `labelOverflow` | `truncate`, `hide`, `outside` | `outside` for `publication`, else `truncate` |
 | `showDurations`, `tooltips` | boolean | off; on for `web` |
 
-Passing a `legend` object or `colorBy: 'task'` in the classic look swaps
-its fixed one-line key for the configurable one and leaves the rest alone.
+The key is drawn only when you ask for it. `legend: true` gives the
+style's key (the classic look's fixed one-line key; the other looks list
+only what the drawing contains); passing a `legend` object, or `colorBy:
+'task'` with `legend: true`, in the classic look swaps the fixed key for
+the configurable one and leaves the rest alone.
 `Rhylthyme.PALETTES` exports the palettes and `Rhylthyme.STYLES` the look
 names.
 
@@ -695,7 +700,7 @@ tracks and steps), and requires the same verdict (CI runs it here and in
 | Function | Returns |
 |---|---|
 | `computeStepTimings(program, opts?)` | `{ [stepId]: { start, end, duration, trackId, resolved } }` in seconds from program start. `resolved` is `false` when a trigger could not be satisfied (cycle or dangling reference); such steps are placed at `t = 0`. `opts.actual = { [stepId]: { start?, end? } }` overrides the plan with what actually happened; `opts.now` makes unstarted manual gates float to the current time and started indefinite steps stretch to it. |
-| `renderTimelineSvg(program, opts?)` | SVG markup (string). Looks, palettes, `colorBy` and the configurable legend are described under [Looks, palettes and the legend](#looks-palettes-and-the-legend). `opts = { arrows, marks, legend }`, all default `true`: cross-track dependency arrows (dashed for negative offsets), hatched indefinite steps, faded variable-step extensions to their maximum, a flag on manual gates, and a one-line legend (dependency, negative offset, indefinite, variable, manual). Player options: `timings` (precomputed), `now` (draws the cursor), `states` (`{ [stepId]: 'done' \| 'active' \| 'waiting' }`), `width`. Planned-vs-actual options: `baseline` (a second timings map drawn as a ghost bar under each step, `class="rt-baseline"`, with every bar tagged `data-deviation` / `data-deviation-seconds`), `deviationThreshold` (seconds inside which a step counts as on time, default 30) and `run` (a run record: shorthand for `timings` from it plus `baseline` from the plan). Bars carry `class="rt-bar"` and `data-step`. Without `baseline`/`run` the output is byte-identical to earlier versions. |
+| `renderTimelineSvg(program, opts?)` | SVG markup (string). Looks, palettes, `colorBy` and the configurable legend are described under [Looks, palettes and the legend](#looks-palettes-and-the-legend). `opts = { arrows, marks }`, both default `true`: cross-track dependency arrows (dashed for negative offsets), hatched indefinite steps, faded variable-step extensions to their maximum and a flag on manual gates. `legend` (default `false`): `true` adds a one-line key to them (dependency, negative offset, indefinite, variable, manual). Player options: `timings` (precomputed), `now` (draws the cursor), `states` (`{ [stepId]: 'done' \| 'active' \| 'waiting' }`), `width`. Planned-vs-actual options: `baseline` (a second timings map drawn as a ghost bar under each step, `class="rt-baseline"`, with every bar tagged `data-deviation` / `data-deviation-seconds`), `deviationThreshold` (seconds inside which a step counts as on time, default 30) and `run` (a run record: shorthand for `timings` from it plus `baseline` from the plan). Bars carry `class="rt-bar"` and `data-step`. Without `baseline`/`run` the output is byte-identical to earlier versions. |
 | `renderTimeline(container, program, opts?)` | Injects the SVG into a DOM element and returns the markup. |
 | `actualFromRun(record, program?, opts?)` | `{ [stepId]: { start, end } }` from a run record, keyed by expanded step id, ready to pass as `computeStepTimings`' `actual`. `opts.endsOnly` keeps only the ends, which is what a replay check feeds back so that every start has to come out of the trigger graph. Arguments may be given in either order. |
 | `timingsFromRun(program, record, opts?)` | `computeStepTimings(program, { actual: actualFromRun(record, program, opts) })`. |

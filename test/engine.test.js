@@ -80,9 +80,10 @@ test("expandReplicates matches the Python expansion shape", () => {
   assert.equal(R.stepDurationSeconds({ duration: { type: "indefinite" } }), 60);
 });
 
-test("renderTimelineSvg draws arrows, marks and legend, and can switch them off", () => {
+test("renderTimelineSvg draws arrows and marks, the legend on request, and can switch them off", () => {
   const p = JSON.parse(fs.readFileSync(path.join(__dirname, "fixtures", "programs", "thanksgiving_one_oven.json")));
-  const svg = R.renderTimelineSvg(p);
+  assert.ok(!R.renderTimelineSvg(p).includes(">manual<"), "no legend by default");
+  const svg = R.renderTimelineSvg(p, { legend: true });
   assert.ok(svg.startsWith("<svg"));
   assert.ok(svg.includes('marker-end="url(#rt-arrow)"'), "dependency arrows");
   assert.ok(svg.includes('class="rt-edge"') && svg.includes('stroke-dasharray="5,4"'), "negative-offset arrow");

@@ -127,8 +127,9 @@ export interface RhylthymeTimelineLabels {
    */
   chartSubtitle: LabelFn<[tracks: number, total: string, totalSeconds: number]>;
   /**
-   * Legend terms. Overriding any of them draws the renderer's configurable
-   * legend (the step kinds the program uses) instead of the fixed key.
+   * Legend terms, used when the `legend` attribute shows the key. Overriding
+   * any of them draws the renderer's configurable legend (the step kinds the
+   * program uses) instead of the fixed key.
    */
   legendDependency: LabelText;
   legendNegativeOffset: LabelText;

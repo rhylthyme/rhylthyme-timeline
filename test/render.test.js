@@ -65,7 +65,7 @@ test('cookie example: exactly one "all" barrier glyph, into box', () => {
 test('instances:"any" draws a dashed barrier; legend names the glyph', () => {
   const p = cookies();
   p.tracks[0].steps[3].startTrigger = { type: 'afterStep', stepId: 'cool', instances: 'any' };
-  const svg = R.renderTimelineSvg(p);
+  const svg = R.renderTimelineSvg(p, { legend: true });
   assert.deepEqual(glyphs(svg, 'any'), ['box']);
   const g = svg.match(/<g class="rt-barrier"[^]*?<\/g>/)[0];
   assert.ok(/<line [^>]*stroke-dasharray/.test(g));
@@ -106,10 +106,10 @@ test('maxInFlight draws one dotted, labelled in-flight arrow, not a dependency a
 });
 
 test('the in-flight legend key appears only when a gate is drawn', () => {
-  assert.ok(R.renderTimelineSvg(cookies()).includes('>in-flight limit<'));
+  assert.ok(R.renderTimelineSvg(cookies(), { legend: true }).includes('>in-flight limit<'));
   const p = cookies();
   delete p.tracks[0].steps[1].replicates.maxInFlight;
-  const svg = R.renderTimelineSvg(p);
+  const svg = R.renderTimelineSvg(p, { legend: true });
   assert.ok(!svg.includes('>in-flight limit<'));
   assert.equal(inflights(svg).length, 0);
 });
@@ -138,23 +138,42 @@ test('a parallel rolling window gates every instance past the window', () => {
 const SNAPSHOTS = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'render-snapshots.json'), 'utf8'));
 const sha256 = (text) => crypto.createHash('sha256').update(text, 'utf8').digest('hex');
 
-test('every default drawing is byte-for-byte what it was before `baseline` existed', () => {
+test('every keyed drawing is byte-for-byte what it was before `baseline` existed', () => {
   // The snapshots were taken from the renderer as it stood before the
   // planned-vs-actual options were added; adding an option must not move a
   // single pixel of a drawing that does not use it. Regenerate deliberately
-  // with tools/gen-render-snapshots.js (and say why in CHANGELOG.md).
+  // with tools/gen-render-snapshots.js (and say why in CHANGELOG.md). They
+  // were taken when the key was on by default, so they are drawn with it.
   const names = Object.keys(SNAPSHOTS.default);
   assert.ok(names.length >= 40, 'snapshots cover the corpus');
   const drifted = [];
   for (const name of names) {
-    const svg = R.renderTimelineSvg(program(name));
+    const svg = R.renderTimelineSvg(program(name), { legend: true });
     if (svg.length !== SNAPSHOTS.default[name].length || sha256(svg) !== SNAPSHOTS.default[name].sha256) drifted.push(name);
   }
   assert.deepEqual(drifted, [], 'default renderTimelineSvg output changed');
 });
 
+test('the key is off by default: the default drawing is the legend:false drawing', () => {
+  for (const name of Object.keys(SNAPSHOTS.default)) {
+    const svg = R.renderTimelineSvg(program(name));
+    assert.equal(svg, R.renderTimelineSvg(program(name), { legend: false }), name);
+    for (const label of ['>dependency<', '>negative offset<', '>indefinite<', '>variable<', '>manual<']) {
+      assert.ok(!svg.includes(label), name + ' ' + label);
+    }
+    assert.ok(!svg.includes('rt-legend'), name);
+    for (const style of ['web', 'publication']) {
+      assert.ok(!R.renderTimelineSvg(program(name), { style }).includes('rt-legend'), name + ' ' + style);
+    }
+  }
+  // Asking for it draws it, as before.
+  assert.ok(R.renderTimelineSvg(thanksgiving(), { legend: true }).includes('>manual<'));
+  assert.ok(R.renderTimelineSvg(thanksgiving(), { legend: {} }).includes('rt-legend'));
+  assert.ok(!R.renderTimelineSvg(thanksgiving(), { legend: { show: false } }).includes('rt-legend'));
+});
+
 test('the Thanksgiving run overlay matches its snapshot', () => {
-  const svg = R.renderTimelineSvg(thanksgiving(), { run: thanksgivingRun() });
+  const svg = R.renderTimelineSvg(thanksgiving(), { run: thanksgivingRun(), legend: true });
   const expected = SNAPSHOTS.overlay['thanksgiving_one_oven.json'];
   assert.equal(svg.length, expected.length);
   assert.equal(sha256(svg), expected.sha256);
@@ -162,6 +181,7 @@ test('the Thanksgiving run overlay matches its snapshot', () => {
   const explicit = R.renderTimelineSvg(thanksgiving(), {
     timings: R.timingsFromRun(thanksgiving(), thanksgivingRun()),
     baseline: R.computeStepTimings(thanksgiving()),
+    legend: true,
   });
   assert.equal(explicit, svg);
 });
@@ -232,19 +252,20 @@ test('deviationThreshold widens the on-time band', () => {
   const loose = bars(R.renderTimelineSvg(p, { run, deviationThreshold: 6000 }));
   assert.ok(Object.values(loose).every((b) => b.deviation === 'on-time'));
   // The legend names the threshold in force.
-  assert.ok(R.renderTimelineSvg(p, { run }).includes('>late (&gt;30s)<'));
-  assert.ok(R.renderTimelineSvg(p, { run, deviationThreshold: 120 }).includes('>late (&gt;120s)<'));
+  assert.ok(R.renderTimelineSvg(p, { run, legend: true }).includes('>late (&gt;30s)<'));
+  assert.ok(R.renderTimelineSvg(p, { run, deviationThreshold: 120, legend: true }).includes('>late (&gt;120s)<'));
 });
 
 test('the four planned-vs-actual legend keys appear only with a baseline', () => {
   const p = thanksgiving();
-  const svg = R.renderTimelineSvg(p, { run: thanksgivingRun() });
+  const svg = R.renderTimelineSvg(p, { run: thanksgivingRun(), legend: true });
   for (const label of ['>planned<', '>late (&gt;30s)<', '>early<', '>on time<']) {
     assert.ok(svg.includes(label), label);
   }
-  const plain = R.renderTimelineSvg(p);
+  const plain = R.renderTimelineSvg(p, { legend: true });
   for (const label of ['>planned<', '>early<', '>on time<']) assert.ok(!plain.includes(label), label);
-  // legend:false drops them with the rest of the key.
+  // Without the key (the default) they go with the rest of it.
+  assert.ok(!R.renderTimelineSvg(p, { run: thanksgivingRun() }).includes('>planned<'));
   const bare = R.renderTimelineSvg(p, { run: thanksgivingRun(), legend: false });
   assert.ok(!bare.includes('>planned<'));
   assert.ok(Object.keys(ghosts(bare)).length === 13, 'bars are unaffected by legend:false');

@@ -20,6 +20,8 @@
  *                BCP 47 locale ("fr", "de-CH"); empty or "auto" means the browser's.
  *                Absent (the default), times use the fixed formats above
  *   theme        "light" (default) | "dark" | "cookbook"; or set the --rt-* custom properties
+ *   legend       present: draw the key to the chart's arrows and marks under the
+ *                chart (hidden by default)
  *   view         "timeline" (only view in this release)
  *   data-factors preset answers to the program's declared variance factors, either JSON
  *                ('{"turkeyKg":6.4,"oven":"gas"}') or "turkeyKg=6.4,oven=gas"
@@ -612,7 +614,7 @@
   }
 
   class RhylthymeTimeline extends HTMLElement {
-    static get observedAttributes() { return ['src', 'mode', 'speed', 'time-format', 'start-at', 'theme', 'view', 'data-factors', 'no-factor-prompt', 'data-predictions', 'locale', 'labels']; }
+    static get observedAttributes() { return ['src', 'mode', 'speed', 'time-format', 'start-at', 'theme', 'view', 'data-factors', 'no-factor-prompt', 'data-predictions', 'locale', 'labels', 'legend']; }
     constructor() {
       super();
       this._program = null;
@@ -1696,9 +1698,10 @@
     };
 
     // Translated chart text. Only overridden keys are handed to the
-    // renderer, so an untranslated chart is unchanged byte for byte. A
-    // translated legend term switches the chart to the renderer's
-    // configurable legend, which lists the step kinds the program uses.
+    // renderer, so an untranslated chart is unchanged byte for byte. The
+    // key is drawn only with the legend attribute; a translated legend term
+    // then switches it to the renderer's configurable legend, which lists
+    // the step kinds the program uses.
     proto._chartText = function (svgOpts, T, now) {
       var own = this._labels || {};
       if (own.chartSubtitle !== undefined) {
@@ -1715,6 +1718,8 @@
         var tracks = (this._expanded.tracks || []).length;
         svgOpts.subtitle = this._msg('chartSubtitle', [tracks, shortDuration(end), end]);
       }
+      if (!this.hasAttribute('legend')) return;
+      svgOpts.legend = true;
       var legendLabels = null;
       Object.keys(LEGEND_KEYS).forEach(function (k) {
         if (own[k] === undefined) return;

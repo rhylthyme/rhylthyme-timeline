@@ -781,10 +781,13 @@ test('the player translates its text through the labels property',
     assert.deepStrictEqual(l.errorBefore, ["'heavy' is not a number", false]);
     assert.deepStrictEqual(l.errorAfter, ['heavy', 'pas un nombre : heavy', false, 'stopped']);
 
-    // The chart: English unchanged, translated keys drawn.
+    // The chart: English unchanged, no key unless asked, translated keys drawn.
     assert.strictEqual(l.chartDefaultSame, true, 'untranslated chart is the renderer default byte for byte');
     assert.ok(l.chartDefault.some((t) => /^\d+ tracks · \S+ total$/.test(t)));
-    assert.ok(l.chartDefault.includes('dependency'));
+    assert.ok(!l.chartDefault.includes('dependency'), 'no key by default');
+    assert.ok(l.chartKeyed.includes('dependency') && l.chartKeyed.includes('manual'), 'the legend attribute draws the key');
+    assert.ok(!l.chartFrUnkeyed.includes('dépendance'), 'translating the terms does not turn the key on');
+    assert.ok(l.chartFrUnkeyed.some((t) => / pistes · /.test(t)));
     assert.ok(l.chartFr.some((t) => /^\d+ pistes · \S+ · \d+ s$/.test(t)), JSON.stringify(l.chartFr));
     const enSub = l.chartDefault.find((t) => / tracks · /.test(t)).match(/^(\d+) tracks · (\S+) total$/);
     const frSub = l.chartFr.find((t) => / pistes · /.test(t)).match(/^(\d+) pistes · (\S+) · /);
