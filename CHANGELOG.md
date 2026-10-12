@@ -3,7 +3,20 @@
 All notable changes to this package are documented here. The format follows
 Keep a Changelog; versions follow SemVer.
 
-## [2.0.0-beta.7] - unreleased
+## [2.0.0-beta.8] - unreleased
+
+### Changed
+- **The chart key is off by default.** `renderTimelineSvg` no longer draws
+  the legend (dependency, negative offset, indefinite, variable, manual,
+  and the planned-vs-actual keys) unless asked: `legend: true` for the
+  style's key, or a legend options object. `legend: false` and
+  `{ show: false }` still hide it. Charts without it are shorter by the
+  key's row. The player gains a `legend` attribute to show it; translated
+  `legend*` labels no longer turn it on by themselves. `rhylthyme-render`
+  draws it only with a `--legend*` option. The render snapshots are of the
+  keyed drawing and are now checked with `legend: true`.
+
+## [2.0.0-beta.7] - 2026-10-11
 
 ### Added
 - `findingCodes` in `@rhylthyme/timeline/schedule` (and its browser entry,
@@ -128,15 +141,6 @@ Keep a Changelog; versions follow SemVer.
   (the same now holds for `data-factors`).
 
 ### Changed
-- **The chart key is off by default.** `renderTimelineSvg` no longer draws
-  the legend (dependency, negative offset, indefinite, variable, manual,
-  and the planned-vs-actual keys) unless asked: `legend: true` for the
-  style's key, or a legend options object. `legend: false` and
-  `{ show: false }` still hide it. Charts without it are shorter by the
-  key's row. The player gains a `legend` attribute to show it; translated
-  `legend*` labels no longer turn it on by themselves. `rhylthyme-render`
-  draws it only with a `--legend*` option. The render snapshots are of the
-  keyed drawing and are now checked with `legend: true`.
 - `<rhylthyme-timeline>`: removing the element no longer drops its run at
   once. The decision runs in a microtask queued at disconnect: an element
   re-inserted synchronously (`appendChild` to another parent, or

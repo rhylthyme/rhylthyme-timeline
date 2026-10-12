@@ -1,6 +1,6 @@
 {
  "generatedBy": "computeStepTimings (rhylthyme-timeline/src/index.js); regenerate with tools/gen-engine-timings.js",
- "engineVersion": "2.0.0-beta.7",
+ "engineVersion": "2.0.0-beta.8",
  "programs": {
   "academy_awards_ceremony.json": {
    "opening-monologue": {

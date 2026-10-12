@@ -16,7 +16,7 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-__version__ = "2.0.0b7"
+__version__ = "2.0.0b8"
 
 _JS = Path(__file__).resolve().parent / "js"
 NODE_ENV = "RHYLTHYME_NODE"
