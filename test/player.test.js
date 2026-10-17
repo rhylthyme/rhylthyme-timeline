@@ -105,5 +105,10 @@ test('the page carries the floating-toolbar engine and a v2 tear-away view bar',
   assert.ok(html.includes('.view-toggle-bar.is-vertical > .inline-flex'), 'vertical layout CSS');
   const T = require('../player/floating-toolbars.js');
   assert.strictEqual(T.VERSION, 2);
-  assert.deepStrictEqual(T.normalizeSaved({ left: 16, top: 736 }, 420, 48, 1200, 800), { h: 'left', x: 16, v: 'bottom', y: 16 });
+  // Pre-v2 {left, top} positions migrate as horizontal bars (they always were).
+  assert.deepStrictEqual(T.normalizeSaved({ left: 16, top: 736 }, 420, 48, 1200, 800), { h: 'left', x: 16, v: 'bottom', y: 16, o: 'horizontal' });
+  // The marker is in the markup, so a host engine injected before the
+  // player's DOMContentLoaded attach already stands down.
+  assert.match(html, /<div id="view-toggle-bar"[^>]*data-rhylthyme-drag="2"/);
+  assert.strictEqual(typeof T.sideDock, 'function', 'orientation hysteresis');
 });

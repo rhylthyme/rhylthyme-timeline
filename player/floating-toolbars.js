@@ -25,12 +25,20 @@
  *     on screen without losing the saved anchor. The old {left, top} format
  *     is read and converted;
  *   - with `vertical: true` the bar turns vertical (class is-vertical) when
- *     docked to the left or right edge and not to the top or bottom;
+ *     it is pushed against the left or right edge, away from the corners.
+ *     The decision is taken from the horizontal-shape box under the
+ *     pointer (never from the shape it would switch to), with UNDOCK
+ *     hysteresis, so a bar sliding along an edge cannot strobe between
+ *     shapes; a vertical bar may slide against the top/bottom clamp. A side
+ *     dock needs the pointer to have moved toward that edge (a bar whose
+ *     default spot sits inside the snap radius does not dock when it is
+ *     only raised). The orientation is saved in the anchor (o);
  *   - double-clicking the grip animates back to the CSS default.
  *
  * Embedders get window.rhylthymeToolbars = {version, reset(name),
- * setVisible(name, bool), rects(), get(name)} and data-rhylthyme-drag="2"
- * on each bar, so a host that injects its own drag engine can stand down.
+ * setVisible(name, bool), rects(), get(name)} as soon as this script runs,
+ * and data-rhylthyme-drag="2" on each bar (also written in the pages'
+ * markup), so a host that injects its own drag engine can stand down.
  *
  * The file is inlined verbatim into the player page (the
  * `_FLOATING_TOOLBARS_JS` template slot) and into the shell, so it must stay
@@ -39,13 +47,20 @@
  */
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory();
-  else root.RhylthymeFloatingToolbars = factory();
+  else {
+    root.RhylthymeFloatingToolbars = factory();
+    // Publish window.rhylthymeToolbars now, before any bar attaches (the
+    // player attaches from DOMContentLoaded), so a host script injected at
+    // document end already sees the native engine.
+    try { if (root.document) root.RhylthymeFloatingToolbars.registry(root); } catch (e) { /* ignore */ }
+  }
 }(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
 
   var VERSION = 2;
   var GAP = 8;          // inset of the edge snap lines; offsets <= GAP are "docked"
   var SNAP = 10;        // magnetic radius, px
+  var UNDOCK = 24;      // a side-docked (vertical) bar lets go this far out
   var THRESHOLD = 3;    // px of travel before a press becomes a drag
   var PAD = 4;          // minimum on-screen inset when clamping
   var SETTLE_MS = 120;  // release ease
@@ -134,17 +149,26 @@
     };
   }
 
+  function copyAnchor(a) {
+    var out = { h: a.h, x: a.x, v: a.v, y: a.y };
+    if (a.o === 'vertical' || a.o === 'horizontal') out.o = a.o;
+    return out;
+  }
+
   /**
-   * Read a saved position in any format: an anchor (kept), the pre-v2
-   * {left, top} viewport pixels (converted against the current viewport),
-   * or anything else (null = CSS default).
+   * Read a saved position in any format: an anchor (kept, with its
+   * orientation o when present), the pre-v2 {left, top} viewport pixels
+   * (converted against the current viewport; those bars were always
+   * horizontal), or anything else (null = CSS default).
    */
   function normalizeSaved(saved, w, h, vw, vh) {
     if (!saved || typeof saved !== 'object') return null;
-    if (isAnchor(saved)) return { h: saved.h, x: saved.x, v: saved.v, y: saved.y };
+    if (isAnchor(saved)) return copyAnchor(saved);
     if (isNum(saved.left) && isNum(saved.top)) {
       var c = clampPosition(saved.left, saved.top, w, h, vw, vh);
-      return anchorFor(c.left, c.top, w, h, vw, vh);
+      var a = anchorFor(c.left, c.top, w, h, vw, vh);
+      a.o = 'horizontal';
+      return a;
     }
     return null;
   }
@@ -155,6 +179,46 @@
   /** 'vertical' when docked to a side edge but not into a corner. */
   function orientationFor(anchor, gap) {
     return dockedH(anchor, gap) && !dockedV(anchor, gap) ? 'vertical' : 'horizontal';
+  }
+
+  /**
+   * The orientation a saved anchor is drawn with: its own o (vertical only
+   * while it is still on a side edge), else orientationFor() for anchors
+   * saved without one.
+   */
+  function anchorOrientation(anchor, gap) {
+    if (!anchor) return 'horizontal';
+    if (anchor.o === 'vertical') return dockedH(anchor, gap) ? 'vertical' : 'horizontal';
+    if (anchor.o === 'horizontal') return 'horizontal';
+    return orientationFor(anchor, gap);
+  }
+
+  /**
+   * Which side edge a bar that can turn vertical is docked to while held:
+   * 'left', 'right' or null (horizontal). Decided from the HORIZONTAL-shape
+   * box under the pointer (refL, refT, wH x hH), so switching shape never
+   * feeds back into the decision, with hysteresis:
+   *   - horizontal -> vertical when the box is pushed within SNAP of a side
+   *     line (or past it), the pointer has moved toward that side (intent),
+   *     and the box is more than UNDOCK from the top and bottom lines;
+   *   - vertical stays until the box is pulled UNDOCK off its side, or into
+   *     a corner (within SNAP of the top or bottom line).
+   */
+  function sideDock(current, refL, refT, wH, hH, vw, vh, intent, options) {
+    var o = options || {};
+    var gap = isNum(o.gap) ? o.gap : GAP;
+    var snap = isNum(o.snap) ? o.snap : SNAP;
+    var undock = isNum(o.undock) ? o.undock : UNDOCK;
+    var dl = refL - gap;
+    var dr = (vw - gap) - (refL + wH);
+    var dc = Math.min(refT - gap, (vh - gap) - (refT + hH));
+    if (current === 'left' || current === 'right') {
+      return (current === 'left' ? dl : dr) <= undock && dc > snap ? current : null;
+    }
+    if (dc <= undock) return null;
+    if (dl <= snap && (!intent || intent.left)) return 'left';
+    if (dr <= snap && (!intent || intent.right)) return 'right';
+    return null;
   }
 
   /**
@@ -315,7 +379,7 @@
     var narrowMq = win.matchMedia ? win.matchMedia(NARROW_QUERY) : null;
     var motionMq = win.matchMedia ? win.matchMedia('(prefers-reduced-motion: reduce)') : null;
 
-    var anchor = null;        // saved anchor (null = CSS default)
+    var anchor = null;        // saved anchor {h, x, v, y, o?} (null = CSS default)
     var pending = null;       // pre-v2 {left, top} waiting for the bar to have a size
     var orientation = 'horizontal';
     var drag = null;
@@ -365,7 +429,7 @@
         clearInline();
         return;
       }
-      setOrientation(orientationFor(anchor));
+      setOrientation(anchorOrientation(anchor));
       var vp = viewport();
       var w = bar.offsetWidth, h = bar.offsetHeight;
       var p = w && h ? placeAnchor(anchor, w, h, vp.w, vp.h) : anchor;
@@ -465,8 +529,25 @@
       doc.addEventListener('pointercancel', onUp, true);
       capEl.addEventListener('lostpointercapture', onLost);
       win.addEventListener('blur', onBlur);
+      win.addEventListener('pagehide', onHide);
       doc.addEventListener('visibilitychange', onBlur);
       drag.keyWins.forEach(function (w) { w.addEventListener('keydown', onKey, true); });
+    }
+
+    function removeListeners(d) {
+      doc.removeEventListener('pointermove', onMove, true);
+      doc.removeEventListener('pointerup', onUp, true);
+      doc.removeEventListener('pointercancel', onUp, true);
+      d.capEl.removeEventListener('lostpointercapture', onLost);
+      win.removeEventListener('blur', onBlur);
+      win.removeEventListener('pagehide', onHide);
+      doc.removeEventListener('visibilitychange', onBlur);
+      d.keyWins.forEach(function (w) { try { w.removeEventListener('keydown', onKey, true); } catch (e) { /* ignore */ } });
+    }
+
+    /** Is this bar's document still the live one (srcdoc not replaced)? */
+    function alive() {
+      try { return bar.isConnected !== false && !!doc.defaultView; } catch (e) { return false; }
     }
 
     function begin() {
@@ -482,7 +563,23 @@
       d.baseL = r.left; d.baseT = r.top;
       d.left = r.left; d.top = r.top;
       d.w = r.width; d.h = r.height;
-      d.gx = d.x0 - r.left; d.gy = d.y0 - r.top;
+      var gx0 = d.x0 - r.left, gy0 = d.y0 - r.top;
+      // Grab offsets in the horizontal shape (H) and the vertical one (V).
+      // They are fixed for the whole drag: a change of shape never moves
+      // the grab point, so it cannot feed back into the next decision.
+      d.side = opts.vertical && orientation === 'vertical' ? (anchorFor(r.left, r.top, r.width, r.height, vp.w, vp.h).h) : null;
+      d.intent = { left: d.side === 'left', right: d.side === 'right' };
+      d.wH = r.width; d.hH = r.height;
+      d.gxH = gx0; d.gyH = gy0; d.gyV = gy0;
+      if (d.side) {
+        // Measure the horizontal shape once (no paint happens in between).
+        bar.classList.remove(verticalClass);
+        d.wH = bar.offsetWidth || r.width; d.hH = bar.offsetHeight || r.height;
+        bar.classList.add(verticalClass);
+        d.gyH = clamp(gy0, 4, d.hH - 4);
+        // Keep the pointer's distance from the docked edge.
+        d.gxH = d.side === 'left' ? clamp(gx0, 4, d.wH - 4) : d.wH - clamp(r.width - gx0, 4, d.wH - 4);
+      }
       d.peers = foreignRects(win).concat(api.rects().filter(function (p) { return p.name !== name; }));
       d.shield = shieldFrames();
       doc.documentElement.classList.add('rhy-toolbar-dragging');
@@ -509,24 +606,31 @@
     }
 
     /** Clamp, then snap (pushing past an edge docks to it), then clamp. */
-    function place(d) {
-      var c = clampPosition(d.x - d.gx, d.y - d.gy, d.w, d.h, d.vw, d.vh);
+    function place(d, left, top) {
+      var c = clampPosition(left, top, d.w, d.h, d.vw, d.vh);
       var s = snapPosition(c.left, c.top, d.w, d.h, d.vw, d.vh, d.peers);
       return clampPosition(s.left, s.top, d.w, d.h, d.vw, d.vh);
     }
 
-    /** Place the held bar under the pointer: snap, clamp, maybe reorient. */
+    /** Place the held bar under the pointer: maybe reorient, snap, clamp. */
     function step(d) {
-      var p = place(d);
       if (opts.vertical) {
-        var o = orientationFor(anchorFor(p.left, p.top, d.w, d.h, d.vw, d.vh));
-        if (setOrientation(o)) {
+        if (d.x0 - d.x >= THRESHOLD) d.intent.left = true;
+        if (d.x - d.x0 >= THRESHOLD) d.intent.right = true;
+        d.side = sideDock(d.side, d.x - d.gxH, d.y - d.gyH, d.wH, d.hH, d.vw, d.vh, d.intent);
+        if (setOrientation(d.side ? 'vertical' : 'horizontal')) {
           d.w = bar.offsetWidth; d.h = bar.offsetHeight;
-          // Keep the grab point inside the reshaped bar, for the rest of the drag.
-          d.gx = Math.min(d.gx, Math.max(4, d.w - 4));
-          d.gy = Math.min(d.gy, Math.max(4, d.h - 4));
-          p = place(d);
         }
+      }
+      var p;
+      if (d.side) {
+        // Held flat against the side line; slides freely along it (snapping
+        // to the top/bottom lines and peers, clamped on screen).
+        var left = d.side === 'left' ? GAP : d.vw - d.w - GAP;
+        p = place(d, left, d.y - clamp(d.gyV, 4, d.h - 4));
+        p.left = clamp(left, PAD, d.vw - d.w - PAD);
+      } else {
+        p = place(d, d.x - d.gxH, d.y - d.gyH);
       }
       d.left = p.left; d.top = p.top;
       bar.style.transform = 'translate3d(' + (p.left - d.baseL) + 'px,' + (p.top - d.baseT) + 'px,0) scale(' + LIFT_SCALE + ')';
@@ -542,8 +646,19 @@
     function onUp(e) { if (drag && e.pointerId === drag.id) finish(true); }
     function onLost(e) { if (drag && e.pointerId === drag.id) finish(true); }
     function onBlur() { if (drag) finish(true); }
+    function onHide() { if (drag) finish(false); }
     function onKey(e) {
-      if (drag && (e.key === 'Escape' || e.key === 'Esc')) {
+      if (!drag) return;
+      if (!alive()) {
+        // The document was replaced mid-drag (the shell swaps the player's
+        // srcdoc): drop the listeners this drag left on other windows and
+        // let the key through.
+        var dead = drag;
+        drag = null;
+        removeListeners(dead);
+        return;
+      }
+      if (e.key === 'Escape' || e.key === 'Esc') {
         e.preventDefault();
         e.stopPropagation();
         finish(false);
@@ -555,30 +670,29 @@
       var d = drag;
       if (!d) return;
       drag = null;
-      doc.removeEventListener('pointermove', onMove, true);
-      doc.removeEventListener('pointerup', onUp, true);
-      doc.removeEventListener('pointercancel', onUp, true);
-      d.capEl.removeEventListener('lostpointercapture', onLost);
-      win.removeEventListener('blur', onBlur);
-      doc.removeEventListener('visibilitychange', onBlur);
-      d.keyWins.forEach(function (w) { try { w.removeEventListener('keydown', onKey, true); } catch (e) { /* ignore */ } });
+      removeListeners(d);
       try { if (d.capEl.hasPointerCapture && d.capEl.hasPointerCapture(d.id)) d.capEl.releasePointerCapture(d.id); } catch (e) { /* ignore */ }
       if (!d.started) return; // a click: nothing moved
+      var undrawn = !!d.raf;
       if (d.raf) { win.cancelAnimationFrame(d.raf); d.raf = 0; }
       (d.shield || []).forEach(function (pair) { pair[0].style.pointerEvents = pair[1]; });
       doc.documentElement.classList.remove('rhy-toolbar-dragging');
       bar.classList.remove('is-dragging', 'rhy-lifted');
 
       if (commit) {
-        step(d); // land on the latest pointer position
+        // Commit what is on screen: the last drawn spot and shape. Only a
+        // move that has not been drawn yet is placed first (step() keeps
+        // the shape it is in unless the pointer really left the edge).
+        if (undrawn) step(d);
         var next = anchorFor(d.left, d.top, d.w, d.h, d.vw, d.vh);
+        if (opts.vertical) next.o = orientation;
         anchor = next;
         animate(d.left - d.baseL, d.top - d.baseT, SETTLE_MS, function () {
           bar.style.transform = '';
           apply();
         });
         if (typeof opts.save === 'function') {
-          try { opts.save({ h: next.h, x: next.x, v: next.v, y: next.y }); } catch (e) { /* ignore */ }
+          try { opts.save(copyAnchor(next)); } catch (e) { /* ignore */ }
         }
       } else {
         anchor = d.startAnchor;
@@ -653,7 +767,7 @@
       element: bar,
       apply: apply,
       setAnchor: setAnchor,
-      getAnchor: function () { return anchor ? { h: anchor.h, x: anchor.x, v: anchor.v, y: anchor.y } : null; },
+      getAnchor: function () { return anchor ? copyAnchor(anchor) : null; },
       orientation: function () { return orientation; },
       isDragging: function () { return !!(drag && drag.started); },
       reset: reset,
@@ -669,6 +783,7 @@
     VERSION: VERSION,
     GAP: GAP,
     SNAP: SNAP,
+    UNDOCK: UNDOCK,
     THRESHOLD: THRESHOLD,
     PAD: PAD,
     SETTLE_MS: SETTLE_MS,
@@ -682,6 +797,8 @@
     dockedH: dockedH,
     dockedV: dockedV,
     orientationFor: orientationFor,
+    anchorOrientation: anchorOrientation,
+    sideDock: sideDock,
     placeAnchor: placeAnchor,
     offsetRect: offsetRect,
     percentile: percentile,
