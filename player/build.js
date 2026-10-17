@@ -757,6 +757,9 @@ function computeSlots(nodes, edges, programData, environmentData, resourceConstr
     // The step-alert engine, inlined the same way from
     // rhylthyme-server/static/js/step-alerts.js.
     '_STEP_ALERTS_JS': fs.readFileSync(path.join(HERE, 'step-alerts.js'), 'utf8'),
+    // The floating-toolbar drag engine (tear-away view bar), inlined the same
+    // way from rhylthyme-server/static/js/floating-toolbars.js.
+    '_FLOATING_TOOLBARS_JS': fs.readFileSync(path.join(HERE, 'floating-toolbars.js'), 'utf8'),
     'nodes_json': nodesJson,
     'edges_json': edgesJson,
     'timeline_json': timelineJson,
