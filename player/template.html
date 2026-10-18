@@ -2548,7 +2548,7 @@
                     <div class="w-full border border-gray-300 rounded overflow-x-auto overflow-y-hidden" id="timeline-container" style=" <%=timeline_height%>">
                         <svg id="timeline-svg" width="100%" height="100%" style="overflow:visible;"></svg>
                     </div>
-                    <button id="timeline-screenshot-btn" onclick="exportTimelineSVG()" title="Download as SVG" style="position:absolute;top:8px;right:8px;z-index:10;background:rgba(0,0,0,0.5);border:none;color:white;width:32px;height:32px;border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:0.6;transition:opacity 0.2s;" onmouseenter="this.style.opacity='1'" onmouseleave="this.style.opacity='0.6'"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></button>
+                    <button id="timeline-screenshot-btn" onclick="exportTimelineSVG()" title="Download as SVG" data-i18n-title="controls.downloadSvg" style="position:absolute;top:8px;right:8px;z-index:10;background:rgba(0,0,0,0.5);border:none;color:white;width:32px;height:32px;border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:0.6;transition:opacity 0.2s;" onmouseenter="this.style.opacity='1'" onmouseleave="this.style.opacity='0.6'"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></button>
                     <div style="position:absolute;top:8px;right:48px;background:rgba(0,0,0,0.7);color:white;padding:4px 8px;border-radius:4px;font-size:12px;pointer-events:none;opacity:0;transition:opacity 0.3s;" id="scroll-hint">← Scroll horizontally →</div>
                 </div>
             </div>
@@ -2676,27 +2676,68 @@
         var I18N = (function() {
             var _lang = 'en';
             var _strings = {};
+            // Where the page runs: 'web' (a browser), 'macos' or 'ios'. The
+            // native apps set window.RHYLTHYME_PLATFORM at document start in
+            // every frame; an embedded player also takes its same-origin
+            // parent's value, and the shell posts 'rhylthyme-platform'.
+            // t(key) prefers '<key>@<platform>', so the apps never tell
+            // people about the browser, tabs or the website.
+            var _platform = detectPlatform();
+            function validPlatform(p) { return p === 'web' || p === 'macos' || p === 'ios'; }
+            function detectPlatform() {
+                try { if (validPlatform(window.RHYLTHYME_PLATFORM)) return window.RHYLTHYME_PLATFORM; } catch (e) {}
+                try {
+                    if (window.parent && window.parent !== window && validPlatform(window.parent.RHYLTHYME_PLATFORM)) {
+                        return window.parent.RHYLTHYME_PLATFORM;
+                    }
+                } catch (e) {}
+                try {
+                    // Apps that predate RHYLTHYME_PLATFORM: the Mac app's user
+                    // agent token and bridge, the iOS app's media bridge.
+                    if (String(navigator.userAgent || '').indexOf('RhylthymeMac/') >= 0) return 'macos';
+                    var mh = window.webkit && window.webkit.messageHandlers;
+                    if (mh && mh.rhylthymeSaveToDisk) return 'macos';
+                    if (mh && mh.rhylthymeUploadMedia) return 'ios';
+                } catch (e) {}
+                return 'web';
+            }
+            function markPlatform() {
+                try { document.documentElement.setAttribute('data-platform', _platform); } catch (e) {}
+            }
+            markPlatform();
             function setStrings(lang, obj) { _strings[lang] = obj; }
             function setLang(lang) {
                 if (_strings[lang]) _lang = lang;
                 else if (_strings[lang.split('-')[0]]) _lang = lang.split('-')[0];
                 else _lang = 'en';
             }
-            function t(key, params) {
-                var s = _strings[_lang];
-                var parts = key.split('.');
+            // Returns true when the platform changed (callers re-render).
+            function setPlatform(p) {
+                if (!validPlatform(p) || p === _platform) return false;
+                _platform = p;
+                markPlatform();
+                return true;
+            }
+            function getPlatform() { return _platform; }
+            function lookup(lang, parts) {
+                var s = _strings[lang];
                 for (var i = 0; i < parts.length; i++) {
                     if (s && typeof s === 'object') s = s[parts[i]];
-                    else { s = undefined; break; }
+                    else return undefined;
                 }
-                if (s === undefined) {
-                    var en = _strings['en'];
-                    for (var j = 0; j < parts.length; j++) {
-                        if (en && typeof en === 'object') en = en[parts[j]];
-                        else { en = undefined; break; }
-                    }
-                    s = en !== undefined ? en : key;
-                }
+                return s;
+            }
+            // '<key>@<platform>' in the current language, then '<key>', then
+            // the same two in English, then the key itself.
+            function t(key, params) {
+                var parts = key.split('.');
+                var pparts = parts.slice();
+                pparts[pparts.length - 1] += '@' + _platform;
+                var s = lookup(_lang, pparts);
+                if (s === undefined) s = lookup(_lang, parts);
+                if (s === undefined) s = lookup('en', pparts);
+                if (s === undefined) s = lookup('en', parts);
+                if (s === undefined) s = key;
                 if (params && typeof s === 'string') {
                     Object.keys(params).forEach(function(k) {
                         s = s.replace(new RegExp('\\{' + k + '\\}', 'g'), params[k]);
@@ -2705,8 +2746,12 @@
                 return s;
             }
             function getLang() { return _lang; }
-            return { setStrings: setStrings, setLang: setLang, t: t, getLang: getLang };
+            return { setStrings: setStrings, setLang: setLang, t: t, getLang: getLang,
+                     setPlatform: setPlatform, getPlatform: getPlatform };
         })();
+        // Tells the Mac app's interim wording rewrite that this page words
+        // itself per platform.
+        window.RHYLTHYME_PLATFORM_SUPPORT = 1;
 
         // English strings (iframe)
         I18N.setStrings('en', {
@@ -2718,7 +2763,10 @@
                 time: 'Time',
                 status: 'Status',
                 reset: 'Reset View',
-                presentationMode: 'Presentation Mode'
+                presentationMode: 'Presentation Mode',
+                downloadSvg: 'Download as SVG',
+                'downloadSvg@macos': 'Save as SVG',
+                'downloadSvg@ios': 'Export as SVG'
             },
             status: {
                 running: 'Running',
@@ -2762,8 +2810,14 @@
                 programAlertsHint: 'Shows the alerts a program sets on its steps (for example, two minutes before a step ends).',
                 alertSound: 'Alert sound',
                 browserNotifications: 'Browser notifications',
+                'browserNotifications@macos': 'Notifications',
+                'browserNotifications@ios': 'Notifications',
                 browserNotificationsHint: 'Also notifies you when this tab is in the background.',
+                'browserNotificationsHint@macos': 'Also notifies you when this window isn\u0027t visible.',
+                'browserNotificationsHint@ios': 'Also notifies you when Rhylthyme is in the background.',
                 browserNotificationsDenied: 'Notifications are blocked for this site. Allow them in your browser settings.',
+                'browserNotificationsDenied@macos': 'Notifications are off for Rhylthyme. Turn them on in System Settings ▸ Notifications.',
+                'browserNotificationsDenied@ios': 'Notifications are off for Rhylthyme. Turn them on in Settings ▸ Notifications.',
                 title: 'Visualization Settings',
                 theme: 'Theme',
                 lightMode: 'Light Mode',
@@ -2837,6 +2891,8 @@
                 noChanges: 'No changes to undo.',
                 restored: 'Schedule restored to original state.',
                 undoFailed: 'Failed to undo changes. Please refresh the page.',
+                'undoFailed@macos': 'Couldn\u0027t undo the changes. Press ⌘R to reload.',
+                'undoFailed@ios': 'Couldn\u0027t undo the changes. Close the program and open it again.',
                 timelineReset: 'Timeline reset to original plan',
                 noChangesToReset: 'No changes to reset',
                 switchedResource: 'Switched to Resource Usage view',
@@ -2894,7 +2950,10 @@
                 time: 'Tiempo',
                 status: 'Estado',
                 reset: 'Restablecer Vista',
-                presentationMode: 'Modo Presentaci\u00f3n'
+                presentationMode: 'Modo Presentaci\u00f3n',
+                downloadSvg: 'Descargar como SVG',
+                'downloadSvg@macos': 'Guardar como SVG',
+                'downloadSvg@ios': 'Exportar como SVG'
             },
             status: {
                 running: 'Ejecutando',
@@ -2938,8 +2997,14 @@
                 programAlertsHint: 'Muestra las alertas que un programa define en sus pasos (por ejemplo, dos minutos antes de que termine un paso).',
                 alertSound: 'Sonido de alerta',
                 browserNotifications: 'Notificaciones del navegador',
+                'browserNotifications@macos': 'Notificaciones',
+                'browserNotifications@ios': 'Notificaciones',
                 browserNotificationsHint: 'También te avisa cuando esta pestaña está en segundo plano.',
+                'browserNotificationsHint@macos': 'También te avisa cuando esta ventana no está visible.',
+                'browserNotificationsHint@ios': 'También te avisa cuando Rhylthyme está en segundo plano.',
                 browserNotificationsDenied: 'Las notificaciones están bloqueadas para este sitio. Permítelas en la configuración del navegador.',
+                'browserNotificationsDenied@macos': 'Las notificaciones de Rhylthyme están desactivadas. Actívalas en Ajustes del Sistema ▸ Notificaciones.',
+                'browserNotificationsDenied@ios': 'Las notificaciones de Rhylthyme están desactivadas. Actívalas en Ajustes ▸ Notificaciones.',
                 title: 'Configuraci\u00f3n de Visualizaci\u00f3n',
                 theme: 'Tema',
                 lightMode: 'Modo Claro',
@@ -3013,6 +3078,8 @@
                 noChanges: 'No hay cambios para deshacer.',
                 restored: 'Cronograma restaurado al estado original.',
                 undoFailed: 'Error al deshacer cambios. Actualiza la p\u00e1gina.',
+                'undoFailed@macos': 'No se pudieron deshacer los cambios. Pulsa ⌘R para volver a cargar.',
+                'undoFailed@ios': 'No se pudieron deshacer los cambios. Cierra el programa y vuelve a abrirlo.',
                 timelineReset: 'Cronograma restablecido al plan original',
                 noChangesToReset: 'No hay cambios para restablecer',
                 switchedResource: 'Cambiado a vista de Uso de Recursos',
@@ -3070,7 +3137,10 @@
                 time: 'Temps',
                 status: 'Statut',
                 reset: 'R\u00e9initialiser',
-                presentationMode: 'Mode Pr\u00e9sentation'
+                presentationMode: 'Mode Pr\u00e9sentation',
+                downloadSvg: 'Télécharger en SVG',
+                'downloadSvg@macos': 'Enregistrer en SVG',
+                'downloadSvg@ios': 'Exporter en SVG'
             },
             status: {
                 running: 'En cours',
@@ -3114,8 +3184,14 @@
                 programAlertsHint: 'Affiche les alertes qu’un programme définit sur ses étapes (par exemple, deux minutes avant la fin d’une étape).',
                 alertSound: 'Son des alertes',
                 browserNotifications: 'Notifications du navigateur',
+                'browserNotifications@macos': 'Notifications',
+                'browserNotifications@ios': 'Notifications',
                 browserNotificationsHint: 'Vous avertit aussi quand cet onglet est en arrière-plan.',
+                'browserNotificationsHint@macos': 'Vous avertit aussi quand cette fenêtre n\u0027est pas visible.',
+                'browserNotificationsHint@ios': 'Vous avertit aussi quand Rhylthyme est en arrière-plan.',
                 browserNotificationsDenied: 'Les notifications sont bloquées pour ce site. Autorisez-les dans les réglages du navigateur.',
+                'browserNotificationsDenied@macos': 'Les notifications de Rhylthyme sont désactivées. Activez-les dans Réglages Système ▸ Notifications.',
+                'browserNotificationsDenied@ios': 'Les notifications de Rhylthyme sont désactivées. Activez-les dans Réglages ▸ Notifications.',
                 title: 'Param\u00e8tres de Visualisation',
                 theme: 'Th\u00e8me',
                 lightMode: 'Mode Clair',
@@ -3189,6 +3265,8 @@
                 noChanges: 'Aucun changement \u00e0 annuler.',
                 restored: 'Chronologie restaur\u00e9e.',
                 undoFailed: '\u00c9chec. Veuillez rafra\u00eechir la page.',
+                'undoFailed@macos': 'Échec. Appuyez sur ⌘R pour recharger.',
+                'undoFailed@ios': 'Échec. Fermez le programme puis rouvrez-le.',
                 timelineReset: 'Chronologie r\u00e9initialis\u00e9e',
                 noChangesToReset: 'Aucun changement \u00e0 r\u00e9initialiser',
                 switchedResource: 'Basculement vers la vue Ressources',
@@ -3246,7 +3324,10 @@
                 time: 'Zeit',
                 status: 'Status',
                 reset: 'Ansicht zur\u00fccksetzen',
-                presentationMode: 'Pr\u00e4sentationsmodus'
+                presentationMode: 'Pr\u00e4sentationsmodus',
+                downloadSvg: 'Als SVG herunterladen',
+                'downloadSvg@macos': 'Als SVG speichern',
+                'downloadSvg@ios': 'Als SVG exportieren'
             },
             status: {
                 running: 'L\u00e4uft',
@@ -3290,8 +3371,14 @@
                 programAlertsHint: 'Zeigt die Hinweise, die ein Programm für seine Schritte festlegt (zum Beispiel zwei Minuten vor dem Ende eines Schritts).',
                 alertSound: 'Hinweiston',
                 browserNotifications: 'Browser-Benachrichtigungen',
+                'browserNotifications@macos': 'Mitteilungen',
+                'browserNotifications@ios': 'Mitteilungen',
                 browserNotificationsHint: 'Benachrichtigt dich auch, wenn dieser Tab im Hintergrund ist.',
+                'browserNotificationsHint@macos': 'Benachrichtigt dich auch, wenn dieses Fenster nicht sichtbar ist.',
+                'browserNotificationsHint@ios': 'Benachrichtigt dich auch, wenn Rhylthyme im Hintergrund ist.',
                 browserNotificationsDenied: 'Benachrichtigungen sind für diese Seite blockiert. Erlaube sie in den Browser-Einstellungen.',
+                'browserNotificationsDenied@macos': 'Mitteilungen für Rhylthyme sind aus. Aktiviere sie in den Systemeinstellungen ▸ Mitteilungen.',
+                'browserNotificationsDenied@ios': 'Mitteilungen für Rhylthyme sind aus. Aktiviere sie in den Einstellungen ▸ Mitteilungen.',
                 title: 'Visualisierungs-Einstellungen',
                 theme: 'Design',
                 lightMode: 'Heller Modus',
@@ -3365,6 +3452,8 @@
                 noChanges: 'Keine \u00c4nderungen zum R\u00fcckg\u00e4ngig machen.',
                 restored: 'Zeitplan wiederhergestellt.',
                 undoFailed: 'Fehler. Bitte Seite aktualisieren.',
+                'undoFailed@macos': 'Fehler. Drücken Sie ⌘R zum Neuladen.',
+                'undoFailed@ios': 'Fehler. Schließen Sie das Programm und öffnen Sie es erneut.',
                 timelineReset: 'Zeitleiste auf Originalplan zur\u00fcckgesetzt',
                 noChangesToReset: 'Keine \u00c4nderungen zum Zur\u00fccksetzen',
                 switchedResource: 'Zur Ressourcenansicht gewechselt',
@@ -3422,7 +3511,10 @@
                 time: '\u6642\u9593',
                 status: '\u30b9\u30c6\u30fc\u30bf\u30b9',
                 reset: '\u30d3\u30e5\u30fc\u3092\u30ea\u30bb\u30c3\u30c8',
-                presentationMode: '\u30d7\u30ec\u30bc\u30f3\u30c6\u30fc\u30b7\u30e7\u30f3\u30e2\u30fc\u30c9'
+                presentationMode: '\u30d7\u30ec\u30bc\u30f3\u30c6\u30fc\u30b7\u30e7\u30f3\u30e2\u30fc\u30c9',
+                downloadSvg: 'SVGとしてダウンロード',
+                'downloadSvg@macos': 'SVGとして保存',
+                'downloadSvg@ios': 'SVGとして書き出す'
             },
             status: {
                 running: '\u5b9f\u884c\u4e2d',
@@ -3466,8 +3558,14 @@
                 programAlertsHint: 'プログラムがステップに設定したアラートを表示します（例：ステップ終了の2分前）。',
                 alertSound: 'アラート音',
                 browserNotifications: 'ブラウザ通知',
+                'browserNotifications@macos': '通知',
+                'browserNotifications@ios': '通知',
                 browserNotificationsHint: 'このタブがバックグラウンドのときにも通知します。',
+                'browserNotificationsHint@macos': 'このウインドウが表示されていないときにも通知します。',
+                'browserNotificationsHint@ios': 'Rhylthymeがバックグラウンドのときにも通知します。',
                 browserNotificationsDenied: 'このサイトの通知はブロックされています。ブラウザの設定で許可してください。',
+                'browserNotificationsDenied@macos': 'Rhylthymeの通知はオフです。システム設定 ▸ 通知でオンにしてください。',
+                'browserNotificationsDenied@ios': 'Rhylthymeの通知はオフです。設定 ▸ 通知でオンにしてください。',
                 title: '\u8868\u793a\u8a2d\u5b9a',
                 theme: '\u30c6\u30fc\u30de',
                 lightMode: '\u30e9\u30a4\u30c8\u30e2\u30fc\u30c9',
@@ -3541,6 +3639,8 @@
                 noChanges: '\u5143\u306b\u623b\u3059\u5909\u66f4\u304c\u3042\u308a\u307e\u305b\u3093\u3002',
                 restored: '\u30b9\u30b1\u30b8\u30e5\u30fc\u30eb\u3092\u5fa9\u5143\u3057\u307e\u3057\u305f\u3002',
                 undoFailed: '\u5931\u6557\u3057\u307e\u3057\u305f\u3002\u30da\u30fc\u30b8\u3092\u66f4\u65b0\u3057\u3066\u304f\u3060\u3055\u3044\u3002',
+                'undoFailed@macos': '失敗しました。⌘Rで再読み込みしてください。',
+                'undoFailed@ios': '失敗しました。プログラムを閉じてもう一度開いてください。',
                 timelineReset: '\u30bf\u30a4\u30e0\u30e9\u30a4\u30f3\u3092\u30ea\u30bb\u30c3\u30c8\u3057\u307e\u3057\u305f',
                 noChangesToReset: '\u30ea\u30bb\u30c3\u30c8\u3059\u308b\u5909\u66f4\u304c\u3042\u308a\u307e\u305b\u3093',
                 switchedResource: '\u30ea\u30bd\u30fc\u30b9\u30d3\u30e5\u30fc\u306b\u5207\u308a\u66ff\u3048\u307e\u3057\u305f',
@@ -3597,7 +3697,10 @@
                 time: '时间',
                 status: '状态',
                 reset: '重置视图',
-                presentationMode: '演示模式'
+                presentationMode: '演示模式',
+                downloadSvg: '下载为 SVG',
+                'downloadSvg@macos': '存储为 SVG',
+                'downloadSvg@ios': '导出为 SVG'
             },
             status: {
                 running: '运行中',
@@ -3641,8 +3744,14 @@
                 programAlertsHint: '显示程序为步骤设置的提醒（例如在步骤结束前两分钟）。',
                 alertSound: '提醒声音',
                 browserNotifications: '浏览器通知',
+                'browserNotifications@macos': '通知',
+                'browserNotifications@ios': '通知',
                 browserNotificationsHint: '当此标签页在后台时也会通知你。',
+                'browserNotificationsHint@macos': '此窗口不可见时也会通知你。',
+                'browserNotificationsHint@ios': 'Rhylthyme 在后台时也会通知你。',
                 browserNotificationsDenied: '此网站的通知已被阻止。请在浏览器设置中允许。',
+                'browserNotificationsDenied@macos': 'Rhylthyme 的通知已关闭。请在“系统设置 ▸ 通知”中打开。',
+                'browserNotificationsDenied@ios': 'Rhylthyme 的通知已关闭。请在“设置 ▸ 通知”中打开。',
                 title: '显示设置',
                 theme: '主题',
                 lightMode: '浅色模式',
@@ -3716,6 +3825,8 @@
                 noChanges: '没有要撤销的更改。',
                 restored: '日程已恢复。',
                 undoFailed: '失败。请刷新页面。',
+                'undoFailed@macos': '失败。请按 ⌘R 重新载入。',
+                'undoFailed@ios': '失败。请关闭该程序后重新打开。',
                 timelineReset: '时间线已重置',
                 noChangesToReset: '没有要重置的更改',
                 switchedResource: '已切换到资源视图',
@@ -3780,6 +3891,39 @@
                 el.setAttribute('data-panel-title', I18N.t(el.getAttribute('data-i18n-panel-title')));
             });
         }
+
+        // A platform set after load (a late window.RHYLTHYME_PLATFORM
+        // assignment, or the shell's 'rhylthyme-platform' message)
+        // re-renders every translated string.
+        function applyPlatform(p) {
+            if (I18N.setPlatform(p)) updateAllTranslations();
+        }
+        (function() {
+            try {
+                Object.defineProperty(window, 'RHYLTHYME_PLATFORM', {
+                    configurable: true,
+                    enumerable: true,
+                    get: function() { return I18N.getPlatform(); },
+                    set: function(p) { applyPlatform(p); }
+                });
+            } catch (e) {}
+            window.addEventListener('message', function(event) {
+                if (!event.data || event.data.type !== 'rhylthyme-platform') return;
+                if (event.source !== window && event.source !== window.parent) return;
+                applyPlatform(event.data.platform);
+            });
+            // The HTML fallbacks carry the web wording and a standalone
+            // player (the iOS app, an exported page) may never get a
+            // 'rhylthyme-lang' message, so inside the apps render the
+            // strings once the page is parsed. On the web nothing changes.
+            if (I18N.getPlatform() !== 'web') {
+                if (document.readyState === 'loading') {
+                    document.addEventListener('DOMContentLoaded', updateAllTranslations);
+                } else {
+                    updateAllTranslations();
+                }
+            }
+        })();
 
         // Data
         const nodes = <%=nodes_json%>;
@@ -4261,13 +4405,14 @@
             box.addEventListener('change', function() {
                 if (!box.checked || typeof Notification === 'undefined') return;
                 const hint = document.getElementById('browser-notifications-hint');
+                // The key goes on data-i18n so a language or platform change
+                // keeps the hint in its current state.
                 const settle = function(permission) {
-                    if (permission === 'granted') {
-                        hint.textContent = I18N.t('settings.browserNotificationsHint');
-                        return;
-                    }
-                    box.checked = false;
-                    hint.textContent = I18N.t('settings.browserNotificationsDenied');
+                    const key = permission === 'granted'
+                        ? 'settings.browserNotificationsHint' : 'settings.browserNotificationsDenied';
+                    if (permission !== 'granted') box.checked = false;
+                    hint.setAttribute('data-i18n', key);
+                    hint.textContent = I18N.t(key);
                 };
                 if (Notification.permission !== 'default') { settle(Notification.permission); return; }
                 try {

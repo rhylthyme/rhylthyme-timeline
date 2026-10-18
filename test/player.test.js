@@ -94,3 +94,39 @@ test('step alerts reach the player steps and the page carries the alert engine',
   assert.ok(html.includes(fs.readFileSync(path.join(__dirname, '..', 'player', 'step-alerts.js'), 'utf8')), 'engine inlined');
   assert.ok(html.includes('rhylthymeAlertSchedule') && html.includes('function processStepAlerts'));
 });
+
+test('the player words itself per platform (window.RHYLTHYME_PLATFORM)', () => {
+  const vm = require('vm');
+  const html = buildPlayerHtml(JSON.parse(fs.readFileSync(path.join(FIXTURES, 'programs', 'thanksgiving_one_oven.json'), 'utf8')));
+  assert.ok(html.includes('window.RHYLTHYME_PLATFORM_SUPPORT = 1;'));
+  assert.ok(html.includes('data-i18n-title="controls.downloadSvg"'));
+  const src = html.slice(html.indexOf('var I18N = (function() {'), html.indexOf('function updateAllTranslations()'));
+  const load = (platform) => {
+    const window = platform ? { RHYLTHYME_PLATFORM: platform } : {};
+    window.parent = window;
+    const sandbox = { window, navigator: { userAgent: '' }, document: { documentElement: { setAttribute() {} } } };
+    vm.createContext(sandbox);
+    vm.runInContext(src + '\nwindow.I18N = I18N;', sandbox);
+    return sandbox.window.I18N;
+  };
+  const web = load(null);
+  assert.strictEqual(web.getPlatform(), 'web');
+  assert.strictEqual(web.t('settings.browserNotificationsDenied'),
+    'Notifications are blocked for this site. Allow them in your browser settings.');
+  const keys = ['settings.browserNotifications', 'settings.browserNotificationsHint',
+    'settings.browserNotificationsDenied', 'toast.undoFailed', 'controls.downloadSvg'];
+  const webWords = /\b(browser|tabs?|website|cookies?)\b|navegador|pestaña|navigateur|onglet|\bTab\b|ブラウザ|タブ|浏览器|标签页|网站/i;
+  for (const platform of ['macos', 'ios']) {
+    const I18N = load(platform);
+    assert.strictEqual(I18N.getPlatform(), platform);
+    for (const lang of ['en', 'es', 'fr', 'de', 'ja', 'zh']) {
+      I18N.setLang(lang);
+      web.setLang(lang);
+      for (const key of keys) {
+        const s = I18N.t(key);
+        assert.notStrictEqual(s, web.t(key), `${platform} ${lang} ${key} has its own wording`);
+        assert.ok(!webWords.test(s), `${platform} ${lang} ${key}: ${s}`);
+      }
+    }
+  }
+});
