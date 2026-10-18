@@ -94,3 +94,21 @@ test('step alerts reach the player steps and the page carries the alert engine',
   assert.ok(html.includes(fs.readFileSync(path.join(__dirname, '..', 'player', 'step-alerts.js'), 'utf8')), 'engine inlined');
   assert.ok(html.includes('rhylthymeAlertSchedule') && html.includes('function processStepAlerts'));
 });
+
+test('the page carries the floating-toolbar engine and a v2 tear-away view bar', () => {
+  const program = parsePyJson(fs.readFileSync(path.join(FIXTURES, 'programs', 'thanksgiving_one_oven.json'), 'utf8'));
+  const html = buildPlayerHtml(program);
+  const engine = fs.readFileSync(path.join(__dirname, '..', 'player', 'floating-toolbars.js'), 'utf8');
+  assert.ok(html.includes(engine), 'engine inlined');
+  assert.ok(html.indexOf(engine) < html.indexOf('id="view-toggle-bar"'), 'engine loads before the bar');
+  assert.ok(html.includes("RhylthymeFloatingToolbars.attach(bar, {") && html.includes("name: 'view'"));
+  assert.ok(html.includes('.view-toggle-bar.is-vertical > .inline-flex'), 'vertical layout CSS');
+  const T = require('../player/floating-toolbars.js');
+  assert.strictEqual(T.VERSION, 2);
+  // Pre-v2 {left, top} positions migrate as horizontal bars (they always were).
+  assert.deepStrictEqual(T.normalizeSaved({ left: 16, top: 736 }, 420, 48, 1200, 800), { h: 'left', x: 16, v: 'bottom', y: 16, o: 'horizontal' });
+  // The marker is in the markup, so a host engine injected before the
+  // player's DOMContentLoaded attach already stands down.
+  assert.match(html, /<div id="view-toggle-bar"[^>]*data-rhylthyme-drag="2"/);
+  assert.strictEqual(typeof T.sideDock, 'function', 'orientation hysteresis');
+});

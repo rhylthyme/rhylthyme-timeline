@@ -43,6 +43,7 @@
     <style><%=_TAILWIND_CSS%></style>
     <script><%=_AUTO_PLAN_JS%></script>
     <script><%=_STEP_ALERTS_JS%></script>
+    <script><%=_FLOATING_TOOLBARS_JS%></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         /* Program alert banners (step `alerts`), stacked at the top. */
@@ -1140,8 +1141,10 @@
             }
         }
 
-        /* Floating draggable view-toggle bar. Default to bottom-left of
-           the viewport; drag persists position to localStorage. */
+        /* Floating tear-away view-toggle bar (floating-toolbars.js).
+           Defaults to bottom-left of the viewport; the dragged anchor is
+           part of userSettings (viewTogglePos). Docked to the left or
+           right edge it turns vertical (.is-vertical). */
         .view-toggle-bar {
             position: fixed !important;
             left: 16px;
@@ -1152,8 +1155,24 @@
             transition: opacity 0.12s ease;
         }
         .view-toggle-bar.is-dragging {
-            opacity: 0.85;
             transition: none;
+        }
+        .view-toggle-bar.is-vertical > .inline-flex {
+            flex-direction: column;
+            align-items: stretch;
+        }
+        .view-toggle-bar.is-vertical .view-toggle {
+            padding-left: 0.75rem;
+            padding-right: 0.75rem;
+            justify-content: center;
+        }
+        .view-toggle-bar.is-vertical .view-toggle-grip {
+            padding: 4px 0;
+            margin-right: 0;
+            margin-bottom: 2px;
+        }
+        .view-toggle-bar.is-vertical .view-toggle-grip i {
+            transform: rotate(90deg);
         }
         .view-toggle-grip {
             cursor: grab;
@@ -2487,7 +2506,7 @@
 
         <div class="grid gap-6 mb-6 relative" id="panels-container" style="grid-template-columns: 1fr; align-items: start;">
             <!-- Floating View Toggle Buttons -->
-            <div id="view-toggle-bar" class="view-toggle-bar bg-white rounded-lg border border-gray-200 shadow-lg">
+            <div id="view-toggle-bar" class="view-toggle-bar bg-white rounded-lg border border-gray-200 shadow-lg" data-rhylthyme-drag="2">
                 <div class="inline-flex rounded-lg border border-gray-200 bg-gray-50 p-1">
                     <span class="view-toggle-grip" title="Drag to move (double-click to reset position)"><i class="fas fa-grip-vertical"></i></span>
                     <button class="view-toggle px-4 py-2 text-sm font-medium rounded-md transition-colors text-gray-700 hover:text-gray-900" data-view="dag" id="view-dag">
@@ -3979,7 +3998,8 @@
             // keep their existing choice (saved overrides default).
             itineraryStyle: 'simple',
             // Position of the floating view-toggle bar. Null = use the
-            // default corner; {left, top} = dragged position in viewport px.
+            // default corner; {h, x, v, y} = anchor edges + offsets in px
+            // (the pre-v2 {left, top} viewport px is still accepted).
             viewTogglePos: null
         };
 
@@ -5000,118 +5020,57 @@
             applyViewTogglePos();
         });
 
-        // ---- Floating draggable view-toggle bar -----------------------
-        function _clampToViewport(left, top, w, h) {
-            const PAD = 4;
-            const vw = window.innerWidth, vh = window.innerHeight;
-            return {
-                left: Math.max(PAD, Math.min(vw - w - PAD, left)),
-                top: Math.max(PAD, Math.min(vh - h - PAD, top)),
-            };
+        // ---- Floating tear-away view-toggle bar ---------------------------
+        // The drag engine is floating-toolbars.js (inlined in <head>):
+        // pointer capture, rAF transform moves, magnetic snap to the
+        // viewport edges and to the shell's action bar, docking that
+        // survives resizes, vertical when docked to a side edge. The
+        // anchor ({h, x, v, y}) lives in userSettings.viewTogglePos, which
+        // the shell persists; the pre-v2 {left, top} value is still read.
+        // Standalone (exported player, apps) it is kept in localStorage.
+        var _viewToggleBar = null;
+        var _VIEW_TOGGLE_POS_KEY = 'rhylthyme_view_toggle_pos';
+        function _isEmbeddedPlayer() {
+            try {
+                return !!(window.parent && window.parent !== window);
+            } catch (e) { return true; }
+        }
+        function _standaloneViewTogglePos() {
+            if (_isEmbeddedPlayer()) return null;
+            try {
+                return JSON.parse(localStorage.getItem(_VIEW_TOGGLE_POS_KEY) || 'null');
+            } catch (e) { return null; }
         }
         function applyViewTogglePos() {
-            const bar = document.getElementById('view-toggle-bar');
-            if (!bar) return;
-            const pos = userSettings.viewTogglePos;
-            if (!pos || typeof pos.left !== 'number' || typeof pos.top !== 'number') {
-                bar.style.left = '';
-                bar.style.top = '';
-                bar.style.right = '';
-                bar.style.bottom = '';
-                return;
-            }
-            const w = bar.offsetWidth, h = bar.offsetHeight;
-            const c = _clampToViewport(pos.left, pos.top, w, h);
-            bar.style.left = c.left + 'px';
-            bar.style.top = c.top + 'px';
-            bar.style.right = 'auto';
-            bar.style.bottom = 'auto';
+            if (!_viewToggleBar) return;
+            const pos = userSettings.viewTogglePos || _standaloneViewTogglePos();
+            _viewToggleBar.setAnchor(pos);
         }
         function _saveViewTogglePos(pos) {
             userSettings.viewTogglePos = pos;
             try {
-                if (window.parent && window.parent !== window) {
+                if (_isEmbeddedPlayer()) {
                     window.parent.postMessage({
                         type: 'rhylthyme-viz-settings-save',
                         settings: userSettings,
                     }, '*');
+                } else if (pos) {
+                    localStorage.setItem(_VIEW_TOGGLE_POS_KEY, JSON.stringify(pos));
+                } else {
+                    localStorage.removeItem(_VIEW_TOGGLE_POS_KEY);
                 }
             } catch (e) { /* ignore */ }
         }
         function initViewToggleBarDrag() {
             const bar = document.getElementById('view-toggle-bar');
-            if (!bar) return;
-            const grip = bar.querySelector('.view-toggle-grip');
-            if (!grip) return;
-
-            let dragging = false;
-            let startX = 0, startY = 0, startLeft = 0, startTop = 0;
-
-            function _begin(clientX, clientY) {
-                const r = bar.getBoundingClientRect();
-                startX = clientX; startY = clientY;
-                startLeft = r.left; startTop = r.top;
-                bar.style.left = startLeft + 'px';
-                bar.style.top = startTop + 'px';
-                bar.style.right = 'auto';
-                bar.style.bottom = 'auto';
-                dragging = true;
-                bar.classList.add('is-dragging');
-            }
-            function _move(clientX, clientY) {
-                if (!dragging) return;
-                const dx = clientX - startX;
-                const dy = clientY - startY;
-                const w = bar.offsetWidth, h = bar.offsetHeight;
-                const c = _clampToViewport(startLeft + dx, startTop + dy, w, h);
-                bar.style.left = c.left + 'px';
-                bar.style.top = c.top + 'px';
-            }
-            function _end() {
-                if (!dragging) return;
-                dragging = false;
-                bar.classList.remove('is-dragging');
-                _saveViewTogglePos({
-                    left: parseInt(bar.style.left, 10),
-                    top: parseInt(bar.style.top, 10),
-                });
-            }
-
-            grip.addEventListener('mousedown', function(e) {
-                _begin(e.clientX, e.clientY);
-                document.addEventListener('mousemove', onMM);
-                document.addEventListener('mouseup', onMU);
-                e.preventDefault();
-            });
-            function onMM(e) { _move(e.clientX, e.clientY); }
-            function onMU() {
-                document.removeEventListener('mousemove', onMM);
-                document.removeEventListener('mouseup', onMU);
-                _end();
-            }
-
-            grip.addEventListener('touchstart', function(e) {
-                if (!e.touches[0]) return;
-                _begin(e.touches[0].clientX, e.touches[0].clientY);
-                e.preventDefault();
-            }, { passive: false });
-            grip.addEventListener('touchmove', function(e) {
-                if (!e.touches[0]) return;
-                _move(e.touches[0].clientX, e.touches[0].clientY);
-                e.preventDefault();
-            }, { passive: false });
-            grip.addEventListener('touchend', _end);
-            grip.addEventListener('touchcancel', _end);
-
-            // Double-click the grip to reset to the default corner.
-            grip.addEventListener('dblclick', function() {
-                _saveViewTogglePos(null);
-                applyViewTogglePos();
-            });
-
-            // Re-clamp on viewport resize so it doesn't end up off-screen.
-            window.addEventListener('resize', function() {
-                if (userSettings.viewTogglePos) applyViewTogglePos();
+            if (!bar || _viewToggleBar || !window.RhylthymeFloatingToolbars) return;
+            _viewToggleBar = window.RhylthymeFloatingToolbars.attach(bar, {
+                name: 'view',
+                handle: bar.querySelector('.view-toggle-grip'),
+                // Matches the .view-toggle-bar CSS default (left/bottom 16px).
+                defaultAnchor: { h: 'left', x: 16, v: 'bottom', y: 16 },
+                vertical: true,
+                save: _saveViewTogglePos,
             });
         }
 
@@ -10743,13 +10702,16 @@
             }
             if (event.data && event.data.type === 'rhylthyme-flash-toggles') {
                 const bar = document.querySelector('.view-toggle-bar');
-                if (bar) {
+                // Skip while the bar is held: the flash's transform would
+                // fight the drag engine's translate3d.
+                if (bar && !bar.classList.contains('is-dragging')) {
                     bar.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
                     bar.style.transition = 'box-shadow 0.3s, transform 0.3s';
                     bar.style.boxShadow = '0 0 0 3px #6366f1, 0 0 20px rgba(99,102,241,0.4)';
                     bar.style.transform = 'scale(1.03)';
                     setTimeout(function() {
                         bar.style.boxShadow = '';
+                        if (bar.classList.contains('is-dragging')) return;
                         bar.style.transform = '';
                     }, 2000);
                 }
