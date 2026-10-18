@@ -135,3 +135,26 @@ test('the player words itself per platform (window.RHYLTHYME_PLATFORM)', () => {
     }
   }
 });
+
+test('the LIVE badge marks live sessions as a premium beta, in every language', () => {
+  const vm = require('vm');
+  const html = buildPlayerHtml(JSON.parse(fs.readFileSync(path.join(FIXTURES, 'programs', 'thanksgiving_one_oven.json'), 'utf8')));
+  const badge = html.slice(html.indexOf('<span id="live-badge"'), html.indexOf('</span>\n', html.indexOf('<span id="live-badge"')));
+  assert.ok(badge.includes(' LIVE <small class="live-beta-badge" data-i18n="status.beta" data-i18n-title="status.premiumBeta"'), badge);
+  assert.ok(badge.includes('>Beta</small>'), badge);
+  const src = html.slice(html.indexOf('var I18N = (function() {'), html.indexOf('function updateAllTranslations()'));
+  const beta = { en: /^Beta$/, es: /^Beta$/, fr: /^Bêta$/, de: /^Beta$/, ja: /^ベータ$/, zh: /^测试版$/ };
+  for (const platform of [null, 'macos', 'ios']) {
+    const window = platform ? { RHYLTHYME_PLATFORM: platform } : {};
+    window.parent = window;
+    const sandbox = { window, navigator: { userAgent: '' }, document: { documentElement: { setAttribute() {} } } };
+    vm.createContext(sandbox);
+    vm.runInContext(src + '\nwindow.I18N = I18N;', sandbox);
+    const I18N = sandbox.window.I18N;
+    for (const lang of Object.keys(beta)) {
+      I18N.setLang(lang);
+      assert.match(I18N.t('status.beta'), beta[lang], `${platform} ${lang}`);
+      assert.match(I18N.t('status.premiumBeta'), /premium|プレミアム|高级/i, `${platform} ${lang}`);
+    }
+  }
+});

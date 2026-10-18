@@ -2013,7 +2013,7 @@
         <div class="execution-panel border border-gray-300 rounded-lg p-3 mb-3 bg-gray-50">
             <div class="execution-layout flex items-center gap-3 flex-wrap">
                 <h3 class="execution-label text-lg font-semibold text-gray-800" style="display:none;">Program Execution</h3>
-                <span id="live-badge" style="display:none;align-items:center;gap:4px;background:#ef4444;color:white;font-size:11px;font-weight:700;padding:2px 8px;border-radius:9999px;animation:livePulse 1.5s ease-in-out infinite;"><span style="width:6px;height:6px;background:white;border-radius:50%;display:inline-block;"></span> LIVE</span>
+                <span id="live-badge" style="display:none;align-items:center;gap:4px;background:#ef4444;color:white;font-size:11px;font-weight:700;padding:2px 8px;border-radius:9999px;animation:livePulse 1.5s ease-in-out infinite;"><span style="width:6px;height:6px;background:white;border-radius:50%;display:inline-block;"></span> LIVE <small class="live-beta-badge" data-i18n="status.beta" data-i18n-title="status.premiumBeta" title="Premium beta feature" style="display:inline-flex;align-items:center;height:14px;padding:0 5px;border-radius:9999px;background:rgba(255,255,255,0.25);font-size:9px;font-weight:700;letter-spacing:0.03em;text-transform:uppercase;line-height:1;">Beta</small></span>
                 <!-- Playback controls -->
                 <div class="flex items-center gap-2 border border-gray-300 rounded-lg px-3 py-2 bg-white">
                     <button id="start-btn" class="bg-gray-200 hover:bg-gray-300 text-green-600 font-bold py-1.5 px-3 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed border border-gray-300">
@@ -2773,7 +2773,9 @@
                 paused: 'Paused',
                 stopped: 'Stopped',
                 completed: 'Completed',
-                waitingManual: 'Waiting for manual step'
+                waitingManual: 'Waiting for manual step',
+                beta: 'Beta',
+                premiumBeta: 'Premium beta feature'
             },
             edit: {
                 editMode: 'Edit Mode',
@@ -2959,7 +2961,9 @@
                 paused: 'Pausado',
                 stopped: 'Detenido',
                 completed: 'Completado',
-                waitingManual: 'Esperando paso manual'
+                waitingManual: 'Esperando paso manual',
+                beta: 'Beta',
+                premiumBeta: 'Funci\u00f3n beta premium'
             },
             edit: {
                 editMode: 'Modo Edici\u00f3n',
@@ -3145,7 +3149,9 @@
                 paused: 'En pause',
                 stopped: 'Arr\u00eat\u00e9',
                 completed: 'Termin\u00e9',
-                waitingManual: '\u00c9tape manuelle en attente'
+                waitingManual: '\u00c9tape manuelle en attente',
+                beta: 'B\u00eata',
+                premiumBeta: 'Fonction b\u00eata premium'
             },
             edit: {
                 editMode: 'Mode \u00c9dition',
@@ -3331,7 +3337,9 @@
                 paused: 'Pausiert',
                 stopped: 'Gestoppt',
                 completed: 'Abgeschlossen',
-                waitingManual: 'Warten auf manuellen Schritt'
+                waitingManual: 'Warten auf manuellen Schritt',
+                beta: 'Beta',
+                premiumBeta: 'Premium-Beta-Funktion'
             },
             edit: {
                 editMode: 'Bearbeitungsmodus',
@@ -3517,7 +3525,9 @@
                 paused: '\u4e00\u6642\u505c\u6b62',
                 stopped: '\u505c\u6b62',
                 completed: '\u5b8c\u4e86',
-                waitingManual: '\u624b\u52d5\u30b9\u30c6\u30c3\u30d7\u5f85\u3061'
+                waitingManual: '\u624b\u52d5\u30b9\u30c6\u30c3\u30d7\u5f85\u3061',
+                beta: 'ベータ',
+                premiumBeta: 'プレミアムベータ機能'
             },
             edit: {
                 editMode: '\u7de8\u96c6\u30e2\u30fc\u30c9',
@@ -3702,7 +3712,9 @@
                 paused: '已暂停',
                 stopped: '已停止',
                 completed: '已完成',
-                waitingManual: '等待手动操作'
+                waitingManual: '等待手动操作',
+                beta: '测试版',
+                premiumBeta: '高级测试版功能'
             },
             edit: {
                 editMode: '编辑模式',
