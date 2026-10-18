@@ -773,6 +773,62 @@
     return links;
   }
 
+  // Geometry of a dependency edge: one cubic Bezier, returned as its four
+  // points [x0, y0, c1x, c1y, c2x, c2y, x3, y3]. (x1, y1) is the anchor on
+  // the source bar (its end) and (x2, y2) the start of the dependent bar,
+  // both on bar centre lines; h is the row height and half the distance
+  // from a bar's centre line to the edge the near-vertical route leaves or
+  // enters by. inset pulls the end left of x2 (room for an arrowhead or a
+  // barrier's convergence point); toCentre ends the near-vertical route on
+  // the centre line at x2 - inset instead of on the target's edge at x2.
+  // Every edge curves along its whole length, and nothing loops:
+  //   forward (dx >= 40): leave right, arrive from the left, both tangents
+  //     horizontal, control reach 0.6 * dx (never capped, so a long edge
+  //     has no straight middle);
+  //   near-vertical or backward (dx < 40): leave the bar's bottom/top edge,
+  //     enter the target's top/bottom edge, vertical control reach
+  //     gap/2 + min(gap, h/2)/4 (3/4 of a thin gap, about half a tall one;
+  //     y stays monotone: no loop, no overshoot), the departure's control
+  //     point pushed left by a bow
+  //     min(0.6h, max(10, gap/2)) * clamp(1 - dx/80, 0.5, 1) and the
+  //     arrival's straight above (below) the target start, so a hop
+  //     straight down is a gentle curl, not a line, and every arrowhead
+  //     points down (up) into the target start;
+  //   same row (only an in-flight gate can be): an arch over the bars.
+  // The web player's crossTrackDepPath (rhylthyme-server web_visualizer.py,
+  // player/template.html here) is this function with half = max(4, h/2 - 5).
+  function _depEdgeCurve(x1, y1, x2, y2, h, half, inset, toCentre) {
+    var dx = x2 - x1;
+    inset = inset || 0;
+    if (Math.abs(y2 - y1) < 1) {
+      var xs = x2 - inset, top = y1 - half;
+      var lift = Math.max(12, Math.min(h, Math.abs(xs - x1) * 0.2));
+      var sx = (xs - x1) * 0.25;
+      return [x1, top, x1 + sx, top - lift, xs - sx, top - lift, xs, top];
+    }
+    if (dx >= 40) {
+      var xe = x2 - inset, reach = 0.6 * (xe - x1);
+      return [x1, y1, x1 + reach, y1, xe - reach, y2, xe, y2];
+    }
+    var dir = y2 > y1 ? 1 : -1;
+    var xb = toCentre ? x2 - inset : x2;
+    var ya = y1 + dir * half, yb = toCentre ? y2 : y2 - dir * half;
+    var gap = Math.abs(yb - ya), k = gap / 2 + Math.min(gap, h / 2) / 4;
+    var bow = Math.min(0.6 * h, Math.max(10, gap / 2)) * Math.min(1, Math.max(0.5, 1 - dx / 80));
+    // Only the departure bows: the curve arrives straight down (up) into
+    // the target, so the arrowhead (orient="auto") points into its start.
+    // A bowed arrival hooks back in its last few pixels, and Chrome then
+    // turns the arrowhead sideways or backwards.
+    return [x1, ya, x1 - bow, ya + dir * k, xb, yb - dir * k, xb, yb];
+  }
+
+  function curvePath(c) {
+    return 'M' + c[0].toFixed(1) + ',' + c[1].toFixed(1)
+      + ' C' + c[2].toFixed(1) + ',' + c[3].toFixed(1)
+      + ' ' + c[4].toFixed(1) + ',' + c[5].toFixed(1)
+      + ' ' + c[6].toFixed(1) + ',' + c[7].toFixed(1);
+  }
+
   // Fill instanceOf / instanceIndex from _trackInstanceLinks(program) on
   // plan entries ({ stepId, instanceOf, instanceIndex }) that have none.
   function _linkTrackInstances(program, entries) {
@@ -1497,11 +1553,7 @@
               var limitLabel = (leaf.task || leaf.instanceOf || tr.stepId) + ' \u2264 ' + tr.inFlightLimit;
               var ix1 = xOf(ref.end), ix2 = xOf(tim.start);
               var iy1 = barMid(rowOfTrack[refTrack]), iy2 = barMid(ti);
-              var ireach = Math.max(24, Math.min(110, Math.abs(ix2 - ix1) * 0.6));
-              var ipath = 'M' + ix1.toFixed(1) + ',' + iy1.toFixed(1)
-                + ' C' + (ix1 + ireach).toFixed(1) + ',' + iy1.toFixed(1)
-                + ' ' + (ix2 - 3 - ireach).toFixed(1) + ',' + iy2.toFixed(1)
-                + ' ' + (ix2 - 3).toFixed(1) + ',' + iy2.toFixed(1);
+              var ipath = curvePath(_depEdgeCurve(ix1, iy1, ix2, iy2, H_TRACK, BAR_H / 2 + 1, 3, false));
               inflightCount++;
               parts.push('<g class="rt-inflight" data-inflight-of="' + esc(tr.inFlightOf)
                 + '" data-limit="' + esc(tr.inFlightLimit) + '" data-from="' + esc(tr.stepId)
@@ -1518,36 +1570,16 @@
             var neg = parseSeconds(tr.offsetSeconds) < 0;
             var xFrom = xOf(fromT), xTo = xOf(tim.start);
             var yFrom = barMid(rowOfTrack[refTrack]), yTo = barMid(ti);
-            // Leave the referenced bar at its anchor edge, arrive at the left
-            // edge of the dependent bar, as a smooth S-curve (cubic Bezier)
-            // in the style of the web player. The horizontal reach of the
-            // control points grows with the distance so short hops stay
-            // tight and long ones sweep. Fan-in lines of a barrier stop at
-            // a common point left of the bar; one arrowhead + bar glyph is
-            // drawn there afterwards instead of N arrowheads.
-            var dx = xTo - xFrom;
-            var xEnd = barrier ? xTo - BARRIER_GAP : xTo - 3;
-            var path;
-            if (dx >= 40) {
-              // Forward hop: leave to the right, arrive from the left.
-              var reach = Math.max(28, Math.min(120, dx * 0.6));
-              path = 'M' + xFrom.toFixed(1) + ',' + yFrom.toFixed(1)
-                + ' C' + (xFrom + reach).toFixed(1) + ',' + yFrom.toFixed(1)
-                + ' ' + (xEnd - reach).toFixed(1) + ',' + yTo.toFixed(1)
-                + ' ' + xEnd.toFixed(1) + ',' + yTo.toFixed(1);
-            } else {
-              // Near-vertical or backward hop (a negative offset): leave the
-              // bar's bottom or top edge and drop into the target's edge
-              // (or into the barrier's convergence point).
-              var dir = yTo > yFrom ? 1 : -1;
-              var y0 = yFrom + dir * (BAR_H / 2 + 1), y1 = barrier ? yTo : yTo - dir * (BAR_H / 2 + 1);
-              var xArr = barrier ? xEnd : xTo;
-              var reachY = Math.max(12, Math.abs(y1 - y0) * 0.5);
-              path = 'M' + xFrom.toFixed(1) + ',' + y0.toFixed(1)
-                + ' C' + xFrom.toFixed(1) + ',' + (y0 + dir * reachY).toFixed(1)
-                + ' ' + xArr.toFixed(1) + ',' + (y1 - dir * reachY).toFixed(1)
-                + ' ' + xArr.toFixed(1) + ',' + y1.toFixed(1);
-            }
+            // Leave the referenced bar at its anchor, arrive at the start of
+            // the dependent bar, as one cubic Bezier in the style of the web
+            // player (_depEdgeCurve: a forward hop is an S-curve whose reach
+            // grows with the distance; a near-vertical or backward hop, a
+            // negative offset, drops from the bar's bottom or top edge into
+            // the target's edge as a gentle bow). Fan-in lines of a barrier
+            // stop at a common point left of the bar; one arrowhead + bar
+            // glyph is drawn there afterwards instead of N arrowheads.
+            var path = curvePath(_depEdgeCurve(xFrom, yFrom, xTo, yTo, H_TRACK, BAR_H / 2 + 1,
+              barrier ? BARRIER_GAP : 3, barrier));
             arrowCount++;
             converging++;
             parts.push('<path class="rt-edge' + (barrier ? ' rt-fanin' : '') + '" d="' + path + '" fill="none" stroke="' + C.arrow + '" stroke-width="' + AW + '" stroke-linecap="round"'
@@ -1763,6 +1795,7 @@
     parseSeconds: parseSeconds,
     stepDurationSeconds: stepDurationSeconds,
     instrumentEstimate: instrumentEstimate,
-    _linkTrackInstances: _linkTrackInstances
+    _linkTrackInstances: _linkTrackInstances,
+    _depEdgeCurve: _depEdgeCurve
   };
 }));

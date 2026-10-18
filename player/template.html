@@ -5259,24 +5259,47 @@
 
         // Path of a cross-track dependency curve from (x1,y1), the end of the
         // source bar, to (x2,y2), the start of the target bar; both y are bar
-        // centres and h is the row height. A forward hop leaves to the right
-        // and arrives from the left. A near-vertical or backward hop (a step
-        // that starts a set time BEFORE its reference ends) leaves the bar's
-        // top or bottom edge and drops into the target's edge: sweeping
-        // sideways there sends the control points off the chart. Same
-        // geometry as rhylthyme-timeline's static renderer.
+        // centres and h is the row height. Every edge curves along its whole
+        // length and nothing loops:
+        //  - forward (dx >= 40): leave to the right, arrive from the left,
+        //    both tangents horizontal, control reach 0.6 * dx, never capped,
+        //    so a long edge has no straight middle;
+        //  - near-vertical or backward (dx < 40, e.g. a step that starts a
+        //    set time BEFORE its reference ends): leave the bar's bottom or
+        //    top edge, enter the target's top or bottom edge, vertical reach
+        //    gap/2 + min(gap, h/2)/4 (3/4 of a thin gap, about half a tall
+        //    one; y stays monotone, so no loop and no overshoot), the
+        //    departure's control point pushed left by a bow of
+        //    min(0.6h, max(10, gap/2)) * clamp(1 - dx/80, 0.5, 1) and the
+        //    arrival's straight above (below) the target start. A drop
+        //    straight down is a gentle curl instead of a straight line, and
+        //    every arrowhead points down (up) into the target start;
+        //  - same row (not a cross-track edge; kept for safety): an arch.
+        // Same geometry as _depEdgeCurve in rhylthyme-timeline's renderer.
         function crossTrackDepPath(x1, y1, x2, y2, h) {
             const dx = x2 - x1;
+            const half = Math.max(4, h / 2 - 5);
+            if (Math.abs(y2 - y1) < 1) {
+                const top = y1 - half;
+                const lift = Math.max(12, Math.min(h, Math.abs(dx) * 0.2));
+                const sx = dx * 0.25;
+                return `M${x1},${top} C${x1 + sx},${top - lift} ${x2 - sx},${top - lift} ${x2},${top}`;
+            }
             if (dx >= 40) {
-                const reach = Math.max(20, Math.min(h * 2.5, dx * 0.6));
+                const reach = 0.6 * dx;
                 return `M${x1},${y1} C${x1 + reach},${y1} ${x2 - reach},${y2} ${x2},${y2}`;
             }
-            const dir = y2 >= y1 ? 1 : -1;
-            const half = Math.max(4, h / 2 - 5);
+            const dir = y2 > y1 ? 1 : -1;
             const ya = y1 + dir * half;
             const yb = y2 - dir * half;
-            const reachY = Math.max(10, Math.abs(yb - ya) * 0.5);
-            return `M${x1},${ya} C${x1},${ya + dir * reachY} ${x2},${yb - dir * reachY} ${x2},${yb}`;
+            const gap = Math.abs(yb - ya);
+            const k = gap / 2 + Math.min(gap, h / 2) / 4;
+            const bow = Math.min(0.6 * h, Math.max(10, gap / 2)) * Math.min(1, Math.max(0.5, 1 - dx / 80));
+            // Only the departure bows: the curve arrives straight down (up)
+            // into the target, so the arrowhead points into its start. A
+            // bowed arrival hooks back in its last few pixels, and Chrome
+            // then turns the arrowhead sideways or backwards.
+            return `M${x1},${ya} C${x1 - bow},${ya + dir * k} ${x2},${yb - dir * k} ${x2},${yb}`;
         }
         let lastTrackScale = null; // Stored from updateTimeline for S-curve updates
         let lastTrackHeight = 40;
@@ -6197,7 +6220,8 @@
                     stepInfoMap[s.stepId] = {
                         trackId: track.trackId,
                         startTime: s.startTime,
-                        endTime: s.endTime
+                        endTime: s.endTime,
+                        lane: s._laneIndex || 0
                     };
                 });
             });
@@ -6208,9 +6232,9 @@
                     const tgt = stepInfoMap[edge.targetId];
                     if (!src || !tgt) return '';
                     const x1 = lastTimeScaleEdit(src.endTime);
-                    const y1 = lastTrackScaleEdit(src.trackId) + lastTrackHeightEdit / 2;
+                    const y1 = lastTrackScaleEdit(src.trackId) + (src.lane + 0.5) * lastTrackHeightEdit;
                     const x2 = lastTimeScaleEdit(tgt.startTime);
-                    const y2 = lastTrackScaleEdit(tgt.trackId) + lastTrackHeightEdit / 2;
+                    const y2 = lastTrackScaleEdit(tgt.trackId) + (tgt.lane + 0.5) * lastTrackHeightEdit;
                     return crossTrackDepPath(x1, y1, x2, y2, lastTrackHeightEdit);
                 });
         }
@@ -9067,7 +9091,8 @@
                     track.steps.forEach(s => {
                         currentStepPos[s.stepId] = {
                             startTime: s.effectiveStartTime || s.startTime,
-                            endTime: s.endTime
+                            endTime: s.endTime,
+                            lane: s._laneIndex || 0
                         };
                     });
                 });
@@ -9077,9 +9102,9 @@
                     const tgt = currentStepPos[edge.targetId];
                     if (!src || !tgt) return;
                     const x1 = timeScale(src.endTime);
-                    const y1 = lastTrackScale(edge.sourceTrackId) + lastTrackHeight / 2;
+                    const y1 = lastTrackScale(edge.sourceTrackId) + (src.lane + 0.5) * lastTrackHeight;
                     const x2 = timeScale(tgt.startTime);
-                    const y2 = lastTrackScale(edge.targetTrackId) + lastTrackHeight / 2;
+                    const y2 = lastTrackScale(edge.targetTrackId) + (tgt.lane + 0.5) * lastTrackHeight;
                     d3.select(this).attr("d", crossTrackDepPath(x1, y1, x2, y2, lastTrackHeight));
                 });
             }
@@ -10964,11 +10989,12 @@
             simulation.alpha(0.2).restart();
         }
         
-        // Create arrow marker
+        // Create arrow marker. Edges end on the target node's border (see
+        // dagEdgeGeometry), so the tip sits at the end of the path.
         svg.append("defs").append("marker")
             .attr("id", "arrowhead")
             .attr("viewBox", "0 -5 10 10")
-            .attr("refX", 70)
+            .attr("refX", 9)
             .attr("refY", 0)
             .attr("markerWidth", 6)
             .attr("markerHeight", 6)
@@ -11245,11 +11271,11 @@
             });
         }, 2000); // Release after 2 seconds
         
-        // Create links
+        // Create links: curved paths, positioned on every tick
         const link = zoomGroup.append("g")
-            .selectAll("line")
+            .selectAll("path")
             .data(edges)
-            .enter().append("line")
+            .enter().append("path")
             .attr("class", d => "link " + d.type + (d.choiceId ? ' choice-edge' : ''))
             .attr("stroke-width", d => d.choiceId ? 1.5 : 2)
             .attr("stroke-dasharray", d => d.choiceId ? "6,3" : null);
@@ -11361,13 +11387,36 @@
                 return '';
             });
         
+        // A DAG edge is a quadratic Bezier from the source node's centre
+        // (hidden under the node) bowed to the left of its direction by
+        // clamp(0.18 * length, 12, 60), so it is never a straight line and
+        // a pair of opposite edges separates instead of overlapping. It ends
+        // where the line from its control point to the target's centre
+        // meets the target's border, so the arrowhead lies along the curve
+        // and points at the node. mx,my is the curve's midpoint (t = 0.5).
+        function dagEdgeGeometry(d) {
+            const sx = d.source.x, sy = d.source.y, tx = d.target.x, ty = d.target.y;
+            const dx = tx - sx, dy = ty - sy;
+            const len = Math.hypot(dx, dy) || 1;
+            const bend = Math.max(12, Math.min(60, len * 0.18));
+            const cx = (sx + tx) / 2 + (dy / len) * bend;
+            const cy = (sy + ty) / 2 - (dx / len) * bend;
+            const dims = calculateNodeDimensions(d.target);
+            const vx = cx - tx, vy = cy - ty;
+            const sxB = vx ? (dims.width / 2 + 2) / Math.abs(vx) : Infinity;
+            const syB = vy ? (dims.height / 2 + 2) / Math.abs(vy) : Infinity;
+            const f = Math.min(1, sxB, syB);
+            const ex = tx + vx * f, ey = ty + vy * f;
+            return {
+                d: `M${sx},${sy} Q${cx},${cy} ${ex},${ey}`,
+                mx: 0.25 * sx + 0.5 * cx + 0.25 * ex,
+                my: 0.25 * sy + 0.5 * cy + 0.25 * ey
+            };
+        }
+
         // Update positions
         simulation.on("tick", () => {
-            link
-                .attr("x1", d => d.source.x)
-                .attr("y1", d => d.source.y)
-                .attr("x2", d => d.target.x)
-                .attr("y2", d => d.target.y);
+            link.attr("d", d => dagEdgeGeometry(d).d);
             
             nodeGroup
                 .attr("transform", d => {
@@ -11380,9 +11429,8 @@
             // Position edge labels at midpoint of edges
             edgeLabels
                 .attr("transform", d => {
-                    const midX = (d.source.x + d.target.x) / 2;
-                    const midY = (d.source.y + d.target.y) / 2;
-                    return "translate(" + midX + "," + midY + ")";
+                    const g = dagEdgeGeometry(d);
+                    return "translate(" + g.mx + "," + g.my + ")";
                 });
         });
         
@@ -12513,6 +12561,7 @@
                             trackId: track.trackId,
                             startTime: s.startTime,
                             endTime: s.endTime,
+                            lane: s._laneIndex || 0,
                             negativeOffsetRefStepId: s.negativeOffsetRefStepId || null
                         };
                     });
@@ -12570,9 +12619,9 @@
                             const src = stepInfoMap[edge.sourceId];
                             const tgt = stepInfoMap[edge.targetId];
                             const x1 = timeScale(src.endTime);
-                            const y1 = trackScale(src.trackId) + trackHeight / 2 + (src._laneIndex || 0) * trackHeight;
+                            const y1 = trackScale(src.trackId) + (src.lane + 0.5) * trackHeight;
                             const x2 = timeScale(tgt.startTime);
-                            const y2 = trackScale(tgt.trackId) + trackHeight / 2 + (tgt._laneIndex || 0) * trackHeight;
+                            const y2 = trackScale(tgt.trackId) + (tgt.lane + 0.5) * trackHeight;
                             return crossTrackDepPath(x1, y1, x2, y2, trackHeight);
                         })
                         .attr("stroke-width", depStrokeWidth)

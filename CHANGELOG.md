@@ -6,6 +6,26 @@ Keep a Changelog; versions follow SemVer.
 ## [2.0.0-beta.8] - unreleased
 
 ### Changed
+- **Dependency arrows always curve.** `renderTimelineSvg` drew an arrow
+  whose dependent starts the moment its reference ends as a straight
+  vertical line, and a long forward arrow as a straight line between two
+  short bends (the control reach stopped at 120px). One rule now draws every
+  arrow (`_depEdgeCurve`, shared with the player's `crossTrackDepPath`):
+  a forward hop (40px or more) is an S whose horizontal control reach is
+  0.6 of the run, uncapped, so it curves along its whole length; a
+  near-vertical or backward hop leaves the bar's bottom (top) edge bowing
+  left by `min(0.6h, max(10, gap/2)) * clamp(1 - dx/80, 0.5, 1)`, with a
+  vertical reach of `gap/2 + min(gap, h/2)/4`, and arrives straight down
+  (up) into the dependent's start, so its arrowhead points into the bar. A
+  maxInFlight gate's dotted line follows the same rule (an arch when both
+  ends share a row). The y of every curve is monotone: no loops, no
+  overshoot past the bars. The render snapshots were regenerated for this.
+  The player (`player/template.html`, exported from rhylthyme-server)
+  changes the same way, its arrows to and from a stacked sub-lane now start
+  and end on that lane, and its DAG view draws edges as bowed quadratic
+  curves ending on the node border instead of straight lines.
+  `test/edges.test.js` checks the geometry, its parity with the player, and
+  every arrow drawn for the corpus.
 - **The chart key is off by default.** `renderTimelineSvg` no longer draws
   the legend (dependency, negative offset, indefinite, variable, manual,
   and the planned-vs-actual keys) unless asked: `legend: true` for the
