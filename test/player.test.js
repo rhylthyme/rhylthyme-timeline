@@ -113,6 +113,11 @@ test('the player words itself per platform (window.RHYLTHYME_PLATFORM)', () => {
   assert.strictEqual(web.getPlatform(), 'web');
   assert.strictEqual(web.t('settings.browserNotificationsDenied'),
     'Notifications are blocked for this site. Allow them in your browser settings.');
+  for (const lang of ['en', 'es', 'fr', 'de', 'ja', 'zh']) {
+    // A hard-coded English title before platform wording; the web keeps it.
+    web.setLang(lang);
+    assert.strictEqual(web.t('controls.downloadSvg'), 'Download as SVG', lang);
+  }
   const keys = ['settings.browserNotifications', 'settings.browserNotificationsHint',
     'settings.browserNotificationsDenied', 'toast.undoFailed', 'controls.downloadSvg'];
   const webWords = /\b(browser|tabs?|website|cookies?)\b|navegador|pestaña|navigateur|onglet|\bTab\b|ブラウザ|タブ|浏览器|标签页|网站/i;
