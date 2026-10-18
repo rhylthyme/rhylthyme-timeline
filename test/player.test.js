@@ -112,3 +112,67 @@ test('the page carries the floating-toolbar engine and a v2 tear-away view bar',
   assert.match(html, /<div id="view-toggle-bar"[^>]*data-rhylthyme-drag="2"/);
   assert.strictEqual(typeof T.sideDock, 'function', 'orientation hysteresis');
 });
+
+test('the player words itself per platform (window.RHYLTHYME_PLATFORM)', () => {
+  const vm = require('vm');
+  const html = buildPlayerHtml(JSON.parse(fs.readFileSync(path.join(FIXTURES, 'programs', 'thanksgiving_one_oven.json'), 'utf8')));
+  assert.ok(html.includes('window.RHYLTHYME_PLATFORM_SUPPORT = 1;'));
+  assert.ok(html.includes('data-i18n-title="controls.downloadSvg"'));
+  const src = html.slice(html.indexOf('var I18N = (function() {'), html.indexOf('function updateAllTranslations()'));
+  const load = (platform) => {
+    const window = platform ? { RHYLTHYME_PLATFORM: platform } : {};
+    window.parent = window;
+    const sandbox = { window, navigator: { userAgent: '' }, document: { documentElement: { setAttribute() {} } } };
+    vm.createContext(sandbox);
+    vm.runInContext(src + '\nwindow.I18N = I18N;', sandbox);
+    return sandbox.window.I18N;
+  };
+  const web = load(null);
+  assert.strictEqual(web.getPlatform(), 'web');
+  assert.strictEqual(web.t('settings.browserNotificationsDenied'),
+    'Notifications are blocked for this site. Allow them in your browser settings.');
+  for (const lang of ['en', 'es', 'fr', 'de', 'ja', 'zh']) {
+    // A hard-coded English title before platform wording; the web keeps it.
+    web.setLang(lang);
+    assert.strictEqual(web.t('controls.downloadSvg'), 'Download as SVG', lang);
+  }
+  const keys = ['settings.browserNotifications', 'settings.browserNotificationsHint',
+    'settings.browserNotificationsDenied', 'toast.undoFailed', 'controls.downloadSvg'];
+  const webWords = /\b(browser|tabs?|website|cookies?)\b|navegador|pestaña|navigateur|onglet|\bTab\b|ブラウザ|タブ|浏览器|标签页|网站/i;
+  for (const platform of ['macos', 'ios']) {
+    const I18N = load(platform);
+    assert.strictEqual(I18N.getPlatform(), platform);
+    for (const lang of ['en', 'es', 'fr', 'de', 'ja', 'zh']) {
+      I18N.setLang(lang);
+      web.setLang(lang);
+      for (const key of keys) {
+        const s = I18N.t(key);
+        assert.notStrictEqual(s, web.t(key), `${platform} ${lang} ${key} has its own wording`);
+        assert.ok(!webWords.test(s), `${platform} ${lang} ${key}: ${s}`);
+      }
+    }
+  }
+});
+
+test('the LIVE badge marks live sessions as a premium beta, in every language', () => {
+  const vm = require('vm');
+  const html = buildPlayerHtml(JSON.parse(fs.readFileSync(path.join(FIXTURES, 'programs', 'thanksgiving_one_oven.json'), 'utf8')));
+  const badge = html.slice(html.indexOf('<span id="live-badge"'), html.indexOf('</span>\n', html.indexOf('<span id="live-badge"')));
+  assert.ok(badge.includes(' LIVE <small class="live-beta-badge" data-i18n="status.beta" data-i18n-title="status.premiumBeta"'), badge);
+  assert.ok(badge.includes('>Beta</small>'), badge);
+  const src = html.slice(html.indexOf('var I18N = (function() {'), html.indexOf('function updateAllTranslations()'));
+  const beta = { en: /^Beta$/, es: /^Beta$/, fr: /^Bêta$/, de: /^Beta$/, ja: /^ベータ$/, zh: /^测试版$/ };
+  for (const platform of [null, 'macos', 'ios']) {
+    const window = platform ? { RHYLTHYME_PLATFORM: platform } : {};
+    window.parent = window;
+    const sandbox = { window, navigator: { userAgent: '' }, document: { documentElement: { setAttribute() {} } } };
+    vm.createContext(sandbox);
+    vm.runInContext(src + '\nwindow.I18N = I18N;', sandbox);
+    const I18N = sandbox.window.I18N;
+    for (const lang of Object.keys(beta)) {
+      I18N.setLang(lang);
+      assert.match(I18N.t('status.beta'), beta[lang], `${platform} ${lang}`);
+      assert.match(I18N.t('status.premiumBeta'), /premium|プレミアム|高级/i, `${platform} ${lang}`);
+    }
+  }
+});
