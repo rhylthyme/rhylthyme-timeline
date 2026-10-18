@@ -5274,6 +5274,14 @@
         //    arrival's straight above (below) the target start. A drop
         //    straight down is a gentle curl instead of a straight line, and
         //    every arrowhead points down (up) into the target start;
+        //  - backward (dx < 0, a negative offset): the same, blended over
+        //    the first 80px of |dx| into an arc bowing away from the chord:
+        //    the departure's control point also reaches 0.5 * |dx| left at
+        //    0.15 of the gap, the arrival's sits 0.85 of the gap above
+        //    (below) the target start, so the edge runs under the source
+        //    bar and drops into the target, about 0.45 of the gap off the
+        //    chord however long it is (the gap between the facing bar edges
+        //    is the only free corridor between adjacent rows);
         //  - same row (not a cross-track edge; kept for safety): an arch.
         // Same geometry as _depEdgeCurve in rhylthyme-timeline's renderer.
         function crossTrackDepPath(x1, y1, x2, y2, h) {
@@ -5295,11 +5303,13 @@
             const gap = Math.abs(yb - ya);
             const k = gap / 2 + Math.min(gap, h / 2) / 4;
             const bow = Math.min(0.6 * h, Math.max(10, gap / 2)) * Math.min(1, Math.max(0.5, 1 - dx / 80));
-            // Only the departure bows: the curve arrives straight down (up)
-            // into the target, so the arrowhead points into its start. A
-            // bowed arrival hooks back in its last few pixels, and Chrome
-            // then turns the arrowhead sideways or backwards.
-            return `M${x1},${ya} C${x1 - bow},${ya + dir * k} ${x2},${yb - dir * k} ${x2},${yb}`;
+            const back = Math.max(0, -dx), s = Math.min(1, back / 80);
+            const k1 = k * (1 - s) + 0.15 * gap * s, k2 = k * (1 - s) + 0.85 * gap * s;
+            // Only the departure bows sideways: the curve arrives straight
+            // down (up) into the target, so the arrowhead points into its
+            // start. A bowed arrival hooks back in its last few pixels, and
+            // Chrome then turns the arrowhead sideways or backwards.
+            return `M${x1},${ya} C${x1 - bow - 0.5 * back},${ya + dir * k1} ${x2},${yb - dir * k2} ${x2},${yb}`;
         }
         let lastTrackScale = null; // Stored from updateTimeline for S-curve updates
         let lastTrackHeight = 40;

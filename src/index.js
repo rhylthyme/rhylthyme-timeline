@@ -787,13 +787,22 @@
   //     has no straight middle);
   //   near-vertical or backward (dx < 40): leave the bar's bottom/top edge,
   //     enter the target's top/bottom edge, vertical control reach
-  //     gap/2 + min(gap, h/2)/4 (3/4 of a thin gap, about half a tall one;
-  //     y stays monotone: no loop, no overshoot), the departure's control
-  //     point pushed left by a bow
+  //     k = gap/2 + min(gap, h/2)/4 (3/4 of a thin gap, about half a tall
+  //     one; y stays monotone: no loop, no overshoot), the departure's
+  //     control point pushed left by a bow
   //     min(0.6h, max(10, gap/2)) * clamp(1 - dx/80, 0.5, 1) and the
   //     arrival's straight above (below) the target start, so a hop
   //     straight down is a gentle curl, not a line, and every arrowhead
   //     points down (up) into the target start;
+  //   backward (dx < 0, a step that starts before its reference ends): the
+  //     same, blended over the first 80px of |dx| (s = min(1, -dx/80)) into
+  //     an arc that bows away from the chord: the departure's control
+  //     point also reaches 0.5 * |dx| left at 0.15 of the gap, the
+  //     arrival's sits 0.85 of the gap above (below) the target start. It
+  //     runs under the source bar, then drops into the target: about 0.45
+  //     of the gap off the chord however long the edge is. (The gap between
+  //     the two facing bar edges is the only free corridor, so a backward
+  //     edge between adjacent rows cannot bow more without crossing them.)
   //   same row (only an in-flight gate can be): an arch over the bars.
   // The web player's crossTrackDepPath (rhylthyme-server web_visualizer.py,
   // player/template.html here) is this function with half = max(4, h/2 - 5).
@@ -815,11 +824,13 @@
     var ya = y1 + dir * half, yb = toCentre ? y2 : y2 - dir * half;
     var gap = Math.abs(yb - ya), k = gap / 2 + Math.min(gap, h / 2) / 4;
     var bow = Math.min(0.6 * h, Math.max(10, gap / 2)) * Math.min(1, Math.max(0.5, 1 - dx / 80));
-    // Only the departure bows: the curve arrives straight down (up) into
-    // the target, so the arrowhead (orient="auto") points into its start.
-    // A bowed arrival hooks back in its last few pixels, and Chrome then
-    // turns the arrowhead sideways or backwards.
-    return [x1, ya, x1 - bow, ya + dir * k, xb, yb - dir * k, xb, yb];
+    var back = Math.max(0, -dx), s = Math.min(1, back / 80);
+    var k1 = k * (1 - s) + 0.15 * gap * s, k2 = k * (1 - s) + 0.85 * gap * s;
+    // Only the departure bows sideways: the curve arrives straight down
+    // (up) into the target, so the arrowhead (orient="auto") points into
+    // its start. A bowed arrival hooks back in its last few pixels, and
+    // Chrome then turns the arrowhead sideways or backwards.
+    return [x1, ya, x1 - bow - 0.5 * back, ya + dir * k1, xb, yb - dir * k2, xb, yb];
   }
 
   function curvePath(c) {

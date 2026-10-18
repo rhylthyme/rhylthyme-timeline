@@ -95,8 +95,8 @@
    "sha256": "5363435dd2c070c6d58c56bfad44f7b41922d4d75aa02372b19ac39416504143"
   },
   "negative_offset_demo.json": {
-   "length": 6644,
-   "sha256": "0a648117ce59c795377e91019ef9269155bf4482c80fbbb4e7c29f6c95fd62aa"
+   "length": 6643,
+   "sha256": "8f3955ebf0150387806154c55faf71455a8a1304627ef25d7d62ee32ad243b94"
   },
   "pcr_twelve_samples.json": {
    "length": 25636,
@@ -164,7 +164,7 @@
   },
   "thanksgiving_one_oven.json": {
    "length": 9345,
-   "sha256": "a1f85173ff2d2427917369051ca57192295b0a04a3599552d50c3f3239fd1c7c"
+   "sha256": "f21d43e216bd8d027651b9096d6edca1086fc5d2bea041462b8603d7d7c4a6d1"
   },
   "wedding_and_reception.json": {
    "length": 18915,
@@ -178,7 +178,7 @@
  "overlay": {
   "thanksgiving_one_oven.json": {
    "length": 13298,
-   "sha256": "04d7509dc5d7dcda77dfe63266a8f8224bd307f1f00eae8ccaeb8a64b48ce651"
+   "sha256": "ee14107d50f1b84f795a75833e35b0a3ed96fce7f7086ec16acfad68153488da"
   }
  }
 }

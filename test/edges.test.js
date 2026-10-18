@@ -66,7 +66,7 @@ function monotone(c, axis) {
   return !(up && down);
 }
 
-const DXS = [-60, -10, 0, 10, 39, 40, 200, 2000];
+const DXS = [-2000, -500, -150, -60, -10, 0, 10, 39, 40, 200, 2000];
 
 test('_depEdgeCurve: every hop curves visibly, without loops or overshoot', () => {
   // [row height, half bar + 1, inset, toCentre, row pitch]: the renderer's
@@ -78,9 +78,10 @@ test('_depEdgeCurve: every hop curves visibly, without loops or overshoot', () =
         const x1 = 500, y1 = 300, x2 = x1 + dx, y2 = y1 + dy;
         const c = curve(x1, y1, x2, y2, h, half, inset, toCentre);
         const where = `h=${h} inset=${inset} dx=${dx} dy=${dy}`;
-        // Visibly curved. The renderer's 12px gap between bars caps how far
-        // a long backward hop can stray (2.6px); the player's 20px allows 3.
-        const minDev = p === h ? 2.5 : 3;
+        // Visibly curved: at least 3px off the chord (2.5 for a short
+        // forward or downward hop between the renderer's 46px rows, whose
+        // bars leave a 12px gap; a backward hop bows further, see below).
+        const minDev = p === h && dx >= 0 ? 2.5 : 3;
         assert.ok(deviation(c) >= minDev, `${where}: ${deviation(c).toFixed(2)}px off the chord`);
         assert.ok(monotone(c, 1), `${where}: y doubles back`);
         if (dx >= 40) assert.ok(monotone(c, 0), `${where}: x doubles back`);
@@ -109,6 +110,52 @@ test('_depEdgeCurve: every hop curves visibly, without loops or overshoot', () =
       }
     }
   }
+});
+
+/** Signed distances of the curve from its chord: an arc keeps one sign. */
+function signedOffsets(c) {
+  const L = Math.hypot(c[6] - c[0], c[7] - c[1]) || 1;
+  const out = [];
+  for (let i = 1; i < 400; i++) {
+    const [x, y] = at(c, i / 400);
+    out.push(((c[6] - c[0]) * (c[1] - y) - (c[0] - x) * (c[7] - c[1])) / L);
+  }
+  return out;
+}
+
+test('_depEdgeCurve: a backward (negative offset) hop is an arc however long it is', () => {
+  // The step starts before its reference ends, so the arrow runs back
+  // through the gap between the two facing bar edges, the only free
+  // corridor between adjacent rows. The old curve was a thin smoothstep
+  // along the chord (2.6px off it in the renderer's 12px gap, 4.4px in
+  // the player's 20px, at any length): a long dashed diagonal with a hook
+  // at the arrowhead. Now a one-sided arc, under the source bar and down
+  // into the target, about 0.45 of the gap off the chord at any length
+  // (over a third of the gap, or of |dx| if less, across several rows). A
+  // bow relative to the chord's length would have to cross the bars.
+  for (const [h, half, inset, toCentre, p, old] of [[46, 17, 3, false, 46, 2.6], [40, 15, 0, false, 50, 4.4], [20, 4, 3, false, 20, 0], [46, 17, 18, true, 46, 0]]) {
+    for (const rows of [1, -1, 3]) {
+      for (const D of [80, 150, 450, 900, 2000, 5000]) {
+        const c = curve(1000, 0, 1000 - D, rows * p, h, half, inset, toCentre);
+        const where = `h=${h} p=${p} toCentre=${toCentre} rows=${rows} dx=-${D}`;
+        const gap = Math.abs(c[7] - c[1]);
+        const off = signedOffsets(c), sign = Math.sign(off[200]);
+        assert.ok(off.every((v) => v * sign >= -1e-6), `${where}: bows to one side of the chord`);
+        const dev = deviation(c);
+        const min = Math.abs(rows) === 1 ? 0.42 * gap : 0.35 * Math.min(gap, D);
+        assert.ok(dev >= Math.max(3, min), `${where}: ${dev.toFixed(2)}px off the chord, gap ${gap}`);
+        if (Math.abs(rows) === 1 && old) assert.ok(dev >= 1.9 * old, `${where}: ${dev.toFixed(2)}px, was ${old}px`);
+        for (let i = 0; i <= 200; i++) {
+          const y = at(c, i / 200)[1];
+          assert.ok(y >= Math.min(c[1], c[7]) - 1e-6 && y <= Math.max(c[1], c[7]) + 1e-6, `${where}: y leaves the gap`);
+        }
+        assert.ok(c[4] === c[6] && (c[7] - c[5]) * Math.sign(rows) > 0.5 * gap, `${where}: arrives straight into the target`);
+      }
+    }
+  }
+  // continuous with the near-vertical curl at dx = 0
+  const c0 = curve(300, 100, 300, 146, 46, 17, 3, false), c1 = curve(300, 100, 299.999, 146, 46, 17, 3, false);
+  c0.forEach((v, n) => assert.ok(Math.abs(v - c1[n]) < 0.01, `control ${n}: ${v} vs ${c1[n]}`));
 });
 
 test('_depEdgeCurve: a long hop has no straight middle; a same-row hop arches', () => {
@@ -150,7 +197,7 @@ test('every dependency arrow the renderer draws for the corpus is curved', () =>
     for (const m of svg.matchAll(/<path class="(rt-edge[^"]*|rt-inflight-edge)" d="([^"]+)"/g)) {
       const c = m[2].match(/-?\d+(?:\.\d+)?/g).map(Number);
       assert.equal(c.length, 8, `${f}: one cubic: ${m[2]}`);
-      assert.ok(deviation(c) >= 2.5, `${f} ${m[1]} ${m[2]}: ${deviation(c).toFixed(2)}px off the chord`);
+      assert.ok(deviation(c) >= 3, `${f} ${m[1]} ${m[2]}: ${deviation(c).toFixed(2)}px off the chord`);
       if (m[1] !== 'rt-edge rt-fanin') assert.ok(arrowTurn(c, 8) < 85, `${f} ${m[2]}: arrowhead turned off the curve`);
       assert.ok(monotone(c, 1) || monotone(c, 0), `${f} ${m[2]}: loops`);
       edges++;

@@ -16,7 +16,14 @@ Keep a Changelog; versions follow SemVer.
   near-vertical or backward hop leaves the bar's bottom (top) edge bowing
   left by `min(0.6h, max(10, gap/2)) * clamp(1 - dx/80, 0.5, 1)`, with a
   vertical reach of `gap/2 + min(gap, h/2)/4`, and arrives straight down
-  (up) into the dependent's start, so its arrowhead points into the bar. A
+  (up) into the dependent's start, so its arrowhead points into the bar.
+  A backward hop (a negative offset: the dependent starts before its
+  reference ends) blends over its first 80px into a one-sided arc: the
+  departure's control point also reaches half the run left, near the
+  source bar's edge, and the arrival's sits high above the target start,
+  so the dashed arrow runs under the source bar and drops into the
+  target, about 0.45 of the gap between the bars off the straight line at
+  any length (it was a thin smoothstep along the diagonal). A
   maxInFlight gate's dotted line follows the same rule (an arch when both
   ends share a row). The y of every curve is monotone: no loops, no
   overshoot past the bars. The render snapshots were regenerated for this.
