@@ -1,14 +1,14 @@
 {
  "generatedBy": "renderTimelineSvg (rhylthyme-timeline/src/index.js); regenerate with tools/gen-render-snapshots.js",
- "note": "default = renderTimelineSvg(program); overlay = renderTimelineSvg(program, { run: record }).",
+ "note": "default = renderTimelineSvg(program, { legend: true }); overlay = renderTimelineSvg(program, { run: record, legend: true }).",
  "default": {
   "academy_awards_ceremony.json": {
    "length": 20066,
-   "sha256": "9a66390bba75ba0a52a479509af1081f9edf1b88b2c2bd12c3c7c39b04f6549e"
+   "sha256": "22e9568b89d2e62f146f09474b204c8b478f5209478a4fca337cd3eb2ae83d95"
   },
   "advanced_dependencies_demo.json": {
    "length": 13369,
-   "sha256": "f02189aeef2563a6de0c92748805bd02d2e1bafbcd77c1f0a7f60a49bf757c54"
+   "sha256": "b77e32c1b152fe72389b35ab8d1840ccb4d9dfbce770c76b3b66b425cf8ade99"
   },
   "airport_batch_example.json": {
    "length": 11251,
@@ -16,7 +16,7 @@
   },
   "airport_landings_taxi_gate.json": {
    "length": 10124,
-   "sha256": "f1e883490a2e426dcf4114f2c22550f91d9182955720e7415c81f42c2c59666a"
+   "sha256": "b04df59155f4985470c176cb256a74ddd112114e3b5736ee39120cf1adc3ee11"
   },
   "airport_program_example.json": {
    "length": 7591,
@@ -44,43 +44,43 @@
   },
   "buffer_example.json": {
    "length": 4662,
-   "sha256": "a66975058c53cdb647c09092650edacb0bddd0c7f3edb07b5e39d080aeefcbb4"
+   "sha256": "026571d844343fd116e41f849f7879e64549c917b707cb06a90ed26293c63088"
   },
   "cell_culture_experiment.json": {
    "length": 16843,
-   "sha256": "1aa94c796b2b0e4743fa1e74e1f369616765aa4d17b680f707d4828922d46ef5"
+   "sha256": "cc239209b0a6b0da55f0ac78b738f0fcfa51321ccd279122602b0a71a023da7b"
   },
   "chemical_plant_batch.json": {
    "length": 21986,
-   "sha256": "a615fe6fdde1bd7333af198e364cf64860adfd6a12428317faa93bef7754f05e"
+   "sha256": "2caf13d81b39bfc718f3c7f135d9fb12714ae1af379c1bdf8ff3c7057b2ed010"
   },
   "circuit_training.json": {
    "length": 8106,
-   "sha256": "70908c67d4349ef4690ca283b62d1f534da3c3ea1c9b8060ad070873c2a8cc71"
+   "sha256": "72649fa58e83d91a5d45a06625ff6ef19df34a715326dfe3413989da73ea048c"
   },
   "compound_each_pairing.json": {
    "length": 8488,
-   "sha256": "50d1d12063f6d066a4cf638a0ba6d83ac7610e02c5f830a1b1516e419e39d1ff"
+   "sha256": "1ce56032cf5b5e7087875b4d87e56a213af3f61bbbbd64f8d2a497f1b2144dfe"
   },
   "comprehensive_manual_demo.json": {
    "length": 6105,
-   "sha256": "93db8942999bd7b5a41ae8746fc9f369f5cf2497f874c189c0a6dfc0721c943a"
+   "sha256": "cb6eefbb302a5a4cd89664887fec4e1713a5139a15fa6bee2e1750ab60688033"
   },
   "cookies_three_trays.json": {
    "length": 8792,
-   "sha256": "acd3324d3cd2fb07d8391a005c7ddbd50d900ee8c84bf1ffc942297ef0d5ba4f"
+   "sha256": "ea2d104ab0c15800870c80750bbd12ef663c4a7dcce75f0086ea7c4842c9c100"
   },
   "corporate_conference.json": {
    "length": 17995,
-   "sha256": "b32cbef6ab66ac5a0a2d6ac8125f20d7a6e1e11912c830379257fc610e41cef0"
+   "sha256": "35cc25e6fa0162ce0c12854b9e1c99ddf0ab271864934ac860d13f6de0bfb788"
   },
   "corporate_presentation.json": {
    "length": 11612,
-   "sha256": "b3e103fa5474e6d77d334b6de23de2e87c649c537d4fcebf3df98f155856b0f2"
+   "sha256": "26113de16e7546daf0a21bd1e07ca522fe58f6f1136f9bc98f8e086f268d73c6"
   },
   "drug_screening_from_tracks.json": {
    "length": 23094,
-   "sha256": "747b60f16528135794e5fa86d0edc7f076a2f3f7f205b27c725c2140a4f37353"
+   "sha256": "b17735f8827eaebff751e7973136f68f9c0893f1cd309995950af3795512350d"
   },
   "hiit_cardio_workout.json": {
    "length": 7179,
@@ -88,23 +88,23 @@
   },
   "lab_experiment.json": {
    "length": 5098,
-   "sha256": "5e432d378522554d0749bad54f960bbe05102cc95459c7d66ed3bc0d119dc312"
+   "sha256": "1650a88f7c4ca3e0220fdcdb3fd2ad96a89b23b3bb49f370ba2e7722baab7e45"
   },
   "multi_resource_example.json": {
    "length": 6752,
-   "sha256": "7115a3c83813fbca698f80d1009b5a9a72886ed01f02682f4f8422cff3c87f68"
+   "sha256": "5363435dd2c070c6d58c56bfad44f7b41922d4d75aa02372b19ac39416504143"
   },
   "negative_offset_demo.json": {
-   "length": 6644,
-   "sha256": "6c052da6e607d22d60859611c61e0324dcb15e5caf14830e0c765cfdde24a432"
+   "length": 6643,
+   "sha256": "8f3955ebf0150387806154c55faf71455a8a1304627ef25d7d62ee32ad243b94"
   },
   "pcr_twelve_samples.json": {
-   "length": 25630,
-   "sha256": "e17eb8d871988578e26862cea72accbb687733b586beeedca9232485ace5fb9c"
+   "length": 25636,
+   "sha256": "d66b547d6a1c1ccf26501edb1637e3ecbc9b28ae311f09427fa59eb42c41ee35"
   },
   "protein_lysate_immunoblotting.json": {
    "length": 16944,
-   "sha256": "196ee70a0a6a191e23c1048ba69e7f068e6624e0bd9a39b15a0c8a2ceb22676b"
+   "sha256": "7a6c2c00da6529f31a8146b3a37d8ada9cdbe8d4aed1db0e75038b69cd93f7e0"
   },
   "rat_psychopharmacology.json": {
    "length": 15264,
@@ -112,15 +112,15 @@
   },
   "replicates_bakery_serial.json": {
    "length": 12287,
-   "sha256": "e316052f783ecdc92ce0757568dcd9be73305d36e2597c088b613ecf23073bec"
+   "sha256": "81c7b87f33b754f08e650a2497fd471e268a464bf7b5e650415d3db5e32458f8"
   },
   "replicates_comprehensive_demo.json": {
    "length": 16929,
-   "sha256": "b33afce3a59c0651cf08c7ee06615fed8da9d38e6bb0b675d02b6716950eb415"
+   "sha256": "911441f0ec06a7a628d9da5df9df8f3f8ba663146476423adbe2845e5bb8f82d"
   },
   "replicates_lab_samples.json": {
    "length": 7078,
-   "sha256": "597596cac83c0ab4997e05e8f51de9195970c333c13b82b560a137c1d5b06d74"
+   "sha256": "d7822401e850f3b1ba6fda35e9270d716e19d5fb795a1c82b490394bef3a18a4"
   },
   "replicates_stagger_orders.json": {
    "length": 10545,
@@ -132,19 +132,19 @@
   },
   "restaurant_tasting_menu.json": {
    "length": 14837,
-   "sha256": "4ad4a1b6c714c1870274d879733d7b5bb42d80aa2857b579274c62956e6691d6"
+   "sha256": "97d8cc4391364ba9baa98495f2e870ad5860cb5cc2bcc36245e47f0697e6bfbf"
   },
   "software_product_launch.json": {
    "length": 49250,
-   "sha256": "0b188b5104f0cb59b52398cb93cbe342567c996bec6a40c46e2c6cb9b892331f"
+   "sha256": "9d2b0a963ac269e7de63a8460052a42758ea77a9049ec46ddaf538756c5bbf58"
   },
   "stir_fry_with_choice.json": {
    "length": 8399,
-   "sha256": "772360b678aa490b42f9a74946a771814c50801fae0dfde3577ccfd4a41c7656"
+   "sha256": "b9a45610510617ceda41a5406283972eb26926ea1fa7f876fa5e8e49ae5a155d"
   },
   "strength_training_session.json": {
    "length": 8309,
-   "sha256": "12e5fcd3381f5cfc4346fffda058212b11131a1a2c80af643a76d1e6f0ca0ea3"
+   "sha256": "a955d37be3334d2ffe4241a5d6995cf9e973a9dd3ebdc98947c0d590076f441b"
   },
   "sunny_side_up_eggs.json": {
    "length": 4101,
@@ -160,15 +160,15 @@
   },
   "thanksgiving_dinner.json": {
    "length": 9862,
-   "sha256": "6b97b2b32eed98cc224c165b8f96aa5846b1fae162754d3385b3f3672ef5411e"
+   "sha256": "3b5ab96b1214392f2e8be1a67ebed84d9572c7ab61f9138582edd3899b201cbe"
   },
   "thanksgiving_one_oven.json": {
    "length": 9345,
-   "sha256": "a2bda7484493a1fd148da795989e3dd4de91ff68b077f475d52d5f9cd6d4b049"
+   "sha256": "f21d43e216bd8d027651b9096d6edca1086fc5d2bea041462b8603d7d7c4a6d1"
   },
   "wedding_and_reception.json": {
    "length": 18915,
-   "sha256": "f18ad65a6be690b1e1bde66cf16b2263472e6212218f9c797a23f3c4ea416143"
+   "sha256": "d70b678cac32b92fc3dc917cb4993f9850a4c63ba1165c9583abd2729815171b"
   },
   "yoga_flow_session.json": {
    "length": 5675,
@@ -177,8 +177,8 @@
  },
  "overlay": {
   "thanksgiving_one_oven.json": {
-   "length": 13299,
-   "sha256": "998b584c42ddaea5dc7b9c6eed9b40c8d89168a2430bd2d7a8a561477dc02df0"
+   "length": 13298,
+   "sha256": "ee14107d50f1b84f795a75833e35b0a3ed96fce7f7086ec16acfad68153488da"
   }
  }
 }

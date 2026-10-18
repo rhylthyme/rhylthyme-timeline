@@ -4,9 +4,10 @@
 /**
  * Regenerate test/fixtures/render-snapshots.json.
  *
- * One SHA-256 per corpus program for `renderTimelineSvg(program)` with the
- * default options, plus one for the Thanksgiving planned-vs-actual overlay
- * (`{ run: record }`). render.test.js asserts these, which is what keeps a
+ * One SHA-256 per corpus program for `renderTimelineSvg(program, { legend:
+ * true })` (the key was on by default when the snapshots were first taken,
+ * and render.test.js draws them with it), plus one for the Thanksgiving
+ * planned-vs-actual overlay (`{ run: record, legend: true }`). render.test.js asserts these, which is what keeps a
  * change to the renderer from silently moving a drawing that is not supposed
  * to move: adding an option must leave every default drawing byte-identical.
  *
@@ -42,19 +43,19 @@ function build() {
     generatedBy:
       "renderTimelineSvg (rhylthyme-timeline/src/index.js); regenerate with tools/gen-render-snapshots.js",
     note:
-      "default = renderTimelineSvg(program); overlay = renderTimelineSvg(program, { run: record }).",
+      "default = renderTimelineSvg(program, { legend: true }); overlay = renderTimelineSvg(program, { run: record, legend: true }).",
     default: {},
     overlay: {},
   };
   for (const name of fs.readdirSync(PROGRAMS).filter((f) => f.endsWith(".json")).sort()) {
     const program = JSON.parse(fs.readFileSync(path.join(PROGRAMS, name), "utf8"));
-    out.default[name] = entry(R.renderTimelineSvg(program));
+    out.default[name] = entry(R.renderTimelineSvg(program, { legend: true }));
   }
   for (const name of fs.readdirSync(RUNS).filter((f) => f.endsWith(".run.json")).sort()) {
     const record = JSON.parse(fs.readFileSync(path.join(RUNS, name), "utf8"));
     const programName = name.replace(/\.run\.json$/, ".json");
     const program = JSON.parse(fs.readFileSync(path.join(PROGRAMS, programName), "utf8"));
-    out.overlay[programName] = entry(R.renderTimelineSvg(program, { run: record }));
+    out.overlay[programName] = entry(R.renderTimelineSvg(program, { run: record, legend: true }));
   }
   return JSON.stringify(out, null, 1) + "\n";
 }
