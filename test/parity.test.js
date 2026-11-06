@@ -24,11 +24,11 @@ const PYTHON = process.env.PYTHON || 'python3';
 
 // Known, deliberate differences, keyed by path under rhylthyme-examples.
 // Keep in step with KNOWN_DIFFERENCES in rhylthyme's tests/test_js_parity.py.
-const KNOWN_DIFFERENCES = {
-  // JS: a task with no resourceConstraint is an error unless the program
-  // names an environment or actors. Python: only with --strict.
-  'programs/comprehensive_manual_demo.json': 'task_not_constrained policy',
-};
+// None today: the last one, programs/comprehensive_manual_demo.json (JS
+// rejects a task with no resourceConstraint unless the program names an
+// environment or actors; Python only with --strict), was fixed in
+// rhylthyme-examples 53e605f, so both validators now accept it.
+const KNOWN_DIFFERENCES = {};
 
 // Codes only one validator emits.
 const JS_ONLY_CODES = new Set(['I_IMPLICIT_BARRIER']);

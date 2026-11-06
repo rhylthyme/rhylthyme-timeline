@@ -335,23 +335,19 @@ test("every invalid/<CODE>.json provokes exactly its declared finding", () => {
 });
 
 test("validator agrees with the Python validator across the example corpus", () => {
-  // Both validators expand replicates before checking, and both reject
-  // the same three programs: two for within-track overlaps and one for
-  // tasks with no resource constraint. Verified against the Python
-  // validator on 2026-09-09.
+  // Both validators expand replicates before checking, and both accept
+  // every program. The three they used to reject (two within-track
+  // overlaps, one task with no resource constraint) were fixed in
+  // rhylthyme-examples 53e605f. Verified against the Python validator on
+  // 2026-11-05.
   const dir = path.join(__dirname, "..", "..", "rhylthyme-examples", "programs");
   if (!fs.existsSync(dir)) return; // examples not checked out alongside
-  const knownBroken = new Set([
-    "academy_awards_ceremony.json",
-    "software_product_launch.json", "comprehensive_manual_demo.json",
-  ]);
   const files = fs.readdirSync(dir).filter((f) => f.endsWith(".json"));
   assert.ok(files.length > 10);
   for (const f of files) {
     const p = JSON.parse(fs.readFileSync(path.join(dir, f), "utf8"));
     const v = S.validateProgram(p);
-    if (knownBroken.has(f)) assert.equal(v.valid, false, `${f} should fail`);
-    else assert.equal(v.valid, true, `${f}: ${JSON.stringify(v.errors.slice(0, 2))}`);
+    assert.equal(v.valid, true, `${f}: ${JSON.stringify(v.errors.slice(0, 2))}`);
     const a = S.analyzeSchedule(p);
     assert.ok(a.makespanSeconds > 0, f);
     assert.ok(R.renderTimelineSvg(p).startsWith("<svg"), f);
