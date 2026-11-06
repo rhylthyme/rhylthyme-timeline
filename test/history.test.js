@@ -578,6 +578,57 @@ test("unusable runs, foreign programs and unmeasured steps contribute nothing", 
   assert.deepEqual(H.predictDurations(PROG, [timed], CTX), {});
 });
 
+// --------------------------------------------- video timeline records
+//
+// A video timeline's run record (runs schema amended 2026-11-05) has
+// runtime.kind "video" and clockMode "media" (times are seconds into the
+// video), and its steps are ended by "annotation" (a dataset label) or
+// "observer" (a person marking while watching). It times a recording, not a
+// run, so it must never become history.
+
+const VIDEO_RUNTIME = { kind: "video", version: "0.1.0", clockMode: "media", speed: 1 };
+
+function videoRun(i, seconds, endedBy) {
+  const record = run(i, seconds, { runtime: { ...VIDEO_RUNTIME } });
+  record.steps[0].endedBy = endedBy;
+  return record;
+}
+
+test("a video timeline record is never a usable run", () => {
+  for (const endedBy of ["annotation", "observer", "executor"]) {
+    const record = videoRun(0, 1000, endedBy);
+    assert.deepEqual(H.isUsableRun(record), { usable: false, reason: "clock-not-wall" }, endedBy);
+    for (const includeFixed of [false, true]) {
+      assert.deepEqual(H.usableSteps(record, { includeFixed }).map((e) => e.reason), ["clock-not-wall"]);
+      assert.deepEqual(H.measuredSteps(record, { includeFixed }), []);
+    }
+  }
+});
+
+test("annotation and observer endings are not the executor, even on a wall clock", () => {
+  for (const endedBy of ["annotation", "observer"]) {
+    const record = run(0, 1000);
+    record.steps[0].endedBy = endedBy;
+    assert.equal(H.isUsableRun(record).usable, true);
+    assert.equal(H.usableSteps(record)[0].reason, "ended-by-" + endedBy);
+    const fixed = { ...record.steps[0], planned: { ...record.steps[0].planned, durationType: "fixed" } };
+    assert.equal(H.stepReason(fixed, true), "ended-by-" + endedBy);
+    assert.deepEqual(H.predictDurations(PROG, [record], CTX), {});
+  }
+});
+
+test("predictDurations ignores video timeline records", () => {
+  const wall = [run(0, 1000), run(1, 1200), run(2, 1400)];
+  // Three video records of the same program, version, environment and factors,
+  // far shorter than the wall runs; one even claims an executor ending.
+  const video = [videoRun(3, 200, "annotation"), videoRun(4, 300, "observer"), videoRun(5, 250, "executor")];
+  const alone = H.predictDurations(PROG, wall, CTX);
+  assert.equal(alone.s.n, 3);
+  assert.deepEqual(H.predictDurations(PROG, wall.concat(video), CTX), alone);
+  assert.deepEqual(H.predictDurations(PROG, video.concat(wall), CTX), alone);
+  assert.deepEqual(H.predictDurations(PROG, video, CTX), {});
+});
+
 test("predictedSeconds narrows a prediction set to the numbers a planner can use", () => {
   const predictions = {
     a: { seconds: 1200, basis: "identical" },
