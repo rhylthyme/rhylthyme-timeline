@@ -776,6 +776,44 @@ test("one prediction covers every replicate instance, and the expansion survives
   assert.ok(a.makespanSeconds > plain.makespanSeconds, "cooling twice as long costs time");
 });
 
+test("video timeline records are not history for analyzeSchedule", (t) => {
+  const file = path.join(__dirname, "fixtures", "schedule", "cookies_three_trays.json");
+  if (!fs.existsSync(file)) { t.skip("cookies example not present"); return; }
+  const program = JSON.parse(fs.readFileSync(file, "utf8"));
+  const record = (runtime, seconds, endedBy) => ({
+    runId: "2026-11-05T09:00:00Z-" + seconds.toString(16).padStart(4, "0"),
+    programId: program.programId,
+    programVersion: "sha256:" + "aa".repeat(32),
+    runtime,
+    startedAt: "2026-11-05T09:00:00.000Z",
+    outcome: "completed",
+    context: { userTags: {} },
+    steps: [1, 2, 3].map((i) => ({
+      stepId: "cool", instance: i,
+      planned: { start: 0, end: 900, durationType: "variable", defaultSeconds: 900 },
+      actual: { start: 0, end: seconds }, endedBy, pausedSeconds: 0,
+    })),
+  });
+  // runs schema (amended 2026-11-05): a record made from a video, times in
+  // seconds of the video, steps ended by a dataset label or an observer.
+  const video = { kind: "video", version: "0.1.0", clockMode: "media", speed: 1 };
+  const wall = { kind: "cli", version: "t", clockMode: "wall", speed: 1 };
+  const videoRecords = [record(video, 300, "annotation"), record(video, 400, "observer"), record(video, 500, "executor")];
+
+  const plain = S.analyzeSchedule(program);
+  const onlyVideo = S.analyzeSchedule(program, { history: videoRecords, useDurations: "predicted" });
+  assert.ok(onlyVideo.steps.every((s) => s.predicted === undefined));
+  assert.equal(onlyVideo.makespanSeconds, plain.makespanSeconds);
+  assert.equal(onlyVideo.predictedMakespanSeconds, plain.makespanSeconds);
+
+  const wallOnly = S.analyzeSchedule(program, { history: [record(wall, 1800, "executor")], useDurations: "predicted" });
+  const mixed = S.analyzeSchedule(program, {
+    history: videoRecords.concat([record(wall, 1800, "executor")]), useDurations: "predicted",
+  });
+  assert.deepEqual(mixed, wallOnly);
+  assert.ok(mixed.steps.filter((s) => s.predicted).every((s) => s.predicted.n === 3 && s.predicted.seconds === 1800));
+});
+
 // ---------------------------------------------------------------------
 // Step alerts (package 0.2.3-alpha; alerts contract §2)
 // ---------------------------------------------------------------------

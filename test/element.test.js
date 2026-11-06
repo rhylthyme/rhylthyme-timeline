@@ -248,6 +248,54 @@ test('every emitted run record validates against runs_schema_0.1.0-alpha',
     }
   });
 
+// The runs schema gained video timeline values on 2026-11-05: runtime.kind
+// "video", clockMode "media" (times are seconds into the video) and endedBy
+// "annotation" (a dataset label) or "observer" (a person marking while
+// watching). The player never writes them, but the checker above must read
+// a schema that has them, accept such a record and still refuse values the
+// schema does not list.
+const VIDEO_RECORD = {
+  schemaVersion: '0.1.0-alpha',
+  runId: '2026-11-05T09:00:00Z-0a1b',
+  programId: 'video-record',
+  programVersion: 'sha256:' + 'ab'.repeat(32),
+  runtime: { kind: 'video', version: '0.1.0', clockMode: 'media', speed: 1 },
+  environmentId: null,
+  startedAt: '2026-11-05T09:00:00.000Z',
+  outcome: 'completed',
+  steps: [
+    { stepId: 'a', instance: 1, planned: { start: 0, end: 600, durationType: 'variable', defaultSeconds: 600 },
+      actual: { start: 12.5, end: 590.25 }, endedBy: 'annotation', notes: 'Measurement error: too little' },
+    { stepId: 'b', instance: 1, planned: { start: 600, end: 900, durationType: 'fixed', seconds: 300 },
+      actual: { start: 590.25, end: 905 }, endedBy: 'observer' },
+    // never happened in the video: no actual, no endedBy
+    { stepId: 'c', instance: 1, planned: { start: 900, end: 1200, durationType: 'variable', defaultSeconds: 300 } },
+  ],
+};
+
+test('the runs schema checker accepts a video timeline record and refuses unknown values', (t) => {
+  const schema = runsSchema();
+  if (!schema) { t.skip('rhylthyme-spec not checked out beside rhylthyme-timeline'); return; }
+  assert.deepStrictEqual(schemaErrors(schema, VIDEO_RECORD), []);
+  const bad = [
+    [['runtime', 'kind'], 'videos'],
+    [['runtime', 'kind'], 'Video'],
+    [['runtime', 'clockMode'], 'Media'],
+    [['runtime', 'clockMode'], 'frames'],
+    [['steps', 0, 'endedBy'], 'label'],
+    [['steps', 1, 'endedBy'], 'Observer'],
+  ];
+  for (const [where, value] of bad) {
+    const record = JSON.parse(JSON.stringify(VIDEO_RECORD));
+    const parent = where.slice(0, -1).reduce((o, k) => o[k], record);
+    parent[where[where.length - 1]] = value;
+    const at = '$' + where.map((k) => (typeof k === 'number' ? `[${k}]` : `.${k}`)).join('');
+    const errors = schemaErrors(schema, record);
+    assert.ok(errors.length > 0, `${at} = ${value} was accepted`);
+    assert.ok(errors.every((e) => e.startsWith(at + ':')), errors.join('\n'));
+  }
+});
+
 // ---------------------------------------------------------------------
 // Declared variance factors (Phase 4): the pre-flight prompt
 // ---------------------------------------------------------------------
