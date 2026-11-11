@@ -3,6 +3,18 @@
 All notable changes to this package are documented here. The format follows
 Keep a Changelog; versions follow SemVer.
 
+## [Unreleased]
+
+### Fixed
+- **Player buttons no longer lose clicks while a program runs.** The player
+  redrew its whole shadow tree on every tick (200 ms), replacing Pause, Stop,
+  the speed menu and every `Start:` / `Done:` step button. A click is a press
+  and a release on one element, so a press held across a tick was dropped
+  (about half of 100 ms presses, all 250 ms ones), and an open speed menu
+  closed. A tick now redraws the chart and sets the clock text in place; the
+  controls and the step buttons are replaced only when their markup changes,
+  and keyboard focus stays on the transport control that was pressed.
+
 ## [2.0.0-beta.8] - unreleased
 
 ### Changed
