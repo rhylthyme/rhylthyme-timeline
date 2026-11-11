@@ -1752,10 +1752,12 @@
         html.push('<label>' + esc(this._msg('speed')) + ' <select data-set="speed">' + [0.5, 1, 2, 5, 10, 30, 60].map(function (v) {
           return '<option value="' + v + '"' + (v === this.speed ? ' selected' : '') + '>' + esc(this._msg('speedOption', [v, intl ? intl.number.format(v) : String(v)])) + '</option>';
         }, this).join('') + '</select></label>');
-        html.push('<div class="clock"><span class="time" part="time">' + esc(this.formatTime(this._time)) + '</span><span class="status" part="status" data-status="' + esc(st) + '">' + esc(this._msg(STATUS_KEYS[st] || 'statusStopped')) + '</span></div>');
+        html.push('<div class="clock"><span class="time" part="time"></span><span class="status" part="status" data-status="' + esc(st) + '">' + esc(this._msg(STATUS_KEYS[st] || 'statusStopped')) + '</span></div>');
         html.push('</div>');
       }
-      html.push('<div class="chart" part="chart">' + svg + '</div>');
+      var controlsHtml = html.join('');
+      var chartHtml = '<div class="chart" part="chart">' + svg + '</div>';
+      var actionsHtml = '';
       if (player) {
         // Actions are grouped by instanceOf so three trays read as one
         // "Cool on rack ×3" row with an instance-labelled button each.
@@ -1784,9 +1786,48 @@
           count++;
         });
         flush();
-        html.push('<div class="actions" part="actions">' + actions.join('') + (count ? '<span class="hint">' + esc(this._msg('actionsHint')) + '</span>' : '') + '</div>');
+        actionsHtml = '<div class="actions" part="actions">' + actions.join('') + (count ? '<span class="hint">' + esc(this._msg('actionsHint')) + '</span>' : '') + '</div>';
       }
-      this._wrap.innerHTML = html.join('');
+      this._paint(controlsHtml, chartHtml, actionsHtml, player ? this.formatTime(this._time) : '');
+    };
+
+    // Puts a render on the page, replacing only the parts whose markup
+    // changed. While a program runs, render() is called on every tick
+    // (200 ms): were the controls and the step buttons rebuilt each time, a
+    // click (a press and a release on one element) would be lost whenever a
+    // tick fell between the two, and an open speed menu would close. The
+    // chart is redrawn every time (its cursor moves); the clock's text is
+    // set in place.
+    proto._paint = function (controlsHtml, chartHtml, actionsHtml, timeText) {
+      var wrap = this._wrap, kids = wrap.children, player = !!controlsHtml;
+      var controls = player ? kids[0] : null, chart = kids[player ? 1 : 0], actions = player ? kids[2] : null;
+      var has = function (node, cls) { return !!node && node.className === cls; };
+      var painted = kids.length === (player ? 3 : 1) && has(chart, 'chart') &&
+        (!player || (has(controls, 'controls') && has(actions, 'actions')));
+      if (!painted) {
+        wrap.innerHTML = controlsHtml + chartHtml + actionsHtml;
+      } else {
+        if (player && controlsHtml !== this._paintedControls) {
+          // A click or key on Start/Pause/Stop redraws them: keep keyboard
+          // focus on the control that took its place.
+          var focused = this._root.activeElement;
+          var act = focused && controls.contains(focused) && focused.dataset ? focused.dataset.act : null;
+          controls.outerHTML = controlsHtml;
+          if (act) {
+            var next = wrap.querySelector(act === 'stop' ? '.controls [data-act="stop"]:not([disabled])' : '.controls [data-act="start"], .controls [data-act="pause"]') ||
+              wrap.querySelector('.controls [data-act]');
+            if (next) next.focus();
+          }
+        }
+        chart.outerHTML = chartHtml;
+        if (player && actionsHtml !== this._paintedActions) actions.outerHTML = actionsHtml;
+      }
+      this._paintedControls = controlsHtml;
+      this._paintedActions = actionsHtml;
+      if (player) {
+        var time = wrap.querySelector('.controls .time');
+        if (time && time.textContent !== timeText) time.textContent = timeText;
+      }
     };
 
     proto._onClick = function (e) {

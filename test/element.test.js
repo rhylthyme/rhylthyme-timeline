@@ -917,3 +917,33 @@ test('properties set before the element is defined go through its setters',
     assert.deepStrictEqual(p.detachedLabels, ['PropStop', 'PropStop'], 'getter and rendered table agree');
     assert.deepStrictEqual(p.propOnly, [false, 'Los', 'Stop']);
   });
+
+test('controls survive a tick: buttons and the speed menu are not replaced while running',
+  { skip: chrome ? false : 'no Chrome binary found (set CHROME_BIN)' }, async () => {
+    const out = await harnessOutput();
+    assert.deepStrictEqual(out.errors, []);
+    const c = out.checks.controlsSurviveTick;
+    // The same nodes before and after a tick, so a press and its release land on one button.
+    assert.deepStrictEqual({ pause: c.pause, stop: c.stop, speed: c.speed, done: c.done },
+      { pause: true, stop: true, speed: true, done: true });
+    // ...while the clock and the chart still move.
+    assert.notStrictEqual(c.timeAfter, c.timeBefore);
+    assert.strictEqual(c.chartRedrawn, true);
+  });
+
+test('controls are redrawn when the state changes',
+  { skip: chrome ? false : 'no Chrome binary found (set CHROME_BIN)' }, async () => {
+    const { checks } = await harnessOutput();
+    assert.deepStrictEqual(checks.controlsAfterPause, { act: 'start', status: 'paused' });
+    assert.strictEqual(checks.doneButtonGoneAfterComplete, true);
+    assert.strictEqual(checks.controlsAfterStop.act, 'start');
+    assert.strictEqual(checks.controlsAfterStop.stopDisabled, true);
+    assert.deepStrictEqual(checks.controlsAfterNewProgram, { act: 'start', bars: true });
+  });
+
+test('keyboard focus stays on the transport control after it is pressed',
+  { skip: chrome ? false : 'no Chrome binary found (set CHROME_BIN)' }, async () => {
+    const { checks } = await harnessOutput();
+    // Start becomes Pause and back; Stop disables itself, so focus moves to Start.
+    assert.deepStrictEqual(checks.focusFollowsControls, { afterStart: 'pause', afterPause: 'start', afterStop: 'start' });
+  });

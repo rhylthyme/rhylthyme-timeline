@@ -1188,6 +1188,59 @@ window.PRE_UPGRADE = (function () {
       el.program = JSON.parse(JSON.stringify(window.RHYLTHYME_EXAMPLES[key]));
       if (bars() > 0) out.checks.corpusRendered++;
     }
+
+    // Controls survive ticks. A click is a press and a release on the same
+    // element: a button replaced by the 200 ms re-render in between never
+    // sees it, and a replaced <select> closes its menu. On an element of its
+    // own, so the runs above keep their records and events.
+    {
+      const el2 = document.createElement('rhylthyme-timeline');
+      el2.setAttribute('mode', 'player');
+      document.body.appendChild(el2);
+      let ms2 = 0;
+      el2.setClock(() => ms2);
+      const q = (sel) => el2.shadowRoot.querySelector(sel);
+      el2.program = JSON.parse(JSON.stringify(window.RHYLTHYME_EXAMPLES.thanksgiving_one_oven));
+      el2.start();
+      ms2 += 1300 * 1000; el2.tick(); // the roast (indefinite) is active: it has a Done button
+      const before = {
+        pause: q('button[data-act="pause"]'), stop: q('button[data-act="stop"]'),
+        speed: q('select[data-set="speed"]'), done: q('button[data-step-done="turkey-roast"]'),
+        time: q('.time').textContent, cursor: q('.rt-cursor') && q('.rt-cursor').outerHTML,
+      };
+      ms2 += 7 * 1000; el2.tick();
+      const same = (node, sel) => !!node && node.isConnected && node === q(sel);
+      out.checks.controlsSurviveTick = {
+        pause: same(before.pause, 'button[data-act="pause"]'),
+        stop: same(before.stop, 'button[data-act="stop"]'),
+        speed: same(before.speed, 'select[data-set="speed"]'),
+        done: same(before.done, 'button[data-step-done="turkey-roast"]'),
+        timeBefore: before.time, timeAfter: q('.time').textContent,
+        chartRedrawn: !!before.cursor && q('.rt-cursor').outerHTML !== before.cursor,
+      };
+      // A change of state still redraws them: paused shows Resume, and the
+      // step's Done button goes once the step is finished.
+      el2.pause();
+      out.checks.controlsAfterPause = { act: q('.controls button').dataset.act, status: q('.status').dataset.status };
+      el2.start();
+      el2.completeStep('turkey-roast');
+      out.checks.doneButtonGoneAfterComplete = !q('button[data-step-done="turkey-roast"]');
+      el2.stop();
+      out.checks.controlsAfterStop = { act: q('.controls button').dataset.act, stopDisabled: q('button[data-act="stop"]').disabled, time: q('.time').textContent };
+      // Keyboard focus follows the control across the redraw a click causes.
+      el2.program = JSON.parse(JSON.stringify(window.RHYLTHYME_EXAMPLES.thanksgiving_one_oven));
+      const focusedAct = () => { const a = el2.shadowRoot.activeElement; return a && a.dataset ? a.dataset.act || null : null; };
+      q('button[data-act="start"]').focus(); q('button[data-act="start"]').click();
+      const afterStart = focusedAct();
+      q('button[data-act="pause"]').click();
+      const afterPause = focusedAct();
+      q('button[data-act="stop"]').focus(); q('button[data-act="stop"]').click();
+      out.checks.focusFollowsControls = { afterStart: afterStart, afterPause: afterPause, afterStop: focusedAct() };
+      // A new program starts from a clean player.
+      el2.program = JSON.parse(JSON.stringify(window.RHYLTHYME_COOKIES));
+      out.checks.controlsAfterNewProgram = { act: q('.controls button').dataset.act, bars: el2.shadowRoot.querySelectorAll('rect.rt-bar').length > 0 };
+      el2.remove();
+    }
   } catch (e) {
     out.errors.push(String(e && e.stack || e));
   }
